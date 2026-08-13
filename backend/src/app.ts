@@ -1,5 +1,6 @@
 import express from 'express';
 import { errorHandler } from './middleware/error.middleware.js';
+import { notFoundHandler } from './middleware/notFound.middleware.js';
 
 /**
  * The Express app, fully configured but never listening. Kept separate from
@@ -10,8 +11,9 @@ export const app = express();
 
 app.use(express.json());
 
-// Routes and the 404 handler are inserted here by later tasks — everything
-// that can produce an AppError must be registered above errorHandler below.
+// Routes are inserted here by later tasks, above notFoundHandler.
+
+app.use(notFoundHandler);
 
 // errorHandler must stay last: Express only routes to 4-arg middleware on error.
 app.use(errorHandler);
