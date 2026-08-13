@@ -19,7 +19,7 @@ _Covers SCRUM-23, SCRUM-21, SCRUM-24, SCRUM-25. Nothing else can start until thi
 - [x] 1.13 Configure ESLint for Node + TypeScript, Prettier, and `lint` / `format` scripts, with the two configured not to fight each other
 - [x] 1.14 Configure Vitest with v8 coverage, a 60% line threshold, and generated/config files excluded from the denominator
 - [x] 1.15 Write tests covering the health endpoint, the 404 handler, and the error middleware's sanitisation of unexpected errors
-- [ ] 1.16 Verify `npm run dev`, `npm run build`, `npm run lint`, and `npm test` all succeed; open PR to `task/SCRUM-11-backend`
+- [x] 1.16 Verify `npm run dev`, `npm run build`, `npm run lint`, and `npm test` all succeed; open PR to `task/SCRUM-11-backend`
 
 ## 2. Feature: Data layer — `feat/SCRUM-22-data-layer`
 
