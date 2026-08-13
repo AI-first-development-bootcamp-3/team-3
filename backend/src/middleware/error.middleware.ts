@@ -14,7 +14,6 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
 
   // Unexpected error: the client gets a generic message, but the full
   // detail — stack trace and all — is logged for whoever's debugging this.
-  // eslint-disable-next-line no-console -- structured logger arrives in the request-pipeline feature
   console.error('Unhandled error:', err);
 
   const fallback = AppError.internal();

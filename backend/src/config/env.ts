@@ -27,7 +27,9 @@ export class EnvValidationError extends Error {
   readonly issues: readonly string[];
 
   constructor(issues: readonly string[]) {
-    super(`Invalid environment configuration:\n${issues.map((issue) => `  - ${issue}`).join('\n')}`);
+    super(
+      `Invalid environment configuration:\n${issues.map((issue) => `  - ${issue}`).join('\n')}`,
+    );
     this.name = 'EnvValidationError';
     this.issues = issues;
   }
@@ -56,7 +58,6 @@ function loadEnv(): Env {
     return parseEnv(process.env);
   } catch (error) {
     if (error instanceof EnvValidationError) {
-      // eslint-disable-next-line no-console -- logger depends on env, so it isn't available yet
       console.error(error.message);
       process.exit(1);
     }
