@@ -1,0 +1,2 @@
+# OpenSpec CLI transient lock file - recreated on every archive run, not meant to be versioned
+openspec/changes/archive/.openspec-archive.lock

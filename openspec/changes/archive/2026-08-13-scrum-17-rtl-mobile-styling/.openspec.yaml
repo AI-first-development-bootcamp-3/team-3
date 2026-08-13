@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-08-13
+goal: dir=rtl/Hebrew locale set up, mobile-first base styles, placeholder UI
+  renders correctly in RTL on mobile and desktop
