@@ -1,6 +1,7 @@
 import express from 'express';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { logger } from '../config/logger.js';
 import { AppError } from '../types/errors.js';
 import { errorHandler } from './error.middleware.js';
 
@@ -25,14 +26,14 @@ function buildTestApp() {
 }
 
 describe('errorHandler', () => {
-  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+  let loggerErrorSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    loggerErrorSpy = vi.spyOn(logger, 'error').mockImplementation(() => undefined as never);
   });
 
   afterEach(() => {
-    consoleErrorSpy.mockRestore();
+    loggerErrorSpy.mockRestore();
   });
 
   it('returns an AppError as-is, in the standard shape', async () => {
@@ -64,11 +65,11 @@ describe('errorHandler', () => {
   it('logs the full unexpected error server-side for diagnosis', async () => {
     await request(buildTestApp()).get('/unexpected-error');
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      'Unhandled error:',
+    expect(loggerErrorSpy).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: expect.stringContaining('postgres://user:hunter2'),
+        err: expect.objectContaining({ message: expect.stringContaining('postgres://user:hunter2') }),
       }),
+      'Unhandled error',
     );
   });
 });

@@ -1,6 +1,7 @@
 import express from 'express';
 import { errorHandler } from './middleware/error.middleware.js';
 import { notFoundHandler } from './middleware/notFound.middleware.js';
+import { requestLogger } from './middleware/requestLogger.middleware.js';
 import { healthRouter } from './routes/health.routes.js';
 
 /**
@@ -10,6 +11,7 @@ import { healthRouter } from './routes/health.routes.js';
  */
 export const app = express();
 
+app.use(requestLogger);
 app.use(express.json());
 
 app.use(healthRouter);
