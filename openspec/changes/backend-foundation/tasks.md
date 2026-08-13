@@ -103,18 +103,20 @@ done._
 
 ## 7. Feature: File uploads — `feat/SCRUM-49-file-uploads`
 
-_Covers SCRUM-49. Deferrable — nothing consumes this until the היעדרויות epic (SCRUM-7)._
+_Covers SCRUM-49. Deferrable — nothing consumes this until the היעדרויות epic (SCRUM-7).
+Implemented on the combined `feat/remaining-features` branch; PR opens once
+group 8 is done._
 
-- [ ] 7.1 Cut `feat/SCRUM-49-file-uploads` from the updated `task/SCRUM-11-backend`
-- [ ] 7.2 Define the `FileStorage` interface (store, retrieve, delete) so the backing store can be replaced without touching callers
-- [ ] 7.3 Implement local-filesystem storage against a mounted volume, generating opaque storage keys that sanitise the original filename
-- [ ] 7.4 Add the `Attachment` model and migration — filename, mime type, size, storage key, uploader, uploaded-at
-- [ ] 7.5 Configure multer with size and MIME-type limits, mapping rejections onto the error contract as 413 and 400
-- [ ] 7.6 Add authenticated upload and retrieval endpoints; enforce that employees reach only their own attachments while administrators reach any
-- [ ] 7.7 Stream retrieval rather than buffering, returning the recorded content type and 404 for unknown identifiers
-- [ ] 7.8 Test oversized rejection, disallowed type rejection, unauthenticated rejection, owner access, admin access, cross-employee refusal, and that a traversal-laden filename cannot escape the store
-- [ ] 7.9 Record the storage decision and the S3 migration path in `backend/README.md`, noting that free-tier filesystems are ephemeral
-- [ ] 7.10 Open PR
+- [x] 7.1 Cut `feat/SCRUM-49-file-uploads` from the updated `task/SCRUM-11-backend`
+- [x] 7.2 Define the `FileStorage` interface (store, retrieve, delete) so the backing store can be replaced without touching callers
+- [x] 7.3 Implement local-filesystem storage against a mounted volume, generating opaque storage keys that sanitise the original filename
+- [x] 7.4 Add the `Attachment` model and migration — filename, mime type, size, storage key, uploader, uploaded-at
+- [x] 7.5 Configure multer with size and MIME-type limits, mapping rejections onto the error contract as 413 and 400
+- [x] 7.6 Add authenticated upload and retrieval endpoints; enforce that employees reach only their own attachments while administrators reach any
+- [x] 7.7 Stream retrieval rather than buffering, returning the recorded content type and 404 for unknown identifiers
+- [x] 7.8 Test oversized rejection, disallowed type rejection, unauthenticated rejection, owner access, admin access, cross-employee refusal, and that a traversal-laden filename cannot escape the store
+- [x] 7.9 Record the storage decision and the S3 migration path in `backend/README.md`, noting that free-tier filesystems are ephemeral
+- [ ] 7.10 Open PR — deferred to end of group 8 (combined branch)
 
 ## 8. Close out SCRUM-11
 
