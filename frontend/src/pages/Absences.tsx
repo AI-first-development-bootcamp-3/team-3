@@ -1,5 +1,5 @@
 function Absences() {
-  return <h1>Absences</h1>
+  return <h1>Absences</h1>;
 }
 
-export default Absences
+export default Absences;
