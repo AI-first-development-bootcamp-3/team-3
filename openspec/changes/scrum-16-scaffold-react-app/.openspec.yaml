@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-08-13
+goal: App starts with npm run dev and renders a placeholder page
+skip_specs: true
