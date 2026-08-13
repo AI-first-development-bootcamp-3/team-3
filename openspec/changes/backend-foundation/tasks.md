@@ -60,14 +60,14 @@ _Covers SCRUM-45, SCRUM-47, SCRUM-48._
 
 _Covers SCRUM-46. Token issuance is out of scope — it belongs to the Auth epic (SCRUM-4)._
 
-- [ ] 4.1 Cut `feat/SCRUM-46-auth-middleware` from the updated `task/SCRUM-11-backend`
-- [ ] 4.2 Define the JWT payload type (user id, role) and extend the Express request type so `req.user` is typed at every call site
-- [ ] 4.3 Implement token verification middleware: extract the bearer token, verify signature and expiry against `JWT_SECRET`, attach `req.user`
-- [ ] 4.4 Return 401 for missing, malformed, and wrongly signed tokens without disclosing which failed; give expiry a distinct code so clients can prompt re-authentication
-- [ ] 4.5 Implement the role-guard middleware restricting routes to administrators, returning 403 for authenticated-but-unauthorised callers
-- [ ] 4.6 Ensure the guard composes after verification, so an unauthenticated request to an admin route returns 401 rather than 403
-- [ ] 4.7 Add a protected sample route and an admin-only sample route demonstrating both middlewares
-- [ ] 4.8 Test valid token, missing token, malformed token, expired token, employee refused an admin route, admin permitted, and that a role claim in the request body cannot override the token's role
+- [x] 4.1 Cut `feat/SCRUM-46-auth-middleware` from the updated `task/SCRUM-11-backend`
+- [x] 4.2 Define the JWT payload type (user id, role) and extend the Express request type so `req.user` is typed at every call site
+- [x] 4.3 Implement token verification middleware: extract the bearer token, verify signature and expiry against `JWT_SECRET`, attach `req.user`
+- [x] 4.4 Return 401 for missing, malformed, and wrongly signed tokens without disclosing which failed; give expiry a distinct code so clients can prompt re-authentication
+- [x] 4.5 Implement the role-guard middleware restricting routes to administrators, returning 403 for authenticated-but-unauthorised callers
+- [x] 4.6 Ensure the guard composes after verification, so an unauthenticated request to an admin route returns 401 rather than 403
+- [x] 4.7 Add a protected sample route and an admin-only sample route demonstrating both middlewares
+- [x] 4.8 Test valid token, missing token, malformed token, expired token, employee refused an admin route, admin permitted, and that a role claim in the request body cannot override the token's role
 - [ ] 4.9 Open PR
 
 ## 5. Feature: Test harness — `feat/SCRUM-52-test-harness`
