@@ -9,7 +9,7 @@ _Covers SCRUM-23, SCRUM-21, SCRUM-24, SCRUM-25. Nothing else can start until thi
 - [x] 1.3 Initialise `backend/package.json` with TypeScript, `tsconfig.json` targeting Node 24 LTS in strict mode, and `dev` / `build` / `start` scripts
 - [x] 1.4 Install the **complete** dependency set for all seven features in this one commit, so later branches add only source files (see design.md → Migration Plan step 1)
 - [x] 1.5 Create the folder layout under `backend/src/`: `routes/`, `controllers/`, `services/`, `middleware/`, `types/`, `config/`
-- [ ] 1.6 Add the environment config module — parse and validate `PORT`, `NODE_ENV`, `DATABASE_URL`, `CORS_ORIGIN`, `JWT_SECRET`, `LOG_LEVEL` at startup; exit non-zero listing every missing or malformed variable
+- [x] 1.6 Add the environment config module — parse and validate `PORT`, `NODE_ENV`, `DATABASE_URL`, `CORS_ORIGIN`, `JWT_SECRET`, `LOG_LEVEL` at startup; exit non-zero listing every missing or malformed variable
 - [ ] 1.7 Commit `.env.example` documenting every variable by name, with no real values
 - [ ] 1.8 Build the Express app and server entrypoint as separate modules, so tests can import the app without binding a port
 - [ ] 1.9 Define the error contract: an `AppError` type carrying HTTP status, machine-readable code, message, and optional per-field details
