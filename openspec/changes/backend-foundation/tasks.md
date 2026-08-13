@@ -88,15 +88,18 @@ explicit instruction); PR opens once group 8 is done, not per sub-group._
 
 ## 6. Feature: API documentation — `feat/SCRUM-50-api-docs`
 
-_Covers SCRUM-50. Deferrable — see proposal.md → Deferred scope._
+_Covers SCRUM-50. Deferrable — see proposal.md → Deferred scope. Implemented
+on the combined `feat/remaining-features` branch; PR opens once group 8 is
+done._
 
-- [ ] 6.1 Cut `feat/SCRUM-50-api-docs` from the updated `task/SCRUM-11-backend`
-- [ ] 6.2 Configure swagger-jsdoc to build the OpenAPI document from annotations beside the route definitions
-- [ ] 6.3 Serve the interactive UI at `/api-docs` and the raw OpenAPI JSON at a sibling route, both disabled in production by configuration
-- [ ] 6.4 Declare the bearer-token security scheme so protected endpoints become executable from the UI once login exists
-- [ ] 6.5 Annotate `GET /health` fully, including its 200 and 503 responses, as the worked example later endpoints copy
-- [ ] 6.6 Document the shared error contract as a reusable schema component
-- [ ] 6.7 Test that the generated document is valid OpenAPI and that the UI route responds; open PR
+- [x] 6.1 Cut `feat/SCRUM-50-api-docs` from the updated `task/SCRUM-11-backend`
+- [x] 6.2 Configure swagger-jsdoc to build the OpenAPI document from annotations beside the route definitions
+- [x] 6.3 Serve the interactive UI at `/api-docs` and the raw OpenAPI JSON at a sibling route, both disabled in production by configuration
+- [x] 6.4 Declare the bearer-token security scheme so protected endpoints become executable from the UI once login exists
+- [x] 6.5 Annotate `GET /health` fully, including its 200 and 503 responses, as the worked example later endpoints copy
+- [x] 6.6 Document the shared error contract as a reusable schema component
+- [x] 6.7 Test that the generated document is valid OpenAPI and that the UI route responds
+- [ ] Open PR — deferred to end of group 8 (combined branch)
 
 ## 7. Feature: File uploads — `feat/SCRUM-49-file-uploads`
 
