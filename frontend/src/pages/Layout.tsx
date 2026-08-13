@@ -1,22 +1,18 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
+import { Menu } from "antd";
 
-const navLinkClassName = ({ isActive }: { isActive: boolean }) =>
-  isActive ? 'active' : undefined
+const items = [
+  { key: "/", label: <Link to="/">Reports</Link> },
+  { key: "/absences", label: <Link to="/absences">Absences</Link> },
+  { key: "/admin", label: <Link to="/admin">Admin</Link> },
+];
 
 function Layout() {
+  const { pathname } = useLocation();
+
   return (
     <div>
-      <nav>
-        <NavLink to="/" end className={navLinkClassName}>
-          Reports
-        </NavLink>
-        <NavLink to="/absences" className={navLinkClassName}>
-          Absences
-        </NavLink>
-        <NavLink to="/admin" className={navLinkClassName}>
-          Admin
-        </NavLink>
-      </nav>
+      <Menu mode="horizontal" selectedKeys={[pathname]} items={items} />
       <main>
         <Outlet />
       </main>
