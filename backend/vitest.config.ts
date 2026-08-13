@@ -8,7 +8,7 @@ export default defineConfig({
     // separately in the test-harness feature (SCRUM-52).
     env: {
       NODE_ENV: 'test',
-      PORT: '0',
+      PORT: '4000',
       DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/abra_test',
       CORS_ORIGIN: 'http://localhost:5173',
       JWT_SECRET: 'test-only-secret-at-least-32-characters-long',

@@ -18,7 +18,8 @@ const envSchema = z.object({
     ),
   // HS256 signing key. 32 chars is the practical floor for a symmetric secret.
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
-  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  // 'silent' is a real pino level that disables logging entirely (used in tests).
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 });
 
 export type Env = z.infer<typeof envSchema>;
