@@ -72,17 +72,19 @@ _Covers SCRUM-46. Token issuance is out of scope — it belongs to the Auth epic
 
 ## 5. Feature: Test harness — `feat/SCRUM-52-test-harness`
 
-_Covers SCRUM-52. Requires groups 1 and 2._
+_Covers SCRUM-52. Requires groups 1 and 2. Implemented on the combined
+`feat/remaining-features` branch (groups 5–8 treated as one feature per
+explicit instruction); PR opens once group 8 is done, not per sub-group._
 
-- [ ] 5.1 Cut `feat/SCRUM-52-test-harness` from the updated `task/SCRUM-11-backend`
-- [ ] 5.2 Add a separate test-database service to `docker-compose.yml` (or a distinct database name) driven by `DATABASE_URL` in the test environment
-- [ ] 5.3 Add global test setup applying the same migrations used by every other environment to the test database
-- [ ] 5.4 Implement per-test truncation so writes in one test are invisible to the next, keeping the schema intact
-- [ ] 5.5 Add a guard aborting the run if the test database URL resolves to the development database
-- [ ] 5.6 Add test data factories for the core entities so integration tests need no hand-written fixtures
-- [ ] 5.7 Write an integration test proving Client → Project → Task traversal against real SQL
-- [ ] 5.8 Confirm the full suite passes twice consecutively with no manual cleanup, and document how CI provisions the test database
-- [ ] 5.9 Open PR
+- [x] 5.1 Cut `feat/SCRUM-52-test-harness` from the updated `task/SCRUM-11-backend`
+- [x] 5.2 Add a separate test-database service to `docker-compose.yml` (or a distinct database name) driven by `DATABASE_URL` in the test environment
+- [x] 5.3 Add global test setup applying the same migrations used by every other environment to the test database
+- [x] 5.4 Implement per-test truncation so writes in one test are invisible to the next, keeping the schema intact
+- [x] 5.5 Add a guard aborting the run if the test database URL resolves to the development database
+- [x] 5.6 Add test data factories for the core entities so integration tests need no hand-written fixtures
+- [x] 5.7 Write an integration test proving Client → Project → Task traversal against real SQL
+- [x] 5.8 Confirm the full suite passes twice consecutively with no manual cleanup, and document how CI provisions the test database
+- [ ] 5.9 Open PR — deferred to end of group 8 (combined branch)
 
 ## 6. Feature: API documentation — `feat/SCRUM-50-api-docs`
 
