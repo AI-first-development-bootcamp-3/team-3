@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-08-13
+goal: npm run lint and format scripts work; ESLint configured for React + TypeScript
+skip_specs: true
