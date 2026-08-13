@@ -44,9 +44,9 @@ _Covers SCRUM-22, SCRUM-44, SCRUM-51._
 
 _Covers SCRUM-45, SCRUM-47, SCRUM-48._
 
-- [ ] 3.1 Cut `feat/SCRUM-45-request-pipeline` from the updated `task/SCRUM-11-backend`
-- [ ] 3.2 Write the Zod validation middleware — validate body, params, and query against a supplied schema, replacing the request payload with the parsed (and stripped) result
-- [ ] 3.3 Map Zod issues onto the error contract's `details` array so all field failures are reported in one 400 response, not just the first
+- [x] 3.1 Cut `feat/SCRUM-45-request-pipeline` from the updated `task/SCRUM-11-backend`
+- [x] 3.2 Write the Zod validation middleware — validate body, params, and query against a supplied schema, replacing the request payload with the parsed (and stripped) result
+- [x] 3.3 Map Zod issues onto the error contract's `details` array so all field failures are reported in one 400 response, not just the first
 - [ ] 3.4 Configure pino with environment-driven log level, plus `pino-pretty` for local development only
 - [ ] 3.5 Add `pino-http` request logging emitting method, path, status, and duration, with a per-request correlation id
 - [ ] 3.6 Configure redaction so authorization headers, passwords, and tokens never reach the logs
