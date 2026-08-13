@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
-import { app } from '../app.js';
-import { prisma } from '../config/prisma.js';
+import { app } from '../../app.js';
+import { prisma } from '../../config/prisma.js';
 
 describe('GET /health', () => {
   afterEach(() => {

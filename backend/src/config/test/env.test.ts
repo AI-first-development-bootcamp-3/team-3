@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EnvValidationError, parseEnv } from './env.js';
+import { EnvValidationError, parseEnv } from '../env.js';
 
 const minimalRequired = {
   DATABASE_URL: 'postgresql://user:pass@localhost:5432/db',

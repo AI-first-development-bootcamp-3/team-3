@@ -1,4 +1,5 @@
 import type { ErrorRequestHandler } from 'express';
+import { logger } from '../config/logger.js';
 import { AppError } from '../types/errors.js';
 
 /**
@@ -14,7 +15,7 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
 
   // Unexpected error: the client gets a generic message, but the full
   // detail — stack trace and all — is logged for whoever's debugging this.
-  console.error('Unhandled error:', err);
+  logger.error({ err }, 'Unhandled error');
 
   const fallback = AppError.internal();
   res.status(fallback.status).json(fallback.toResponseBody());
