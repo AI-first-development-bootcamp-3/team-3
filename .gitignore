@@ -33,3 +33,6 @@ npm-debug.log*
 
 # Claude Code local overrides (shared config in .claude/ stays tracked)
 .claude/settings.local.json
+
+# OpenSpec CLI transient lock file - recreated on every archive run, not meant to be versioned
+openspec/changes/archive/.openspec-archive.lock

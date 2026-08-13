@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-08-13
+goal: Clear folders (components, pages, hooks, services, types), React Router
+  configured, placeholder layout/nav renders

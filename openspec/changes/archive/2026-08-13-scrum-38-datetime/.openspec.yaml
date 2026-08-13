@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-08-13
+goal: Date library configured with Hebrew locale, sample date picker renders
+  correctly in Hebrew
