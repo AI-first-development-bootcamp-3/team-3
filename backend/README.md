@@ -26,3 +26,72 @@ await prisma.client.findMany({ where: { isActive: undefined } });
 An explicit key in `where` — even set to `undefined` — is left untouched by
 the extension; only a `where` with no `isActive` key at all gets the default
 filter applied.
+
+## Test database
+
+Integration tests run against a real PostgreSQL database — `abra_test` —
+kept separate from `abra_dev` so a test run can never touch development
+data:
+
+- `docker/postgres-init/01-create-test-db.sql` creates `abra_test` alongside
+  `abra_dev` on the Postgres container's **first** startup only. If you
+  already had the `postgres-data` volume from before this change, the script
+  won't run automatically — either `docker compose down -v` (destroys the
+  volume) or connect once and run `CREATE DATABASE abra_test;` by hand.
+- `vitest.config.ts` points every test process at `abra_test` via `testEnv`
+  (`src/test/testEnv.ts`), and registers `src/test/globalSetup.ts` to run
+  `prisma migrate deploy` against it before the suite starts — the same
+  migrations every other environment gets, applied once per run rather than
+  once per test file.
+- Before migrating, `globalSetup` calls `guardAgainstDevDatabase`
+  (`src/test/guardAgainstDevDatabase.ts`), which compares the test
+  `DATABASE_URL` against `.env`'s directly and aborts the run if they match
+  — tests truncate every table after each one runs, so pointing them at the
+  dev database would destroy it.
+- Each integration test calls `resetDatabase()` (`src/test/resetDatabase.ts`)
+  in its own `afterEach`, truncating every table so writes don't leak
+  between tests. It isn't wired in globally, so tests that never touch the
+  database don't pick up a DB dependency they don't need.
+- `src/test/factories.ts` builds valid `User`/`Client`/`Project`/`Task` rows
+  inline (auto-creating parents up the hierarchy as needed), so integration
+  tests don't need hand-written fixtures.
+- All test files share this one real database, so `vitest.config.ts` sets
+  `fileParallelism: false` — Vitest's default parallel-file execution would
+  let one file's `resetDatabase()` truncate rows another file is mid-test
+  with. Running files sequentially trades some suite speed for the
+  isolation the tests actually need.
+
+**In CI:** bring up `docker compose up -d postgres` (or run an equivalent
+`postgres:16-alpine` service with the same init script mounted) before
+`npm test`. No other setup is required — `globalSetup` handles migrations,
+and the suite is safe to run repeatedly with no manual cleanup between runs.
+
+## File storage
+
+Attachments (sick notes, reserve-duty confirmations — PDFs and photos,
+1-5 MB) are metadata in PostgreSQL plus bytes on disk, not `bytea` in the
+database: `bytea` would bloat every `pg_dump`, defeat streaming responses,
+and consume the free-tier database quota that should hold years of report
+rows instead.
+
+- `src/types/fileStorage.ts` declares the `FileStorage` interface
+  (`store`/`retrieve`/`delete`) that calling code depends on — never the
+  concrete implementation directly.
+- `src/services/localFileStorage.ts` is the only implementation right now:
+  bytes live under `STORAGE_DIR` (default `./storage/uploads`, a mounted
+  volume in Docker/production). The original filename is discarded on
+  write — only its extension survives — so a generated key
+  (`crypto.randomUUID() + extension`) is what actually touches the
+  filesystem. That's what makes path traversal in an uploaded filename
+  harmless: there's no user-supplied path component left to sanitise.
+- `src/services/attachment.service.ts` enforces who can retrieve what
+  (owner or administrator) and streams bytes back rather than buffering a
+  whole file into memory.
+
+**Free-tier filesystems are ephemeral.** Render's and Railway's free tiers
+don't persist container disks — an uploaded file vanishes on redeploy. The
+`FileStorage` interface exists so this is a known, contained gap: swapping
+in an S3-compatible store (Cloudflare R2 and Backblaze B2 both have real
+free tiers) means writing a new implementation of that interface and
+pointing the app at it — no changes to `attachment.service.ts` or the
+routes/controllers that call it.

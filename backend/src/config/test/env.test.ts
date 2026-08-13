@@ -23,15 +23,17 @@ describe('parseEnv', () => {
       CORS_ORIGIN: ['http://localhost:5173', 'http://localhost:3000'],
       JWT_SECRET: minimalRequired.JWT_SECRET,
       LOG_LEVEL: 'debug',
+      STORAGE_DIR: './storage/uploads',
     });
   });
 
-  it('applies defaults for NODE_ENV, PORT, and LOG_LEVEL when omitted', () => {
+  it('applies defaults for NODE_ENV, PORT, LOG_LEVEL, and STORAGE_DIR when omitted', () => {
     const env = parseEnv(minimalRequired);
 
     expect(env.NODE_ENV).toBe('development');
     expect(env.PORT).toBe(3000);
     expect(env.LOG_LEVEL).toBe('info');
+    expect(env.STORAGE_DIR).toBe('./storage/uploads');
   });
 
   it('coerces PORT from a string to a number', () => {

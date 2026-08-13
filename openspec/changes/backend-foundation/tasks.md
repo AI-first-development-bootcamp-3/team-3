@@ -72,44 +72,51 @@ _Covers SCRUM-46. Token issuance is out of scope — it belongs to the Auth epic
 
 ## 5. Feature: Test harness — `feat/SCRUM-52-test-harness`
 
-_Covers SCRUM-52. Requires groups 1 and 2._
+_Covers SCRUM-52. Requires groups 1 and 2. Implemented on the combined
+`feat/remaining-features` branch (groups 5–8 treated as one feature per
+explicit instruction); PR opens once group 8 is done, not per sub-group._
 
-- [ ] 5.1 Cut `feat/SCRUM-52-test-harness` from the updated `task/SCRUM-11-backend`
-- [ ] 5.2 Add a separate test-database service to `docker-compose.yml` (or a distinct database name) driven by `DATABASE_URL` in the test environment
-- [ ] 5.3 Add global test setup applying the same migrations used by every other environment to the test database
-- [ ] 5.4 Implement per-test truncation so writes in one test are invisible to the next, keeping the schema intact
-- [ ] 5.5 Add a guard aborting the run if the test database URL resolves to the development database
-- [ ] 5.6 Add test data factories for the core entities so integration tests need no hand-written fixtures
-- [ ] 5.7 Write an integration test proving Client → Project → Task traversal against real SQL
-- [ ] 5.8 Confirm the full suite passes twice consecutively with no manual cleanup, and document how CI provisions the test database
-- [ ] 5.9 Open PR
+- [x] 5.1 Cut `feat/SCRUM-52-test-harness` from the updated `task/SCRUM-11-backend`
+- [x] 5.2 Add a separate test-database service to `docker-compose.yml` (or a distinct database name) driven by `DATABASE_URL` in the test environment
+- [x] 5.3 Add global test setup applying the same migrations used by every other environment to the test database
+- [x] 5.4 Implement per-test truncation so writes in one test are invisible to the next, keeping the schema intact
+- [x] 5.5 Add a guard aborting the run if the test database URL resolves to the development database
+- [x] 5.6 Add test data factories for the core entities so integration tests need no hand-written fixtures
+- [x] 5.7 Write an integration test proving Client → Project → Task traversal against real SQL
+- [x] 5.8 Confirm the full suite passes twice consecutively with no manual cleanup, and document how CI provisions the test database
+- [x] 5.9 Open PR — https://github.com/AI-first-development-bootcamp-3/team-3/pull/27 (combined, targets `task/SCRUM-11-backend`)
 
 ## 6. Feature: API documentation — `feat/SCRUM-50-api-docs`
 
-_Covers SCRUM-50. Deferrable — see proposal.md → Deferred scope._
+_Covers SCRUM-50. Deferrable — see proposal.md → Deferred scope. Implemented
+on the combined `feat/remaining-features` branch; PR opens once group 8 is
+done._
 
-- [ ] 6.1 Cut `feat/SCRUM-50-api-docs` from the updated `task/SCRUM-11-backend`
-- [ ] 6.2 Configure swagger-jsdoc to build the OpenAPI document from annotations beside the route definitions
-- [ ] 6.3 Serve the interactive UI at `/api-docs` and the raw OpenAPI JSON at a sibling route, both disabled in production by configuration
-- [ ] 6.4 Declare the bearer-token security scheme so protected endpoints become executable from the UI once login exists
-- [ ] 6.5 Annotate `GET /health` fully, including its 200 and 503 responses, as the worked example later endpoints copy
-- [ ] 6.6 Document the shared error contract as a reusable schema component
-- [ ] 6.7 Test that the generated document is valid OpenAPI and that the UI route responds; open PR
+- [x] 6.1 Cut `feat/SCRUM-50-api-docs` from the updated `task/SCRUM-11-backend`
+- [x] 6.2 Configure swagger-jsdoc to build the OpenAPI document from annotations beside the route definitions
+- [x] 6.3 Serve the interactive UI at `/api-docs` and the raw OpenAPI JSON at a sibling route, both disabled in production by configuration
+- [x] 6.4 Declare the bearer-token security scheme so protected endpoints become executable from the UI once login exists
+- [x] 6.5 Annotate `GET /health` fully, including its 200 and 503 responses, as the worked example later endpoints copy
+- [x] 6.6 Document the shared error contract as a reusable schema component
+- [x] 6.7 Test that the generated document is valid OpenAPI and that the UI route responds
+- [x] Open PR — https://github.com/AI-first-development-bootcamp-3/team-3/pull/27 (combined, targets `task/SCRUM-11-backend`)
 
 ## 7. Feature: File uploads — `feat/SCRUM-49-file-uploads`
 
-_Covers SCRUM-49. Deferrable — nothing consumes this until the היעדרויות epic (SCRUM-7)._
+_Covers SCRUM-49. Deferrable — nothing consumes this until the היעדרויות epic (SCRUM-7).
+Implemented on the combined `feat/remaining-features` branch; PR opens once
+group 8 is done._
 
-- [ ] 7.1 Cut `feat/SCRUM-49-file-uploads` from the updated `task/SCRUM-11-backend`
-- [ ] 7.2 Define the `FileStorage` interface (store, retrieve, delete) so the backing store can be replaced without touching callers
-- [ ] 7.3 Implement local-filesystem storage against a mounted volume, generating opaque storage keys that sanitise the original filename
-- [ ] 7.4 Add the `Attachment` model and migration — filename, mime type, size, storage key, uploader, uploaded-at
-- [ ] 7.5 Configure multer with size and MIME-type limits, mapping rejections onto the error contract as 413 and 400
-- [ ] 7.6 Add authenticated upload and retrieval endpoints; enforce that employees reach only their own attachments while administrators reach any
-- [ ] 7.7 Stream retrieval rather than buffering, returning the recorded content type and 404 for unknown identifiers
-- [ ] 7.8 Test oversized rejection, disallowed type rejection, unauthenticated rejection, owner access, admin access, cross-employee refusal, and that a traversal-laden filename cannot escape the store
-- [ ] 7.9 Record the storage decision and the S3 migration path in `backend/README.md`, noting that free-tier filesystems are ephemeral
-- [ ] 7.10 Open PR
+- [x] 7.1 Cut `feat/SCRUM-49-file-uploads` from the updated `task/SCRUM-11-backend`
+- [x] 7.2 Define the `FileStorage` interface (store, retrieve, delete) so the backing store can be replaced without touching callers
+- [x] 7.3 Implement local-filesystem storage against a mounted volume, generating opaque storage keys that sanitise the original filename
+- [x] 7.4 Add the `Attachment` model and migration — filename, mime type, size, storage key, uploader, uploaded-at
+- [x] 7.5 Configure multer with size and MIME-type limits, mapping rejections onto the error contract as 413 and 400
+- [x] 7.6 Add authenticated upload and retrieval endpoints; enforce that employees reach only their own attachments while administrators reach any
+- [x] 7.7 Stream retrieval rather than buffering, returning the recorded content type and 404 for unknown identifiers
+- [x] 7.8 Test oversized rejection, disallowed type rejection, unauthenticated rejection, owner access, admin access, cross-employee refusal, and that a traversal-laden filename cannot escape the store
+- [x] 7.9 Record the storage decision and the S3 migration path in `backend/README.md`, noting that free-tier filesystems are ephemeral
+- [x] 7.10 Open PR — https://github.com/AI-first-development-bootcamp-3/team-3/pull/27 (combined, targets `task/SCRUM-11-backend`)
 
 ## 8. Close out SCRUM-11
 
