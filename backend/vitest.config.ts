@@ -1,19 +1,14 @@
 import { defineConfig } from 'vitest/config';
+import { testEnv } from './src/test/testEnv.js';
 
 export default defineConfig({
   test: {
     environment: 'node',
     // Values needed so importing env.ts during tests doesn't exit the
-    // process — the real database used by integration tests is set up
-    // separately in the test-harness feature (SCRUM-52).
-    env: {
-      NODE_ENV: 'test',
-      PORT: '4000',
-      DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/abra_test',
-      CORS_ORIGIN: 'http://localhost:5173',
-      JWT_SECRET: 'test-only-secret-at-least-32-characters-long',
-      LOG_LEVEL: 'silent',
-    },
+    // process, and so the test database (distinct from development) is what
+    // every test, and globalSetup's migration run, connects to.
+    env: testEnv,
+    globalSetup: ['./src/test/globalSetup.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
