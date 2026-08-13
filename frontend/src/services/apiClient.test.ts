@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { notification } from 'antd'
 import { ApiError, request } from './apiClient'
 import { sessionStore } from './sessionStore'
 import * as navigation from './navigation'
@@ -69,17 +70,25 @@ describe('apiClient request', () => {
 
   it('clears session and redirects to login on 401 response', async () => {
     const redirectSpy = vi.spyOn(navigation, 'redirectToLogin').mockImplementation(() => {})
+    // antd's static notification API renders into its own DOM container outside
+    // any tree RTL's cleanup() knows about, using React's async scheduler - that
+    // work can outlive this test file's jsdom teardown and throw "window is not
+    // defined". Stub it so the test verifies our error-handling behavior without
+    // exercising antd's real (and here, irrelevant) rendering.
+    const notificationSpy = vi.spyOn(notification, 'warning').mockImplementation(() => '' as unknown as void)
     sessionStore
       .getState()
       .setSession({ id: '1', fullName: 'Dan', email: 'd@x.com', userType: 'admin', active: true }, 'abc123')
-    
+
     mockFetchOnce({ ok: false, status: 401, json: {} })
 
     await expect(request('/protected')).rejects.toBeInstanceOf(ApiError)
-    
+
     expect(sessionStore.getState().token).toBeNull()
     expect(redirectSpy).toHaveBeenCalledOnce()
+    expect(notificationSpy).toHaveBeenCalledOnce()
     redirectSpy.mockRestore()
+    notificationSpy.mockRestore()
   })
 
   it('throws ApiError with status 500 without redirecting', async () => {
