@@ -40,6 +40,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@apidevtools/swagger-parser": "12.1.0",
     "@eslint/js": "10.0.1",
     "@types/cors": "2.8.19",
     "@types/express": "5.0.6",

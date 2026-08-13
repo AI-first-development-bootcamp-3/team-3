@@ -1,7 +1,9 @@
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
+import swaggerUi from 'swagger-ui-express';
 import { env } from './config/env.js';
+import { openApiSpec } from './config/swagger.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { notFoundHandler } from './middleware/notFound.middleware.js';
 import { requestLogger } from './middleware/requestLogger.middleware.js';
@@ -30,6 +32,15 @@ app.use(express.json());
 
 app.use(healthRouter);
 app.use(sampleRouter);
+
+// Interactive docs leak endpoint shapes and are dev/QA tooling, not a
+// production surface — disabled there by configuration.
+if (env.NODE_ENV !== 'production') {
+  app.get('/api-docs.json', (_req, res) => {
+    res.json(openApiSpec);
+  });
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openApiSpec));
+}
 
 // Feature routes are inserted here by later tasks, above notFoundHandler.
 
