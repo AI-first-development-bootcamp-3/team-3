@@ -1,5 +1,7 @@
+import { notification } from 'antd'
 import { API_URL } from './env'
 import { sessionStore } from './sessionStore'
+import { redirectToLogin } from './navigation'
 
 export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
@@ -20,9 +22,14 @@ export class ApiError extends Error {
 }
 
 /**
- * Thin fetch wrapper every feature Story's services/ code goes through, instead
- * of calling fetch directly. Attaches the session token automatically (SCRUM-39)
- * when one is present. No error-redirect handling here - that's SCRUM-42.
+ * Core API fetch wrapper for making network requests.
+ * 
+ * **ERROR HANDLING PATTERN:**
+ * Feature work should use this `request` function (or React Query hooks that use it) 
+ * without worrying about global errors:
+ * - **401 Unauthorized**: Handled automatically. The session is cleared, a toast is shown, and the user is redirected to `/login`.
+ * - **500+ Server Errors**: Handled automatically via React Query's global cache. A toast is shown.
+ * - **400/422 Validation Errors**: NOT handled automatically. Your feature code should catch these (via `try/catch` or `onError` in mutations) to show inline form validation messages.
  */
 export async function request<T>(
   path: string,
@@ -47,6 +54,14 @@ export async function request<T>(
     : undefined
 
   if (!response.ok) {
+    if (response.status === 401) {
+      sessionStore.getState().clearSession()
+      notification.warning({
+        message: 'Session Expired',
+        description: 'Session expired, please log in again',
+      })
+      redirectToLogin()
+    }
     throw new ApiError(response.status, responseBody)
   }
 
