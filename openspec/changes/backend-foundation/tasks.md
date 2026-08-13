@@ -84,7 +84,7 @@ explicit instruction); PR opens once group 8 is done, not per sub-group._
 - [x] 5.6 Add test data factories for the core entities so integration tests need no hand-written fixtures
 - [x] 5.7 Write an integration test proving Client → Project → Task traversal against real SQL
 - [x] 5.8 Confirm the full suite passes twice consecutively with no manual cleanup, and document how CI provisions the test database
-- [ ] 5.9 Open PR — deferred to end of group 8 (combined branch)
+- [x] 5.9 Open PR — https://github.com/AI-first-development-bootcamp-3/team-3/pull/27 (combined, targets `task/SCRUM-11-backend`)
 
 ## 6. Feature: API documentation — `feat/SCRUM-50-api-docs`
 
@@ -99,7 +99,7 @@ done._
 - [x] 6.5 Annotate `GET /health` fully, including its 200 and 503 responses, as the worked example later endpoints copy
 - [x] 6.6 Document the shared error contract as a reusable schema component
 - [x] 6.7 Test that the generated document is valid OpenAPI and that the UI route responds
-- [ ] Open PR — deferred to end of group 8 (combined branch)
+- [x] Open PR — https://github.com/AI-first-development-bootcamp-3/team-3/pull/27 (combined, targets `task/SCRUM-11-backend`)
 
 ## 7. Feature: File uploads — `feat/SCRUM-49-file-uploads`
 
@@ -116,7 +116,7 @@ group 8 is done._
 - [x] 7.7 Stream retrieval rather than buffering, returning the recorded content type and 404 for unknown identifiers
 - [x] 7.8 Test oversized rejection, disallowed type rejection, unauthenticated rejection, owner access, admin access, cross-employee refusal, and that a traversal-laden filename cannot escape the store
 - [x] 7.9 Record the storage decision and the S3 migration path in `backend/README.md`, noting that free-tier filesystems are ephemeral
-- [ ] 7.10 Open PR — deferred to end of group 8 (combined branch)
+- [x] 7.10 Open PR — https://github.com/AI-first-development-bootcamp-3/team-3/pull/27 (combined, targets `task/SCRUM-11-backend`)
 
 ## 8. Close out SCRUM-11
 
