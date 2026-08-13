@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, request } from './apiClient'
 import { sessionStore } from './sessionStore'
+import * as navigation from './navigation'
 
 function mockFetchOnce(response: {
   ok: boolean
@@ -64,5 +65,29 @@ describe('apiClient request', () => {
 
     const [, init] = fetchMock.mock.calls[0]
     expect(init.headers.Authorization).toBeUndefined()
+  })
+
+  it('clears session and redirects to login on 401 response', async () => {
+    const redirectSpy = vi.spyOn(navigation, 'redirectToLogin').mockImplementation(() => {})
+    sessionStore
+      .getState()
+      .setSession({ id: '1', fullName: 'Dan', email: 'd@x.com', userType: 'admin', active: true }, 'abc123')
+    
+    mockFetchOnce({ ok: false, status: 401, json: {} })
+
+    await expect(request('/protected')).rejects.toBeInstanceOf(ApiError)
+    
+    expect(sessionStore.getState().token).toBeNull()
+    expect(redirectSpy).toHaveBeenCalledOnce()
+    redirectSpy.mockRestore()
+  })
+
+  it('throws ApiError with status 500 without redirecting', async () => {
+    const redirectSpy = vi.spyOn(navigation, 'redirectToLogin').mockImplementation(() => {})
+    mockFetchOnce({ ok: false, status: 500, json: {} })
+
+    await expect(request('/fail')).rejects.toMatchObject({ status: 500 })
+    expect(redirectSpy).not.toHaveBeenCalled()
+    redirectSpy.mockRestore()
   })
 })
