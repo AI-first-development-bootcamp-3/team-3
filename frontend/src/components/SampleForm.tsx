@@ -6,6 +6,7 @@ import {
   sampleFormSchema,
   type SampleFormValues,
 } from './SampleForm.schema'
+import HealthCheckDemo from './HealthCheckDemo'
 
 const TIME_FORMAT = 'HH:mm'
 
@@ -97,6 +98,14 @@ function SampleForm() {
       <Form.Item label="Sample date (SCRUM-38)">
         <DatePicker />
       </Form.Item>
+
+      {/*
+        Two independent instances, same query key - proves TanStack Query
+        dedup rather than each firing its own request. See SCRUM-39's design.md.
+      */}
+      <div>Sample query dedup (SCRUM-39):</div>
+      <HealthCheckDemo />
+      <HealthCheckDemo />
     </Form>
   )
 }

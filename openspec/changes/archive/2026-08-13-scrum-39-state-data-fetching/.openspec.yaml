@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-08-13
+goal: TanStack Query configured for server-state caching, lightweight global
+  state for auth/session, sample query demonstrates caching
