@@ -1,12 +1,14 @@
 services:
   postgres:
-    image: postgres:16
+    image: postgres:16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: abra_dev
-      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=en_US.UTF-8'
+      # Alpine's musl libc only ships C / C.UTF-8 locales, not en_US.UTF-8 —
+      # C.UTF-8 still gives full UTF-8 storage/comparison, just C-style sort order.
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C.UTF-8'
     ports:
       - '5432:5432'
     volumes:
