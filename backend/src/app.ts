@@ -6,6 +6,7 @@ import { errorHandler } from './middleware/error.middleware.js';
 import { notFoundHandler } from './middleware/notFound.middleware.js';
 import { requestLogger } from './middleware/requestLogger.middleware.js';
 import { healthRouter } from './routes/health.routes.js';
+import { sampleRouter } from './routes/sample.routes.js';
 
 /**
  * The Express app, fully configured but never listening. Kept separate from
@@ -28,6 +29,7 @@ app.use(requestLogger);
 app.use(express.json());
 
 app.use(healthRouter);
+app.use(sampleRouter);
 
 // Feature routes are inserted here by later tasks, above notFoundHandler.
 
