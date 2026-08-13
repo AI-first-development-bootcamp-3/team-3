@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { prisma } from './prisma.js';
+import { prisma } from '../prisma.js';
 
 // Exercises the soft-delete extension against a real database. Per-test
 // isolation (truncation between runs) lands with the test-harness feature;

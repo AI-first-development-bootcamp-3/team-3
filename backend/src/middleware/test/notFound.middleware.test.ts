@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import request from 'supertest';
-import { app } from '../app.js';
+import { app } from '../../app.js';
 
 describe('404 handler', () => {
   it('returns the standard error shape for an unmatched route', async () => {

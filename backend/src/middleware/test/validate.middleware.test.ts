@@ -1,8 +1,8 @@
 import type { NextFunction, Request, Response } from 'express';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { AppError } from '../types/errors.js';
-import { validate } from './validate.middleware.js';
+import { AppError } from '../../types/errors.js';
+import { validate } from '../validate.middleware.js';
 
 function makeRes(): Response {
   return {} as Response;

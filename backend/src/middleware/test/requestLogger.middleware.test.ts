@@ -1,8 +1,8 @@
 import pino from 'pino';
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
-import { app } from '../app.js';
-import { redactPaths } from './requestLogger.middleware.js';
+import { app } from '../../app.js';
+import { redactPaths } from '../requestLogger.middleware.js';
 
 describe('request logging', () => {
   it('attaches a correlation id header to the response', async () => {

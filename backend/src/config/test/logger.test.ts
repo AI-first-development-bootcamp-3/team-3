@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { logger } from './logger.js';
+import { logger } from '../logger.js';
 
 describe('logger', () => {
   it('is configured with the log level from the environment', () => {

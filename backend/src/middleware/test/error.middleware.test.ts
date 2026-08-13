@@ -1,9 +1,9 @@
 import express from 'express';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { logger } from '../config/logger.js';
-import { AppError } from '../types/errors.js';
-import { errorHandler } from './error.middleware.js';
+import { logger } from '../../config/logger.js';
+import { AppError } from '../../types/errors.js';
+import { errorHandler } from '../error.middleware.js';
 
 /**
  * A small, isolated app rather than the real one — this test needs routes
