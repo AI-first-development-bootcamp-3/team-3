@@ -16,5 +16,46 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - app-network
+
+  backend:
+    build:
+      context: ./backend
+      target: dev
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/abra_dev
+      CORS_ORIGIN: http://localhost:5173
+      JWT_SECRET: dev-only-secret-change-me-please-32chars-min
+      LOG_LEVEL: debug
+    ports:
+      - '3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: ./frontend
+      target: dev
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://localhost:3000
+    ports:
+      - '5173:5173'
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
 volumes:
   postgres-data:
+
+networks:
+  app-network:
+    driver: bridge

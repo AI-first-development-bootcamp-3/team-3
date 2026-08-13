@@ -27,15 +27,16 @@ Because frontend JS runs in the browser (outside the Docker network), only host-
 Acceptance criteria explicitly calls for "shared network between services." Compose creates a default network automatically, but naming it explicitly documents the intent directly in the file.
 
 ## Risks / Trade-offs
-**`frontend/` and `backend/` source (SCRUM-26/27) aren't present on this branch.** This compose file's `build: context: ./frontend` / `./backend` directives will fail until those directories exist here via a merge. Mitigation: write the compose file now per the established "spec/write now, verify once merged" pattern used for SCRUM-26/27/28; flagged explicitly as an open item rather than silently assumed away.
+**`frontend/` and `backend/` application source isn't present on this branch.** Only the Dockerfiles (SCRUM-26/27, copied verbatim) are here — `build: context: ./frontend` / `./backend` directives resolve to real Dockerfiles, but `docker compose build` will still fail until real application source is added underneath them. This is intentional: the user is deliberately staging infrastructure ahead of source integration, to be merged/added later on their own timeline. Mitigation: none needed — this is the desired state, not a gap to close within this change.
 
 **Dev secrets in plain text in the compose file.** `JWT_SECRET` etc. are placeholder dev-only values. Mitigation: SCRUM-30 should call out explicitly that this isn't safe beyond local dev.
 
 ## Migration Plan
 1. Add `backend` and `frontend` services plus `app-network` to `docker-compose.yml`
-2. Merge in `frontend/` (SCRUM-26) and `backend/` (SCRUM-27) source once available
-3. Verify `docker compose up` brings up all three services successfully, backend connects to Postgres, frontend can call the backend from the browser
-4. Hand off to SCRUM-30 for docs
+2. Add the Dockerfiles/`.dockerignore`/`nginx.conf` (SCRUM-26/27, infra only) so build contexts resolve
+3. Application source (`frontend/`, `backend/`) added/integrated later, on the user's own timeline
+4. Once source is in place, verify `docker compose up` brings up all three services successfully, backend connects to Postgres, frontend can call the backend from the browser
+5. Hand off to SCRUM-30 for docs
 
 ## Open Questions
-- **Same recurring question as SCRUM-26/27/28**: merge the SCRUM-26/27 branches into this one now (enabling real build verification), or keep deferring merge to a later integration step?
+None currently — the branch-ancestry question from SCRUM-26/27/28 is resolved for this change: infrastructure is staged now, application source is deliberately deferred to a later, separate integration step.
