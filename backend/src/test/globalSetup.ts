@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { guardAgainstDevDatabase } from './guardAgainstDevDatabase.js';
 import { testEnv } from './testEnv.js';
 
 /**
@@ -10,6 +11,8 @@ import { testEnv } from './testEnv.js';
  * rather than a mock.
  */
 export default function setup(): void {
+  guardAgainstDevDatabase(testEnv.DATABASE_URL);
+
   execFileSync('npx', ['prisma', 'migrate', 'deploy'], {
     stdio: 'inherit',
     env: { ...process.env, ...testEnv },
