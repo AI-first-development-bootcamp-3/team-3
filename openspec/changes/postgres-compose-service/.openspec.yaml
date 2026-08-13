@@ -1,3 +1,0 @@
-schema: spec-driven
-created: 2026-08-13
-goal: Add the PostgreSQL Docker Compose service, reusing the definition already validated on feat/SCRUM-22-data-layer (SCRUM-28)

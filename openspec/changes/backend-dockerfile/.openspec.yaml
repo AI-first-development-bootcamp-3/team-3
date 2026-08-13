@@ -1,3 +1,0 @@
-schema: spec-driven
-created: 2026-08-13
-goal: Multi-stage Dockerfile for the Node/Express/Prisma backend, matching the frontend's build/dev/production pattern (SCRUM-27)
