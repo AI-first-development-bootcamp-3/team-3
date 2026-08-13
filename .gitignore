@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Environment — never commit real values, see .env.example
+.env
+.env.*
+!.env.example
+
+# Test output
+coverage/
+*.lcov
+
+# Uploaded files (absence attachments live on a volume, not in git)
+uploads/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Claude Code local overrides (shared config in .claude/ stays tracked)
+.claude/settings.local.json

@@ -4,8 +4,8 @@ Each numbered group is one feature branch cut from `task/SCRUM-11-backend`, merg
 
 _Covers SCRUM-23, SCRUM-21, SCRUM-24, SCRUM-25. Nothing else can start until this merges._
 
-- [ ] 1.1 Cut `feat/SCRUM-23-app-skeleton` from `task/SCRUM-11-backend`
-- [ ] 1.2 Create `backend/` and `frontend/` sibling folders; add a root `.gitignore` covering `node_modules`, `dist`, `.env`, and coverage output
+- [x] 1.1 Cut `feat/SCRUM-23-app-skeleton` from `task/SCRUM-11-backend`
+- [x] 1.2 Create `backend/` and `frontend/` sibling folders; add a root `.gitignore` covering `node_modules`, `dist`, `.env`, and coverage output
 - [ ] 1.3 Initialise `backend/package.json` with TypeScript, `tsconfig.json` targeting Node 20 in strict mode, and `dev` / `build` / `start` scripts
 - [ ] 1.4 Install the **complete** dependency set for all seven features in this one commit, so later branches add only source files (see design.md → Migration Plan step 1)
 - [ ] 1.5 Create the folder layout under `backend/src/`: `routes/`, `controllers/`, `services/`, `middleware/`, `types/`, `config/`
