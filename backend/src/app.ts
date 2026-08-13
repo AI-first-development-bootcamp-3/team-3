@@ -7,6 +7,7 @@ import { openApiSpec } from './config/swagger.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { notFoundHandler } from './middleware/notFound.middleware.js';
 import { requestLogger } from './middleware/requestLogger.middleware.js';
+import { attachmentRouter } from './routes/attachment.routes.js';
 import { healthRouter } from './routes/health.routes.js';
 import { sampleRouter } from './routes/sample.routes.js';
 
@@ -32,6 +33,7 @@ app.use(express.json());
 
 app.use(healthRouter);
 app.use(sampleRouter);
+app.use(attachmentRouter);
 
 // Interactive docs leak endpoint shapes and are dev/QA tooling, not a
 // production surface — disabled there by configuration.

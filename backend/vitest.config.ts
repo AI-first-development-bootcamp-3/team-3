@@ -9,6 +9,12 @@ export default defineConfig({
     // every test, and globalSetup's migration run, connects to.
     env: testEnv,
     globalSetup: ['./src/test/globalSetup.ts'],
+    // All test files share one real Postgres database. Vitest's default
+    // parallel-file execution would let one file's resetDatabase() truncate
+    // rows another file is mid-test with — running files sequentially trades
+    // some suite speed for the isolation the "no leaked state" requirement
+    // actually needs.
+    fileParallelism: false,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],

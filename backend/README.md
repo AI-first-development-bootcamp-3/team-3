@@ -55,8 +55,43 @@ data:
 - `src/test/factories.ts` builds valid `User`/`Client`/`Project`/`Task` rows
   inline (auto-creating parents up the hierarchy as needed), so integration
   tests don't need hand-written fixtures.
+- All test files share this one real database, so `vitest.config.ts` sets
+  `fileParallelism: false` — Vitest's default parallel-file execution would
+  let one file's `resetDatabase()` truncate rows another file is mid-test
+  with. Running files sequentially trades some suite speed for the
+  isolation the tests actually need.
 
 **In CI:** bring up `docker compose up -d postgres` (or run an equivalent
 `postgres:16-alpine` service with the same init script mounted) before
 `npm test`. No other setup is required — `globalSetup` handles migrations,
 and the suite is safe to run repeatedly with no manual cleanup between runs.
+
+## File storage
+
+Attachments (sick notes, reserve-duty confirmations — PDFs and photos,
+1-5 MB) are metadata in PostgreSQL plus bytes on disk, not `bytea` in the
+database: `bytea` would bloat every `pg_dump`, defeat streaming responses,
+and consume the free-tier database quota that should hold years of report
+rows instead.
+
+- `src/types/fileStorage.ts` declares the `FileStorage` interface
+  (`store`/`retrieve`/`delete`) that calling code depends on — never the
+  concrete implementation directly.
+- `src/services/localFileStorage.ts` is the only implementation right now:
+  bytes live under `STORAGE_DIR` (default `./storage/uploads`, a mounted
+  volume in Docker/production). The original filename is discarded on
+  write — only its extension survives — so a generated key
+  (`crypto.randomUUID() + extension`) is what actually touches the
+  filesystem. That's what makes path traversal in an uploaded filename
+  harmless: there's no user-supplied path component left to sanitise.
+- `src/services/attachment.service.ts` enforces who can retrieve what
+  (owner or administrator) and streams bytes back rather than buffering a
+  whole file into memory.
+
+**Free-tier filesystems are ephemeral.** Render's and Railway's free tiers
+don't persist container disks — an uploaded file vanishes on redeploy. The
+`FileStorage` interface exists so this is a known, contained gap: swapping
+in an S3-compatible store (Cloudflare R2 and Backblaze B2 both have real
+free tiers) means writing a new implementation of that interface and
+pointing the app at it — no changes to `attachment.service.ts` or the
+routes/controllers that call it.
