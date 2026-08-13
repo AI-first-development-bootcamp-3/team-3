@@ -120,9 +120,9 @@ group 8 is done._
 
 ## 8. Close out SCRUM-11
 
-- [ ] 8.1 Merge `development` into `task/SCRUM-11-backend` and resolve any drift accumulated during the story
-- [ ] 8.2 Confirm the full suite passes with coverage at or above 60%
-- [ ] 8.3 Verify a clean-clone bootstrap: `npm install`, compose up, migrate, seed, `npm run dev`, and `/health` green
-- [ ] 8.4 Write `backend/README.md` covering setup, scripts, environment variables, and the conventions later epics must follow
-- [ ] 8.5 Open the PR from `task/SCRUM-11-backend` to `epic-setup&instrafracture`
+- [x] 8.1 Merge `development` into `task/SCRUM-11-backend` and resolve any drift accumulated during the story — `development` had no new commits; nothing to merge
+- [x] 8.2 Confirm the full suite passes with coverage at or above 60% — 78/78, 86.87% coverage
+- [x] 8.3 Verify a clean-clone bootstrap: `npm install`, compose up, migrate, seed, `npm run dev`, and `/health` green — verified against a throwaway database (Docker unavailable in this environment, used a local Postgres instead)
+- [x] 8.4 Write `backend/README.md` covering setup, scripts, environment variables, and the conventions later epics must follow
+- [x] 8.5 Open the PR from `task/SCRUM-11-backend` to `epic-setup&instrafracture` — https://github.com/AI-first-development-bootcamp-3/team-3/pull/31 (opened from `task-scrum11-for-epic-pr`, which pre-merges `epic-setup&instrafracture` in to resolve two conflicts — `.gitignore` and `docker-compose.yml` — before opening; PR reports MERGEABLE/CLEAN)
 - [ ] 8.6 Transition remaining SCRUM-11 subtasks to Done and run `/opsx:archive` for this change
