@@ -52,9 +52,9 @@ _Covers SCRUM-45, SCRUM-47, SCRUM-48._
 - [x] 3.6 Configure redaction so authorization headers, passwords, and tokens never reach the logs
 - [x] 3.7 Configure CORS from `CORS_ORIGIN`, supporting multiple origins and credentialed requests
 - [x] 3.8 Apply helmet, and disable the framework's identifying response header
-- [ ] 3.9 Add a sample validated route demonstrating required-field, wrong-type, and multi-field failures
-- [ ] 3.10 Test validation (valid passes, missing field, wrong type, three simultaneous failures, unknown fields stripped), CORS (allowed vs disallowed origin), and that security headers are present
-- [ ] 3.11 Verify logs are structured JSON with no secrets present; open PR
+- [x] 3.9 Add a sample validated route demonstrating required-field, wrong-type, and multi-field failures
+- [x] 3.10 Test validation (valid passes, missing field, wrong type, three simultaneous failures, unknown fields stripped), CORS (allowed vs disallowed origin), and that security headers are present
+- [x] 3.11 Verify logs are structured JSON with no secrets present; open PR
 
 ## 4. Feature: Auth middleware — `feat/SCRUM-46-auth-middleware`
 
