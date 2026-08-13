@@ -9,8 +9,8 @@ env:
   NODE_VERSION: '24'
 
 jobs:
-  lint-test:
-    name: lint-test (${{ matrix.app }})
+  lint:
+    name: lint (${{ matrix.app }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -31,12 +31,67 @@ jobs:
       - run: npm run lint
         working-directory: ${{ matrix.app }}
 
+  test-frontend:
+    name: test (frontend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+        working-directory: frontend
+
       - run: npm run test
-        working-directory: ${{ matrix.app }}
+        working-directory: frontend
+
+  # backend/vitest.config.ts wires a globalSetup (src/test/globalSetup.ts)
+  # that runs `prisma migrate deploy` against a real Postgres before every
+  # test file, unconditionally — this repo doesn't separate "unit" from
+  # "integration" tests, so this one job's `npm run test` is what satisfies
+  # both SCRUM-31 (backend lint+test) and SCRUM-55 (Postgres-backed
+  # integration tests): same command, same real DB, same failure mode.
+  # DB connection details come from backend/src/test/testEnv.ts, not from
+  # anything set here — no credentials live in this repo or this workflow.
+  test-backend:
+    name: test (backend, w/ Postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: abra_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+        working-directory: backend
+
+      - run: npm run test
+        working-directory: backend
 
   build:
     name: build (${{ matrix.app }})
-    needs: lint-test
+    needs: lint
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -59,7 +114,7 @@ jobs:
 
   docker-build:
     name: docker-build (${{ matrix.app }})
-    needs: lint-test
+    needs: lint
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -76,51 +131,3 @@ jobs:
           push: false
           cache-from: type=gha,scope=${{ matrix.app }}
           cache-to: type=gha,mode=max,scope=${{ matrix.app }}
-
-  # Depends on SCRUM-52 (test DB config for integration tests), which is still
-  # In Progress as of this workflow being written. DATABASE_URL/JWT_SECRET/
-  # CORS_ORIGIN below follow backend/.env.example and src/config/env.ts, and
-  # `npm run test` runs the full vitest suite since no separate integration
-  # script exists yet. Revisit this job once SCRUM-52 lands and defines real
-  # integration-test conventions (e.g. a dedicated `test:integration` script).
-  integration-test:
-    name: integration-test (backend)
-    needs: lint-test
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: abra_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      NODE_ENV: test
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/abra_test
-      JWT_SECRET: ci-only-secret-not-used-in-any-real-environment
-      CORS_ORIGIN: http://localhost:5173
-      LOG_LEVEL: silent
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: backend/package-lock.json
-
-      - run: npm ci
-        working-directory: backend
-
-      - run: npx prisma migrate deploy
-        working-directory: backend
-
-      - run: npm run test
-        working-directory: backend
