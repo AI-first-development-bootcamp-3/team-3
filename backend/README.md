@@ -1,5 +1,85 @@
 # Backend
 
+Express + TypeScript + Prisma/PostgreSQL API for the Abra timesheet system.
+
+## Setup
+
+Prerequisites: Node 24+, Docker (for PostgreSQL).
+
+```bash
+cp .env.example .env        # fill in JWT_SECRET at minimum — see below
+docker compose up -d postgres
+cd backend
+npm install                 # postinstall runs `prisma generate`
+npx prisma migrate deploy   # or `prisma migrate dev` when changing the schema
+npm run seed                # admin + employee users, sample clients/projects/tasks
+npm run dev
+curl http://localhost:3000/health   # -> {"status":"ok"}
+```
+
+`/api-docs` (Swagger UI) and `/api-docs.json` are live in development —
+see [API documentation](#api-documentation) below.
+
+## Scripts
+
+| Script | Purpose |
+| --- | --- |
+| `npm run dev` | Start the server with hot reload (`tsx watch`) |
+| `npm run build` / `npm start` | Compile to `dist/` and run the compiled output |
+| `npm run seed` | Populate the database via `prisma/seed.ts` (repeatable — upserts on stable keys) |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run lint` / `lint:fix` | ESLint |
+| `npm run format` / `format:check` | Prettier |
+| `npm test` / `test:watch` | Vitest — see [Test database](#test-database) |
+| `npm run test:coverage` | Vitest with the 60% line-coverage gate enforced |
+
+## Environment variables
+
+All parsed and validated at startup by `src/config/env.ts` — a missing or
+malformed value exits the process with every problem listed, not just the
+first. See `.env.example` for the full annotated list; `DATABASE_URL`,
+`CORS_ORIGIN`, and `JWT_SECRET` are required, everything else defaults.
+
+| Variable | Required | Notes |
+| --- | --- | --- |
+| `NODE_ENV` | no (`development`) | `development` \| `test` \| `production` |
+| `PORT` | no (`3000`) | |
+| `DATABASE_URL` | **yes** | Prisma-format PostgreSQL connection string |
+| `CORS_ORIGIN` | **yes** | Comma-separated list of allowed browser origins |
+| `JWT_SECRET` | **yes** | HS256 signing key, 32+ characters (`openssl rand -base64 32`) |
+| `LOG_LEVEL` | no (`info`) | pino level; `silent` disables logging (used in tests) |
+| `STORAGE_DIR` | no (`./storage/uploads`) | See [File storage](#file-storage) |
+
+## Conventions later epics should follow
+
+- **Layered structure:** `routes/` declare paths and compose middleware,
+  `controllers/` translate HTTP to/from domain calls, `services/` hold
+  business logic and own all database access. Keeps services unit-testable
+  without HTTP and gives every feature an obvious place to put things.
+- **Error contract:** throw `AppError` (`src/types/errors.ts`) from anywhere
+  — a route, a service, middleware — and the error middleware
+  (`src/middleware/error.middleware.ts`) serialises it identically
+  everywhere: `{ error: { code, message, details? } }`. Unexpected errors
+  are logged in full server-side and returned to the client as a generic
+  500, never leaking stack traces or internals.
+- **Validation:** wrap a route with `validate({ body, params, query })`
+  (`src/middleware/validate.middleware.ts`) using Zod schemas from
+  `src/types/`. All field failures come back in one 400, and the request
+  object is replaced with the parsed, stripped result — downstream code
+  only ever sees trusted, typed data.
+- **Auth:** `authenticate` (`src/middleware/auth.middleware.ts`) verifies
+  the bearer token and attaches `req.user`; `requireRole(role)` composes
+  after it to restrict a route by role. An unauthenticated request to a
+  role-guarded route gets 401, never 403.
+- **Soft delete**, **test database**, and **file storage** each have their
+  own section below — read them before touching `User`/`Client`/`Project`/
+  `Task`, writing an integration test, or adding a new attachment-like
+  feature.
+- **API documentation:** annotate new routes with `@openapi` JSDoc beside
+  the route definition (see `src/routes/health.routes.ts` for the worked
+  example) — the OpenAPI document at `/api-docs.json` is generated from
+  these, not maintained separately.
+
 ## Soft delete
 
 `User`, `Client`, `Project`, and `Task` are never hard-deleted — historical
@@ -65,6 +145,21 @@ data:
 `postgres:16-alpine` service with the same init script mounted) before
 `npm test`. No other setup is required — `globalSetup` handles migrations,
 and the suite is safe to run repeatedly with no manual cleanup between runs.
+
+## API documentation
+
+`src/config/swagger.ts` builds an OpenAPI document from `@openapi` JSDoc
+annotations kept beside each route definition — there's no separate spec
+file to keep in sync. Served in every environment except production:
+
+- `/api-docs` — interactive Swagger UI, with the bearer-token security
+  scheme wired up so a token pasted into the UI is sent on every request.
+- `/api-docs.json` — the raw OpenAPI document.
+
+`GET /health` (`src/routes/health.routes.ts`) is fully annotated as the
+worked example, including both its 200 and 503 responses; the shared error
+contract is declared once as a reusable `Error` schema component and
+referenced from there.
 
 ## File storage
 
