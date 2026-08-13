@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-08-13
+goal: Library evaluated for RTL quality, installed, RTL enabled, one placeholder
+  component confirms it works
