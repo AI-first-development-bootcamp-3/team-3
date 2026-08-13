@@ -15,7 +15,7 @@ _Covers SCRUM-23, SCRUM-21, SCRUM-24, SCRUM-25. Nothing else can start until thi
 - [x] 1.9 Define the error contract: an `AppError` type carrying HTTP status, machine-readable code, message, and optional per-field details
 - [x] 1.10 Add error-handling middleware returning that contract; log full detail server-side while returning a generic message for unexpected errors, never leaking stack traces, SQL, or paths
 - [x] 1.11 Add a catch-all 404 handler using the same error contract
-- [ ] 1.12 Implement `GET /health` returning 200 with service status (database check added in group 2)
+- [x] 1.12 Implement `GET /health` returning 200 with service status (database check added in group 2)
 - [ ] 1.13 Configure ESLint for Node + TypeScript, Prettier, and `lint` / `format` scripts, with the two configured not to fight each other
 - [ ] 1.14 Configure Vitest with v8 coverage, a 60% line threshold, and generated/config files excluded from the denominator
 - [ ] 1.15 Write tests covering the health endpoint, the 404 handler, and the error middleware's sanitisation of unexpected errors

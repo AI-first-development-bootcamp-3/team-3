@@ -1,6 +1,7 @@
 import express from 'express';
 import { errorHandler } from './middleware/error.middleware.js';
 import { notFoundHandler } from './middleware/notFound.middleware.js';
+import { healthRouter } from './routes/health.routes.js';
 
 /**
  * The Express app, fully configured but never listening. Kept separate from
@@ -11,7 +12,9 @@ export const app = express();
 
 app.use(express.json());
 
-// Routes are inserted here by later tasks, above notFoundHandler.
+app.use(healthRouter);
+
+// Feature routes are inserted here by later tasks, above notFoundHandler.
 
 app.use(notFoundHandler);
 
