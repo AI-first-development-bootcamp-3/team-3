@@ -25,20 +25,20 @@ _Covers SCRUM-23, SCRUM-21, SCRUM-24, SCRUM-25. Nothing else can start until thi
 
 _Covers SCRUM-22, SCRUM-44, SCRUM-51._
 
-- [ ] 2.1 Cut `feat/SCRUM-22-data-layer` from the updated `task/SCRUM-11-backend`
-- [ ] 2.2 Add a `docker-compose.yml` PostgreSQL 16 service with a UTF-8 database and a named volume for persistence
-- [ ] 2.3 Initialise Prisma; point the datasource at `DATABASE_URL` and add `prisma generate` to `postinstall`
-- [ ] 2.4 Model `User` in `schema.prisma` with email, hashed password, display name, an admin/employee role enum, and `isActive`
-- [ ] 2.5 Model `Client`, `Project` (belonging to a Client), and `Task` (belonging to a Project), each with `isActive` and foreign keys enforcing the hierarchy
-- [ ] 2.6 Generate and apply the initial migration; confirm an empty database reaches the current schema from migrations alone
-- [ ] 2.7 Create the singleton Prisma client module, guarded against connection exhaustion under hot reload
-- [ ] 2.8 Implement the soft-delete Client Extension: rewrite `delete` into `update { isActive: false }`, and inject `isActive: true` into reads unless a caller opts out
-- [ ] 2.9 Write the seed script — one admin, one employee, and clients with projects and tasks exercising the full hierarchy; include Hebrew strings to prove UTF-8 end to end
-- [ ] 2.10 Make the seed script repeatable (upsert on stable keys) so a second run creates no duplicates
-- [ ] 2.11 Extend `GET /health` to check database connectivity, returning 503 and naming the database when unreachable
-- [ ] 2.12 Test the soft-delete extension: deletion sets inactive without removing the row, default reads exclude inactive records, and the explicit opt-out returns them
-- [ ] 2.13 Document the soft-delete convention in `backend/README.md`, including how to opt out and why it exists
-- [ ] 2.14 Verify migrate + seed from an empty database, and that health reports the database correctly; open PR
+- [x] 2.1 Cut `feat/SCRUM-22-data-layer` from the updated `task/SCRUM-11-backend`
+- [x] 2.2 Add a `docker-compose.yml` PostgreSQL 16 service with a UTF-8 database and a named volume for persistence
+- [x] 2.3 Initialise Prisma; point the datasource at `DATABASE_URL` and add `prisma generate` to `postinstall`
+- [x] 2.4 Model `User` in `schema.prisma` with email, hashed password, display name, an admin/employee role enum, and `isActive`
+- [x] 2.5 Model `Client`, `Project` (belonging to a Client), and `Task` (belonging to a Project), each with `isActive` and foreign keys enforcing the hierarchy
+- [x] 2.6 Generate and apply the initial migration; confirm an empty database reaches the current schema from migrations alone
+- [x] 2.7 Create the singleton Prisma client module, guarded against connection exhaustion under hot reload
+- [x] 2.8 Implement the soft-delete Client Extension: rewrite `delete` into `update { isActive: false }`, and inject `isActive: true` into reads unless a caller opts out
+- [x] 2.9 Write the seed script — one admin, one employee, and clients with projects and tasks exercising the full hierarchy; include Hebrew strings to prove UTF-8 end to end
+- [x] 2.10 Make the seed script repeatable (upsert on stable keys) so a second run creates no duplicates
+- [x] 2.11 Extend `GET /health` to check database connectivity, returning 503 and naming the database when unreachable
+- [x] 2.12 Test the soft-delete extension: deletion sets inactive without removing the row, default reads exclude inactive records, and the explicit opt-out returns them
+- [x] 2.13 Document the soft-delete convention in `backend/README.md`, including how to opt out and why it exists
+- [x] 2.14 Verify migrate + seed from an empty database, and that health reports the database correctly; open PR
 
 ## 3. Feature: Request pipeline — `feat/SCRUM-45-request-pipeline`
 
