@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router-dom";
 import { ConfigProvider } from "antd";
 import heIL from "antd/locale/he_IL";
+import "./services/dayjs";
 import "./index.css";
 import router from "./routes.tsx";
 

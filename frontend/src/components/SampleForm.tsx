@@ -1,6 +1,6 @@
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Button, Form, Input, TimePicker } from 'antd'
+import { Button, DatePicker, Form, Input, TimePicker } from 'antd'
 import dayjs from 'dayjs'
 import {
   sampleFormSchema,
@@ -88,6 +88,15 @@ function SampleForm() {
       <Button type="primary" htmlType="submit">
         Submit
       </Button>
+
+      {/*
+        Not part of the form's own validated schema - a standalone sample
+        proving the date library + Hebrew locale render correctly. See
+        SCRUM-38's design.md.
+      */}
+      <Form.Item label="Sample date (SCRUM-38)">
+        <DatePicker />
+      </Form.Item>
     </Form>
   )
 }
