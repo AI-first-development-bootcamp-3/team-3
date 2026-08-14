@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-08-13
+goal: React Hook Form + validation schema wired in; sample form demonstrates
+  required-field and cross-field validation

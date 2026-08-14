@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-08-13
+goal: Vitest configured, npm test works, one sample unit test passes
+skip_specs: true
