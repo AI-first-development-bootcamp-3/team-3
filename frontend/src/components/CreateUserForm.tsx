@@ -1,0 +1,115 @@
+import { useState } from 'react'
+import { Controller, useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { Alert, Button, Form, Input, Select, notification } from 'antd'
+import { createUser } from '../services/adminUsers'
+import { ApiError } from '../services/apiClient'
+import { createUserFormSchema, type CreateUserFormValues } from './CreateUserForm.schema'
+
+const ROLE_OPTIONS = [
+  { value: 'EMPLOYEE', label: 'Employee' },
+  { value: 'ADMIN', label: 'Admin' },
+]
+
+/**
+ * Admin-only "Create User" form (SCRUM-202). Not wrapped in useMutation -
+ * follows the same direct request()-in-submit-handler pattern as Login.tsx
+ * and ChangePassword.tsx, so a 409 duplicate-email response can show as an
+ * inline field error without also triggering queryClient's global
+ * "unexpected error" toast (which fires for any error a useMutation doesn't
+ * fully suppress).
+ */
+function CreateUserForm() {
+  const [formError, setFormError] = useState<string | null>(null)
+
+  const {
+    control,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+    setError,
+    reset,
+  } = useForm<CreateUserFormValues>({
+    resolver: zodResolver(createUserFormSchema),
+    defaultValues: { displayName: '', email: '', role: 'EMPLOYEE', temporaryPassword: '' },
+  })
+
+  const onSubmit = async (values: CreateUserFormValues) => {
+    setFormError(null)
+    try {
+      const result = await createUser({
+        displayName: values.displayName,
+        email: values.email,
+        role: values.role,
+        ...(values.temporaryPassword ? { temporaryPassword: values.temporaryPassword } : {}),
+      })
+
+      notification.success({
+        message: 'User created',
+        description: `${result.user.email} was created. Temporary password: ${result.temporaryPassword} (also emailed to the new user).`,
+        duration: 0,
+      })
+      reset()
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        setError('email', { message: 'A user with this email already exists' })
+        return
+      }
+      if (error instanceof ApiError && error.status === 400) {
+        setFormError('Some fields are invalid. Please check the form and try again.')
+        return
+      }
+      setFormError('Could not create the user. Please try again.')
+    }
+  }
+
+  return (
+    <Form layout="vertical" onFinish={handleSubmit(onSubmit)}>
+      <h2>Create User</h2>
+
+      {formError && <Alert type="error" message={formError} showIcon style={{ marginBottom: 16 }} />}
+
+      <Form.Item label="Full name" htmlFor="displayName" validateStatus={errors.displayName ? 'error' : ''} help={errors.displayName?.message}>
+        <Controller
+          name="displayName"
+          control={control}
+          render={({ field }) => <Input {...field} id="displayName" />}
+        />
+      </Form.Item>
+
+      <Form.Item label="Email" htmlFor="email" validateStatus={errors.email ? 'error' : ''} help={errors.email?.message}>
+        <Controller
+          name="email"
+          control={control}
+          render={({ field }) => <Input {...field} id="email" type="email" autoComplete="off" />}
+        />
+      </Form.Item>
+
+      <Form.Item label="Role" htmlFor="role" validateStatus={errors.role ? 'error' : ''} help={errors.role?.message}>
+        <Controller
+          name="role"
+          control={control}
+          render={({ field }) => <Select {...field} id="role" options={ROLE_OPTIONS} />}
+        />
+      </Form.Item>
+
+      <Form.Item
+        label="Temporary password"
+        htmlFor="temporaryPassword"
+        validateStatus={errors.temporaryPassword ? 'error' : ''}
+        help={errors.temporaryPassword?.message ?? 'Leave blank to generate one automatically'}
+      >
+        <Controller
+          name="temporaryPassword"
+          control={control}
+          render={({ field }) => <Input.Password {...field} id="temporaryPassword" autoComplete="off" />}
+        />
+      </Form.Item>
+
+      <Button type="primary" htmlType="submit" loading={isSubmitting}>
+        Create user
+      </Button>
+    </Form>
+  )
+}
+
+export default CreateUserForm
