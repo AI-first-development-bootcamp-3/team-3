@@ -1,0 +1,133 @@
+import jwt from 'jsonwebtoken';
+import request from 'supertest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { app } from '../../app.js';
+import { env } from '../../config/env.js';
+import { prisma } from '../../config/prisma.js';
+import { Role } from '../../generated/prisma/enums.js';
+import { createUser } from '../../test/factories.js';
+import { resetDatabase } from '../../test/resetDatabase.js';
+
+function tokenFor(user: { id: string; role: string }): string {
+  return jwt.sign({ sub: user.id, role: user.role }, env.JWT_SECRET, { expiresIn: '1h' });
+}
+
+describe('POST /admin/users', () => {
+  afterEach(async () => {
+    await resetDatabase();
+  });
+
+  it('creates a user with a generated temporary password, mustChangePassword: true, no password hash leaked', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+
+    const response = await request(app)
+      .post('/admin/users')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ email: 'new-user@example.test', displayName: 'New User', role: 'EMPLOYEE' });
+
+    expect(response.status).toBe(201);
+    expect(response.body.user).toMatchObject({
+      email: 'new-user@example.test',
+      displayName: 'New User',
+      role: 'EMPLOYEE',
+      isActive: true,
+      mustChangePassword: true,
+    });
+    expect(response.body.temporaryPassword).toEqual(expect.any(String));
+    expect(response.body.user.passwordHash).toBeUndefined();
+
+    const loginResponse = await request(app)
+      .post('/login')
+      .send({ email: 'new-user@example.test', password: response.body.temporaryPassword });
+    expect(loginResponse.status).toBe(200);
+  });
+
+  it('accepts an admin-supplied temporary password instead of generating one', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+
+    const response = await request(app)
+      .post('/admin/users')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({
+        email: 'chosen-pw@example.test',
+        displayName: 'Chosen Password',
+        role: 'EMPLOYEE',
+        temporaryPassword: 'a-chosen-temp-password',
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.temporaryPassword).toBe('a-chosen-temp-password');
+  });
+
+  it('rejects a duplicate email with 409', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+    await createUser({ email: 'taken@example.test' });
+
+    const response = await request(app)
+      .post('/admin/users')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ email: 'taken@example.test', displayName: 'Duplicate', role: 'EMPLOYEE' });
+
+    expect(response.status).toBe(409);
+  });
+
+  it('rejects a non-admin caller with 403', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+
+    const response = await request(app)
+      .post('/admin/users')
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({ email: 'blocked@example.test', displayName: 'Blocked', role: 'EMPLOYEE' });
+
+    expect(response.status).toBe(403);
+  });
+
+  it('rejects an unauthenticated caller with 401', async () => {
+    const response = await request(app)
+      .post('/admin/users')
+      .send({ email: 'blocked@example.test', displayName: 'Blocked', role: 'EMPLOYEE' });
+
+    expect(response.status).toBe(401);
+  });
+
+  it('rejects a malformed body (missing displayName, invalid role)', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+
+    const response = await request(app)
+      .post('/admin/users')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ email: 'not-an-email', role: 'SUPERUSER' });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.details).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'email' }),
+        expect.objectContaining({ field: 'displayName' }),
+        expect.objectContaining({ field: 'role' }),
+      ]),
+    );
+  });
+
+  it('rejects an admin-supplied temporary password shorter than 8 characters', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+
+    const response = await request(app)
+      .post('/admin/users')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ email: 'short-pw@example.test', displayName: 'Short Password', role: 'EMPLOYEE', temporaryPassword: 'short' });
+
+    expect(response.status).toBe(400);
+  });
+
+  it('does not persist a user when the request is invalid', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+
+    await request(app)
+      .post('/admin/users')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ email: 'not-an-email', role: 'EMPLOYEE' });
+
+    const found = await prisma.user.findFirst({ where: { email: 'not-an-email' } });
+    expect(found).toBeNull();
+  });
+});
