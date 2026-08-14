@@ -11,13 +11,18 @@ import type { ClientModel, ProjectModel, TaskModel, UserModel } from '../generat
  * override for anything a test cares about.
  */
 
-export async function createUser(overrides: Partial<Pick<UserModel, 'email' | 'passwordHash' | 'displayName' | 'role' | 'isActive'>> = {}): Promise<UserModel> {
+export async function createUser(
+  overrides: Partial<
+    Pick<UserModel, 'email' | 'passwordHash' | 'displayName' | 'role' | 'isActive' | 'mustChangePassword'>
+  > = {},
+): Promise<UserModel> {
   return prisma.user.create({
     data: {
       email: overrides.email ?? `user-${crypto.randomUUID()}@example.test`,
       passwordHash: overrides.passwordHash ?? (await bcrypt.hash('password123', 4)),
       displayName: overrides.displayName ?? 'Test User',
       role: overrides.role ?? Role.EMPLOYEE,
+      mustChangePassword: overrides.mustChangePassword ?? false,
       ...(overrides.isActive !== undefined ? { isActive: overrides.isActive } : {}),
     },
   });

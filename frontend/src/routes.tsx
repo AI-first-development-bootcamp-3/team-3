@@ -4,6 +4,7 @@ import Reports from "./pages/Reports";
 import Absences from "./pages/Absences";
 import Admin from "./pages/Admin";
 import Login from "./pages/Login";
+import ChangePassword from "./pages/ChangePassword";
 import NotFound from "./pages/NotFound";
 import SampleForm from "./components/SampleForm";
 import RequireAuth from "./components/RequireAuth";
@@ -41,6 +42,14 @@ const router = createBrowserRouter([
         ),
       },
       { path: "login", element: <Login /> },
+      {
+        path: "change-password",
+        element: (
+          <RequireAuth>
+            <ChangePassword />
+          </RequireAuth>
+        ),
+      },
       // Not in the main nav Menu - a living form-pattern reference, see SCRUM-37.
       { path: "dev/sample-form", element: <SampleForm /> },
       { path: "*", element: <NotFound /> },
