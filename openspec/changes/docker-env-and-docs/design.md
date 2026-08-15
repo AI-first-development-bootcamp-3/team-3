@@ -28,8 +28,8 @@ Not possible on this branch — there's no `docker-compose.yml` here yet, and fo
 
 ## Migration Plan
 1. Add `.env.example` and `DOCKER.md` on this branch
-2. When merging with SCRUM-29: update `docker-compose.yml` to use `${VAR:-default}` substitution for each hardcoded value, matching `.env.example`
-3. Verify `cp .env.example .env && docker compose up --build` brings up the full stack
+2. When merging with SCRUM-29: update `docker-compose.yml` to use `${VAR:-default}` substitution for each hardcoded value, matching `.env.example` — **done** on `task-Docker`, where `docker-compose.yml` now exists post-merge. Container-internal ports (`PORT: 3000` for backend, Dockerfile `EXPOSE`d ports for frontend) are left fixed; only host-published ports (`POSTGRES_PORT`/`BACKEND_PORT`/`FRONTEND_PORT`) are parameterized, since changing the app's internal listening port would require additional wiring beyond this subtask's scope
+3. Verify `cp .env.example .env && docker compose up --build` brings up the full stack — still blocked, Docker isn't available in this environment
 
 ## Open Questions
 None blocking — the deferred substitution work is explicitly scheduled as a merge-time step rather than left ambiguous.

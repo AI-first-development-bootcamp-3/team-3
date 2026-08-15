@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  EMPLOYEE
+}
+
+model User {
+  id                 String       @id @default(uuid())
+  email              String       @unique
+  passwordHash       String
+  displayName        String
+  role               Role
+  isActive           Boolean      @default(true)
+  mustChangePassword Boolean      @default(true)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  attachments        Attachment[]
+
+  @@map("users")
+}
+
+model Client {
+  id        String    @id @default(uuid())
+  name      String
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  projects  Project[]
+
+  @@map("clients")
+}
+
+model Project {
+  id        String   @id @default(uuid())
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id])
+  tasks     Task[]
+
+  @@map("projects")
+}
+
+model Task {
+  id        String   @id @default(uuid())
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id])
+
+  @@map("tasks")
+}
+
+/// File bytes live outside PostgreSQL, behind the FileStorage interface —
+/// this row is metadata plus a reference (storageKey), never the content
+/// itself. Not soft-deletable: attachments have no update/delete endpoint
+/// in this change.
+model Attachment {
+  id         String   @id @default(uuid())
+  filename   String
+  mimeType   String
+  sizeBytes  Int
+  storageKey String   @unique
+  uploaderId String
+  uploader   User     @relation(fields: [uploaderId], references: [id])
+  uploadedAt DateTime @default(now())
+
+  @@map("attachments")
+}
