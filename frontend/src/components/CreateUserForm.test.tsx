@@ -89,6 +89,23 @@ describe('CreateUserForm', () => {
     expect(await screen.findByText(/a user with this email already exists/i)).toBeInTheDocument()
   })
 
+  it('shows a form-level error for a malformed-input (400) response', async () => {
+    mockFetchOnce({
+      ok: false,
+      status: 400,
+      json: { error: { code: 'BAD_REQUEST', message: 'Validation failed', details: [{ field: 'email', message: 'Invalid email' }] } },
+    })
+    const user = userEvent.setup()
+
+    render(<CreateUserForm />)
+
+    await user.type(screen.getByLabelText(/full name/i), 'Someone')
+    await user.type(screen.getByLabelText(/^email$/i), 'someone@abra.test')
+    await user.click(screen.getByRole('button', { name: /create user/i }))
+
+    expect(await screen.findByText(/some fields are invalid/i)).toBeInTheDocument()
+  })
+
   it('shows a generic form error for an unexpected failure without a global toast taking over', async () => {
     mockFetchOnce({ ok: false, status: 500, json: { error: { code: 'INTERNAL_ERROR', message: 'boom' } } })
     const user = userEvent.setup()
