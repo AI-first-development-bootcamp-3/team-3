@@ -7,6 +7,12 @@ export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
   headers?: Record<string, string>
+  /**
+   * Set to `false` for calls where a 401 means "wrong credentials", not
+   * "your session expired" - e.g. POST /login itself. Defaults to `true`.
+   * Either way, a 401 still rejects with ApiError for the caller to handle.
+   */
+  handleUnauthorizedGlobally?: boolean
 }
 
 export class ApiError extends Error {
@@ -35,7 +41,7 @@ export async function request<T>(
   path: string,
   options: RequestOptions = {},
 ): Promise<T> {
-  const { method = 'GET', body, headers = {} } = options
+  const { method = 'GET', body, headers = {}, handleUnauthorizedGlobally = true } = options
   const { token } = sessionStore.getState()
 
   const response = await fetch(`${API_URL}${path}`, {
@@ -54,7 +60,7 @@ export async function request<T>(
     : undefined
 
   if (!response.ok) {
-    if (response.status === 401) {
+    if (response.status === 401 && handleUnauthorizedGlobally) {
       sessionStore.getState().clearSession()
       notification.warning({
         message: 'Session Expired',

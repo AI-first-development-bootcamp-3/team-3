@@ -30,6 +30,7 @@ async function main() {
       passwordHash,
       displayName: 'מנהל המערכת',
       role: 'ADMIN',
+      mustChangePassword: false,
     },
   });
 
@@ -42,6 +43,7 @@ async function main() {
       passwordHash,
       displayName: 'ישראל ישראלי',
       role: 'EMPLOYEE',
+      mustChangePassword: false,
     },
   });
 
