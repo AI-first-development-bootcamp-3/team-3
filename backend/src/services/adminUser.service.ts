@@ -68,3 +68,43 @@ export async function createUser(input: CreateUserInput): Promise<CreateUserResu
     throw error;
   }
 }
+
+export interface ResetPasswordResult {
+  user: CreatedUser;
+  /** Plaintext, returned once - same one-time-reveal contract as CreateUserResult.temporaryPassword. */
+  temporaryPassword: string;
+}
+
+/**
+ * Issues a new generated temporary password for an existing user and forces
+ * a change on next login, same as account creation. Admins cannot choose the
+ * new password (see SCRUM-83 design) - always generated.
+ */
+export async function resetUserPassword(id: string): Promise<ResetPasswordResult> {
+  const temporaryPassword = generateTemporaryPassword();
+  const passwordHash = await bcrypt.hash(temporaryPassword, 10);
+
+  const user = await updateUserOrNotFound(id, { passwordHash, mustChangePassword: true });
+
+  return { user, temporaryPassword };
+}
+
+/** Changes a user's role. No self-demotion or last-admin restriction (see SCRUM-83 design - YAGNI, not required by spec). */
+export async function changeUserRole(id: string, role: Role): Promise<CreatedUser> {
+  return updateUserOrNotFound(id, { role });
+}
+
+async function updateUserOrNotFound(id: string, data: Prisma.UserUpdateInput): Promise<CreatedUser> {
+  try {
+    return await prisma.user.update({
+      where: { id },
+      data,
+      select: { id: true, email: true, displayName: true, role: true, isActive: true, mustChangePassword: true },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      throw AppError.notFound('User not found');
+    }
+    throw error;
+  }
+}
