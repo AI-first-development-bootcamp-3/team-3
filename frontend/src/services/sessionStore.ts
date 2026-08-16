@@ -1,12 +1,21 @@
 import { create } from 'zustand'
 import type { User } from '../types'
-import { removeSession, writeSession } from './sessionStorageAdapter'
+import { readSession, removeSession, writeSession, type StoredSession } from './sessionStorageAdapter'
 
 interface SessionState {
   user: User | null
   token: string | null
   setSession: (user: User, token: string, expiresAt: string, rememberMe: boolean) => void
   clearSession: () => void
+  rehydrateSession: () => void
+}
+
+function isValidStoredSession(stored: StoredSession | null): stored is StoredSession {
+  if (!stored || typeof stored.token !== 'string' || typeof stored.expiresAt !== 'string' || !stored.user) {
+    return false
+  }
+  const expiresAt = new Date(stored.expiresAt).getTime()
+  return !Number.isNaN(expiresAt) && expiresAt > Date.now()
 }
 
 /**
@@ -24,5 +33,10 @@ export const sessionStore = create<SessionState>((set) => ({
     removeSession(sessionStorage)
     removeSession(localStorage)
     set({ user: null, token: null })
+  },
+  rehydrateSession: () => {
+    const stored = readSession(sessionStorage) ?? readSession(localStorage)
+    if (!isValidStoredSession(stored)) return
+    set({ user: stored.user as User, token: stored.token })
   },
 }))
