@@ -22,9 +22,18 @@ export const authRouter = Router();
  *             properties:
  *               email: { type: string, format: email }
  *               password: { type: string }
+ *               rememberMe: { type: boolean, default: false, description: "Extends the issued token's lifetime from the default (hours) to the remember-me duration (days)." }
  *     responses:
  *       200:
- *         description: A JWT and the caller's profile, including whether they must change their password before doing anything else.
+ *         description: A JWT, its expiry, and the caller's profile, including whether they must change their password before doing anything else.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 token: { type: string }
+ *                 expiresAt: { type: string, format: date-time }
+ *                 user: { type: object }
  *       400:
  *         description: Malformed request body.
  *         content:
