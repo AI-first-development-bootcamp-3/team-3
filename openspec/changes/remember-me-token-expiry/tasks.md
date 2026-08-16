@@ -42,5 +42,5 @@
 - [ ] 3.2 Verify end to end: log in with "Remember me" → quit and reopen the browser → still signed in
 - [ ] 3.3 Verify an expired session behaves correctly: with a stored session whose `expiresAt` has passed, booting the app lands on `/login` with no flash of authenticated content
 - [ ] 3.4 Confirm the 401 path still works: a request with an expired token clears the persisted session, shows the "Session Expired" toast, and redirects to `/login`
-- [ ] 3.5 File the follow-up Jira subtask under SCRUM-58 for the deactivated-user revocation gap documented in design.md → Risks, and cross-reference it from that section
+- [x] 3.5 File the follow-up Jira subtask under SCRUM-58 for the deactivated-user revocation gap documented in design.md → Risks, and cross-reference it from that section
 - [ ] 3.6 Move SCRUM-181 to Done and open the PR from `feat/remember-me-token-expiry` into `development`

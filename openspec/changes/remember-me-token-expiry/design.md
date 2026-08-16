@@ -147,11 +147,11 @@ once both are merged.
 - **Known limitation — deactivating a user does not end their session.** `login()` checks `isActive`, but
   `auth.middleware.ts` never re-checks it, and a stateless JWT cannot be revoked. Today's exposure is at
   most 8 hours; with a 30-day remembered token it becomes up to 30 days of continued API access for a
-  deactivated employee. **This change knowingly widens an existing hole.** Mitigation: file a follow-up
-  Jira subtask under SCRUM-58 to either re-check `isActive` in the middleware (one DB read per
-  authenticated request) or introduce real revocation. Deployments that consider the 30-day window
-  unacceptable can lower `JWT_REMEMBER_ME_EXPIRES_IN_SECONDS` without a code change — which is a further
-  argument for D3.
+  deactivated employee. **This change knowingly widens an existing hole.** Mitigation: tracked as
+  [SCRUM-218](https://dangutman98-1786525083697.atlassian.net/browse/SCRUM-218), a follow-up subtask under
+  SCRUM-58, to either re-check `isActive` in the middleware (one DB read per authenticated request) or
+  introduce real revocation. Deployments that consider the 30-day window unacceptable can lower
+  `JWT_REMEMBER_ME_EXPIRES_IN_SECONDS` without a code change — which is a further argument for D3.
 - **"Remember me" on a shared machine keeps the next person signed in for 30 days** → Mitigated by
   defaulting the checkbox to unchecked, so the durable choice is always deliberate.
 - **Client clock skew makes the boot expiry check wrong** → Harmless in both directions. A skewed-fast
