@@ -18,7 +18,7 @@
 
 ## 2. Frontend — session persistence and remember-me UI
 
-- [ ] 2.1 Create a storage adapter module under `frontend/src/services/` that reads, writes, and removes the `abra.session` key, takes the target storage (`sessionStorage` or `localStorage`) as a parameter, and wraps every access in `try/catch` so a throwing or unavailable `Storage` degrades to a no-op (design.md D7)
+- [x] 2.1 Create a storage adapter module under `frontend/src/services/` that reads, writes, and removes the `abra.session` key, takes the target storage (`sessionStorage` or `localStorage`) as a parameter, and wraps every access in `try/catch` so a throwing or unavailable `Storage` degrades to a no-op (design.md D7)
 - [ ] 2.2 Add unit tests for the adapter: round-trip write/read, removal, malformed JSON returns nothing rather than throwing, and a storage that throws on access is handled silently
 - [ ] 2.3 Extend `frontend/src/services/sessionStore.ts` so `setSession(user, token, expiresAt, rememberMe)` persists to `localStorage` when remembered and `sessionStorage` otherwise, and `clearSession()` removes the key from **both** storages (design.md D6)
 - [ ] 2.4 Add a synchronous `rehydrateSession()` to the session store that reads `sessionStorage` first then `localStorage`, discards an entry whose `expiresAt` has passed or whose shape is unexpected, and otherwise populates `user` and `token`
