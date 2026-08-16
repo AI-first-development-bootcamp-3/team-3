@@ -43,4 +43,4 @@
 - [ ] 3.3 Verify an expired session behaves correctly: with a stored session whose `expiresAt` has passed, booting the app lands on `/login` with no flash of authenticated content
 - [ ] 3.4 Confirm the 401 path still works: a request with an expired token clears the persisted session, shows the "Session Expired" toast, and redirects to `/login`
 - [x] 3.5 File the follow-up Jira subtask under SCRUM-58 for the deactivated-user revocation gap documented in design.md → Risks, and cross-reference it from that section
-- [ ] 3.6 Move SCRUM-181 to Done and open the PR from `feat/remember-me-token-expiry` into `development`
+- [x] 3.6 Open [PR #42](https://github.com/AI-first-development-bootcamp-3/team-3/pull/42) from `feat/remember-me-token-expiry` into `development` and move SCRUM-181 to **In Review** (not Done — 3.1-3.4 manual QA is still pending)
