@@ -23,7 +23,12 @@ describe('RequireRole', () => {
   it('renders a forbidden message when the signed-in user has a different role', () => {
     sessionStore
       .getState()
-      .setSession({ id: '1', fullName: 'Regular Employee', email: 'e@abra.test', userType: 'regular', active: true }, 'a-token')
+      .setSession(
+        { id: '1', fullName: 'Regular Employee', email: 'e@abra.test', userType: 'regular', active: true },
+        'a-token',
+        new Date(Date.now() + 60_000).toISOString(),
+        false,
+      )
 
     render(
       <RequireRole role="admin">
@@ -38,7 +43,12 @@ describe('RequireRole', () => {
   it('renders the children when the signed-in user has the required role', () => {
     sessionStore
       .getState()
-      .setSession({ id: '1', fullName: 'Site Admin', email: 'a@abra.test', userType: 'admin', active: true }, 'a-token')
+      .setSession(
+        { id: '1', fullName: 'Site Admin', email: 'a@abra.test', userType: 'admin', active: true },
+        'a-token',
+        new Date(Date.now() + 60_000).toISOString(),
+        false,
+      )
 
     render(
       <RequireRole role="admin">
