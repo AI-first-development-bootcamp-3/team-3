@@ -24,7 +24,7 @@
 - [x] 2.4 Add a synchronous `rehydrateSession()` to the session store that reads `sessionStorage` first then `localStorage`, discards an entry whose `expiresAt` has passed or whose shape is unexpected, and otherwise populates `user` and `token`
 - [x] 2.5 Add unit tests for the store: persists to the correct storage per flag, `clearSession` clears both, rehydrate restores a valid session, rehydrate discards an expired one, rehydrate discards a malformed one, and `sessionStorage` takes precedence when both hold an entry
 - [x] 2.6 Call `rehydrateSession()` in `frontend/src/main.tsx` before the router is created, so the store is correct on `RequireAuth`'s first evaluation and no loading state is needed (design.md D7)
-- [ ] 2.7 Add `rememberMe: z.boolean()` to `loginFormSchema` in `frontend/src/pages/Login.schema.ts` and default it to `false` in the form's `defaultValues`
+- [x] 2.7 Add `rememberMe: z.boolean()` to `loginFormSchema` in `frontend/src/pages/Login.schema.ts` and default it to `false` in the form's `defaultValues`
 - [ ] 2.8 Add an Ant Design `Checkbox` labelled "Remember me" to `frontend/src/pages/Login.tsx`, wired through `Controller` like the existing fields, and pass the value into `login()` and on to `setSession`
 - [ ] 2.9 Update `login()` in `frontend/src/services/auth.ts` to send `rememberMe` in the `POST /login` body and to return `expiresAt` from the response alongside `user` and `token`
 - [ ] 2.10 Extend `frontend/src/pages/Login.test.tsx`: the checkbox renders unchecked by default, submitting unchecked sends `rememberMe: false`, submitting checked sends `true`, and the resulting session lands in the expected storage in each case
