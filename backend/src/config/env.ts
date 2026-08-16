@@ -18,12 +18,20 @@ const envSchema = z.object({
     ),
   // HS256 signing key. 32 chars is the practical floor for a symmetric secret.
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
+  // Default session lifetime, in seconds. 28800 = 8 hours.
+  JWT_EXPIRES_IN_SECONDS: z.coerce.number().int().positive().default(28800),
+  // Lifetime, in seconds, when the caller opts into "remember me" at login.
+  // 2592000 = 30 days.
+  JWT_REMEMBER_ME_EXPIRES_IN_SECONDS: z.coerce.number().int().positive().default(2592000),
   // Local-filesystem root for uploaded attachments — a mounted volume in
   // Docker/production. Free-tier container filesystems are ephemeral; see
   // backend/README.md -> File storage.
   STORAGE_DIR: z.string().min(1).default('./storage/uploads'),
   // 'silent' is a real pino level that disables logging entirely (used in tests).
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+}).refine((data) => data.JWT_REMEMBER_ME_EXPIRES_IN_SECONDS >= data.JWT_EXPIRES_IN_SECONDS, {
+  message: 'JWT_REMEMBER_ME_EXPIRES_IN_SECONDS must be >= JWT_EXPIRES_IN_SECONDS',
+  path: ['JWT_REMEMBER_ME_EXPIRES_IN_SECONDS'],
 });
 
 export type Env = z.infer<typeof envSchema>;
