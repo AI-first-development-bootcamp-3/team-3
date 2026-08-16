@@ -12,6 +12,7 @@ import { attachmentRouter } from './routes/attachment.routes.js';
 import { authRouter } from './routes/auth.routes.js';
 import { healthRouter } from './routes/health.routes.js';
 import { sampleRouter } from './routes/sample.routes.js';
+import { timeReportRouter } from './routes/timeReport.routes.js';
 
 /**
  * The Express app, fully configured but never listening. Kept separate from
@@ -38,6 +39,7 @@ app.use(sampleRouter);
 app.use(attachmentRouter);
 app.use(authRouter);
 app.use(adminUserRouter);
+app.use(timeReportRouter);
 
 // Interactive docs leak endpoint shapes and are dev/QA tooling, not a
 // production surface — disabled there by configuration.
