@@ -16,7 +16,7 @@ export const reportEntryFormSchema = z
     description: z.string().trim().min(1, 'יש להזין פירוט').max(2000),
   })
   .refine((data) => data.endTime >= data.startTime, {
-    message: 'שעת הסיום לא יכולה להיות לפני שעת ההתחלה',
+    message: 'שעת היציאה לא יכולה להיות לפני שעת הכניסה',
     path: ['endTime'],
   })
 

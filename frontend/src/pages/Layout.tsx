@@ -11,7 +11,7 @@ function Layout() {
   const { pathname } = useLocation();
 
   return (
-    <div>
+    <div className="app-shell">
       <Menu mode="horizontal" selectedKeys={[pathname]} items={items} />
       <main>
         <Outlet />
