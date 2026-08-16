@@ -7,7 +7,7 @@ import { env } from './env.js';
  * convention. Kept as an explicit list — rather than inferred from the DMMF —
  * so adding a new soft-deletable model is a deliberate, visible change here.
  */
-const SOFT_DELETE_MODELS = new Set(['User', 'Client', 'Project', 'Task']);
+const SOFT_DELETE_MODELS = new Set(['User', 'Client', 'Project', 'Task', 'Absence']);
 
 /**
  * Rewrites `delete`/`deleteMany` into `update`/`updateMany { isActive: false }`,
