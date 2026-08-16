@@ -11,3 +11,15 @@ export const createUserBodySchema = z.object({
 });
 
 export type CreateUserBody = z.infer<typeof createUserBodySchema>;
+
+export const userIdParamSchema = z.object({
+  id: z.string().uuid(),
+});
+
+export type UserIdParam = z.infer<typeof userIdParamSchema>;
+
+export const changeRoleBodySchema = z.object({
+  role: z.enum(Role),
+});
+
+export type ChangeRoleBody = z.infer<typeof changeRoleBodySchema>;
