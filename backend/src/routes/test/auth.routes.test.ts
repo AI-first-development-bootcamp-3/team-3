@@ -142,6 +142,19 @@ describe('POST /login', () => {
     expect(response.status).toBe(400);
   });
 
+  it('does not put rememberMe in the JWT payload', async () => {
+    await createUser({ email: 'login-no-remember-claim@example.test' });
+
+    const response = await request(app)
+      .post('/login')
+      .send({ email: 'login-no-remember-claim@example.test', password: 'password123', rememberMe: true });
+
+    expect(response.status).toBe(200);
+    const decoded = jwt.decode(response.body.token) as Record<string, unknown>;
+    expect(decoded).not.toHaveProperty('rememberMe');
+    expect(Object.keys(decoded).sort()).toEqual(['exp', 'iat', 'role', 'sub']);
+  });
+
   it('returns an expiresAt matching the token\'s exp claim', async () => {
     await createUser({ email: 'login-expires-at@example.test' });
 
