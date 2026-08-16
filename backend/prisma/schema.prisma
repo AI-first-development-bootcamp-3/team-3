@@ -74,7 +74,9 @@ model Task {
 /// One row per absence, spanning startDate..endDate (never one row per day —
 /// see openspec/changes/absences-schema/design.md). isActive doubles as both
 /// the SCRUM-51 soft-delete flag and the "cancelled" business state; there is
-/// deliberately no separate status column.
+/// deliberately no separate status column. A CHECK ("endDate" >= "startDate")
+/// constraint on this table is added as raw SQL in the migration — Prisma
+/// 7.9.1 has no `@@check` attribute, so it isn't representable here.
 model Absence {
   id        String       @id @default(uuid())
   userId    String
@@ -88,7 +90,7 @@ model Absence {
   updatedAt DateTime     @updatedAt
   documents Attachment[]
 
-  @@index([userId, startDate, endDate])
+  @@index([userId, isActive, startDate, endDate])
   @@map("absences")
 }
 

@@ -82,7 +82,7 @@ model Absence {
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
-  @@index([userId, startDate, endDate])
+  @@index([userId, isActive, startDate, endDate])
   @@map("absences")
 }
 
@@ -99,6 +99,10 @@ A single row with `startDate`/`endDate` matches the frontend's existing contract
 *Alternative considered:* one row per day (`absence_id` FK + `date`), which would make "is this specific day off" a plain row lookup instead of a range check. Rejected — every consumer (SCRUM-144 working-day calc, SCRUM-145 conflict validation, SCRUM-146 month display) needs the *range* as a unit anyway (to render "Aug 10–14, vacation" as one entry, to validate against a whole new range at once), so per-day rows would mean reconstructing the range from contiguous rows everywhere they're used, for no ticket that actually wants per-day granularity.
 
 The `@@index([userId, startDate, endDate])` supports SCRUM-145's overlap check and SCRUM-146's month-scoped lookups, both of which filter by user and a date range.
+
+**Revised after PR #48 review:** the index above doesn't include `isActive`, but every read of this table gets `isActive: true` auto-injected by the soft-delete extension (`prisma.ts`) — so in practice every query this index is meant to serve is filtering on `isActive` too, and the index can't lead with it. Revised to `@@index([userId, isActive, startDate, endDate])`. Cheap, no behavioral change, just makes the index actually match the query shape SCRUM-145/146 will issue.
+
+**New: date-range validity enforced by storage, not just application code.** Nothing currently stops `endDate` from being written earlier than `startDate` — a form bug or a future direct-write bug could silently produce negative-length absences and corrupt anything downstream that counts days from the range (working-day calc, conflict checks, monthly totals). Add a database-level `CHECK ("endDate" >= "startDate")` constraint so this is impossible regardless of which code path writes the row, not just the path that happens to validate it. See the new "Absence date range is valid at the storage level" requirement in `spec.md`. *Implementation note:* whether this is representable as `@@check` directly in `schema.prisma` (Prisma added check-constraint support at some point; not yet confirmed for the Prisma version this repo pins) or must be added as raw SQL appended to the migration is an implementation detail to resolve when this is actually built — either way the constraint must exist in the database.
 
 ### Type list and half-day flag
 
@@ -143,6 +147,8 @@ model Attachment {
 
 **Sub-decision, either way:** `missingDocument` (a field on the frontend's `Absence` type) is derived, not stored — computed as `type ∈ {SICK, RESERVE_DUTY} AND no linked document exists`. No schema column represents it.
 
+**New, from PR #48 review: retrieval permission must extend to the absence's owner, not just the uploader.** `retrieveAttachment` (`attachment.service.ts`) currently allows only the uploader or an admin to retrieve a file — written when `Attachment` only had `uploaderId`. Now that `Attachment` can be linked to an absence, an admin uploading a sick note on an employee's behalf (a realistic scenario the PDF spec anticipates — documents can be added after the fact, "כי לעיתים האישור מתקבל בהמשך") would leave the employee, the actual owner of the absence, unable to retrieve their own supporting document. Not reachable through today's API (no endpoint yet sets `absenceId` on upload), but the authorization model should be correct before that endpoint exists, not patched after someone hits it. See the new "Absence document retrieval extends to the absence's owner" requirement in `spec.md`; the fix is to also permit the caller when they own the linked absence (`attachment.absence.userId === caller.id`), alongside the existing uploader-or-admin check.
+
 ## Risks / Trade-offs
 
 **Extending `Attachment` couples two domains (generic file storage, absences) in one table.** A nullable `absenceId` keeps the door open for non-absence attachments later, but nothing currently enforces that an absence document's `absenceId` is actually set — that constraint lives in application code (the absence-document upload path), not the schema. Mitigation: SCRUM-151's spec.md already states the requirement ("a supporting document identifies exactly one absence"); whichever ticket implements the upload endpoint should validate it there.
@@ -150,6 +156,16 @@ model Attachment {
 **Single `isActive` column means "cancelled" and "soft-deleted" can never diverge.** If a future requirement needs to distinguish "employee cancelled this" from "admin removed this in error," one column can't carry both. Mitigation: nothing in the current spec asks for that distinction; if it appears later, it's an additive column, not a rework of this design.
 
 **No stored `Report` reference for the half-day "complete the remainder of the day" rule.** SCRUM-149 will need to correlate a half-day absence with the work-hours report for the rest of that day, and no schema relation exists between them here. Mitigation: this is a same-user-same-date correlation the application layer can do without a foreign key (both entities carry `userId` and a date); a stronger relation can be added later if the correlation proves error-prone in practice.
+
+**New, from PR #48 review: the soft-delete extension doesn't cover every query shape.** `softDeleteExtension` (`prisma.ts`) intercepts `findMany`/`findFirst`/`findUnique`/`count`/`delete`/`deleteMany`, but not `aggregate`, `groupBy`, or records reached through a nested `include`/`select` on a relation. This predates this change (it's already true for `User`/`Client`/`Project`/`Task`), but `Absence` is the first place it becomes practically reachable through a real user-facing relation — a future "total vacation days this month" aggregate could silently count cancelled absences. Split into two responses, not one: (1) extending the interception to `aggregate`/`groupBy` is cheap and uniform across all five soft-deletable models — do it now, tracked in `tasks.md`, and covered by the new "Cancelled absences are excluded from aggregate views by default" requirement in `spec.md`. (2) Filtering through nested `include`/`select` is a materially larger change (relation-level query rewriting, project-wide, not absences-specific) — explicitly deferred, not fixed in this change; noted here so it isn't forgotten rather than fixed speculatively.
+
+## Code Review Follow-Ups (PR #48)
+
+Three items above now have corresponding requirements in `spec.md` (date-range validity, absence-owner document retrieval, aggregate soft-delete exclusion) and will be implemented against those requirements. Four more are implementation/tooling quality items with no externally observable behavior to spec, tracked directly in `tasks.md` instead:
+
+- Seed fixture comment (`seed.ts`) claims a "Fri–Sat weekend" range that's actually Thu–Sun (4 days, 2 of them weekdays) — misleading for whoever builds SCRUM-144 against it as a fixture.
+- No `createAbsence()` test factory in `factories.ts`, breaking the pattern every other soft-deletable model follows.
+- Six near-identical seed blocks for the sample absences could be a data array + loop instead of copy-paste.
 
 ## Migration Plan
 

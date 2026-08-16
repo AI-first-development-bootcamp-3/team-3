@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { prisma } from '../src/config/prisma.js';
+import type { AbsenceType } from '../src/generated/prisma/enums.js';
 
 /**
  * Fixed ids make the seed repeatable via `upsert`: re-running it converges on
@@ -96,58 +97,45 @@ async function main() {
     create: { id: IDS.taskTesting, name: 'בדיקות QA', projectId: IDS.projectMobile },
   });
 
-  // Single-day absence.
-  await prisma.absence.upsert({
-    where: { id: IDS.absenceVacationSingleDay },
-    update: {},
-    create: {
-      id: IDS.absenceVacationSingleDay,
-      userId: IDS.employee,
-      type: 'VACATION',
-      startDate: new Date('2026-08-10'),
-      endDate: new Date('2026-08-10'),
-    },
-  });
+  // Sample absences for the employee, covering SCRUM-154's required shapes.
+  // Every entry has a single-day range (startDate === endDate) unless noted.
+  const ABSENCES: Array<{
+    id: string;
+    type: AbsenceType;
+    startDate: string;
+    endDate: string;
+    halfDay?: boolean;
+  }> = [
+    // Single-day absence.
+    { id: IDS.absenceVacationSingleDay, type: 'VACATION', startDate: '2026-08-10', endDate: '2026-08-10' },
+    // Multi-day range, entirely within one work week (no weekend inside it).
+    { id: IDS.absenceVacationMultiDay, type: 'VACATION', startDate: '2026-08-17', endDate: '2026-08-19' },
+    // Half-day absence.
+    { id: IDS.absenceHalfDay, type: 'OTHER', startDate: '2026-08-20', endDate: '2026-08-20', halfDay: true },
+    // Sick absence WITH a supporting document attached (see the Attachment upsert below).
+    { id: IDS.absenceSickWithDoc, type: 'SICK', startDate: '2026-08-05', endDate: '2026-08-05' },
+    // Sick absence WITHOUT a document — exercises the missing-document flag.
+    { id: IDS.absenceSickNoDoc, type: 'SICK', startDate: '2026-08-06', endDate: '2026-08-06' },
+    // Thu 2026-08-13 -> Sun 2026-08-16: 4 calendar days, spanning the Fri
+    // 8/14 + Sat 8/15 weekend. NOT a "0 working days" fixture — Thu and Sun
+    // are working days, so this is 2 working days out of 4 calendar days.
+    { id: IDS.absenceReserveDutyWeekend, type: 'RESERVE_DUTY', startDate: '2026-08-13', endDate: '2026-08-16' },
+  ];
 
-  // Multi-day range, entirely within one work week (no weekend inside it).
-  await prisma.absence.upsert({
-    where: { id: IDS.absenceVacationMultiDay },
-    update: {},
-    create: {
-      id: IDS.absenceVacationMultiDay,
-      userId: IDS.employee,
-      type: 'VACATION',
-      startDate: new Date('2026-08-17'),
-      endDate: new Date('2026-08-19'),
-    },
-  });
-
-  // Half-day absence.
-  await prisma.absence.upsert({
-    where: { id: IDS.absenceHalfDay },
-    update: {},
-    create: {
-      id: IDS.absenceHalfDay,
-      userId: IDS.employee,
-      type: 'OTHER',
-      startDate: new Date('2026-08-20'),
-      endDate: new Date('2026-08-20'),
-      halfDay: true,
-    },
-  });
-
-  // Sick absence WITH a supporting document attached.
-  await prisma.absence.upsert({
-    where: { id: IDS.absenceSickWithDoc },
-    update: {},
-    create: {
-      id: IDS.absenceSickWithDoc,
-      userId: IDS.employee,
-      type: 'SICK',
-      startDate: new Date('2026-08-05'),
-      endDate: new Date('2026-08-05'),
-    },
-  });
+  for (const absence of ABSENCES) {
+    await prisma.absence.upsert({
+      where: { id: absence.id },
+      update: {},
+      create: {
+        id: absence.id,
+        userId: IDS.employee,
+        type: absence.type,
+        startDate: new Date(absence.startDate),
+        endDate: new Date(absence.endDate),
+        ...(absence.halfDay !== undefined ? { halfDay: absence.halfDay } : {}),
+      },
+    });
+  }
 
   await prisma.attachment.upsert({
     where: { id: IDS.attachmentSickNote },
@@ -160,33 +148,6 @@ async function main() {
       storageKey: 'seed/attachments/sick-note-employee.pdf',
       uploaderId: IDS.employee,
       absenceId: IDS.absenceSickWithDoc,
-    },
-  });
-
-  // Sick absence WITHOUT a document — exercises the missing-document flag.
-  await prisma.absence.upsert({
-    where: { id: IDS.absenceSickNoDoc },
-    update: {},
-    create: {
-      id: IDS.absenceSickNoDoc,
-      userId: IDS.employee,
-      type: 'SICK',
-      startDate: new Date('2026-08-06'),
-      endDate: new Date('2026-08-06'),
-    },
-  });
-
-  // Range spanning a weekend (Fri 2026-08-14 - Sat 2026-08-15), to exercise
-  // the working-day / Fri-Sat exclusion.
-  await prisma.absence.upsert({
-    where: { id: IDS.absenceReserveDutyWeekend },
-    update: {},
-    create: {
-      id: IDS.absenceReserveDutyWeekend,
-      userId: IDS.employee,
-      type: 'RESERVE_DUTY',
-      startDate: new Date('2026-08-13'),
-      endDate: new Date('2026-08-16'),
     },
   });
 }

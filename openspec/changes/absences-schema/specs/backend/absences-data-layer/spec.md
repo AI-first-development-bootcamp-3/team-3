@@ -75,3 +75,43 @@ A supporting document SHALL be linked to the single absence it supports, and an 
 
 - **WHEN** a supporting document is stored
 - **THEN** it identifies exactly one absence it belongs to
+
+### Requirement: Absence date range is valid at the storage level
+
+An absence's end date SHALL NOT precede its start date. This SHALL be guaranteed by storage itself, not only by application code that happens to validate it on the way in.
+
+#### Scenario: Valid range is stored
+
+- **WHEN** an absence is stored with an end date on or after its start date
+- **THEN** the write succeeds
+
+#### Scenario: Inverted range is refused
+
+- **WHEN** any write path attempts to store an absence with an end date before its start date
+- **THEN** storage refuses the write, regardless of which application code produced it
+
+### Requirement: Absence document retrieval extends to the absence's owner
+
+A supporting document linked to an absence SHALL be retrievable by the employee who owns that absence, in addition to whoever uploaded it and any administrator — since an absence document may be uploaded by someone other than the employee it belongs to.
+
+#### Scenario: Absence owner retrieves a document they didn't upload
+
+- **WHEN** a supporting document linked to an employee's absence was uploaded by someone else
+- **AND** that employee requests the document
+- **THEN** the document is returned to them
+
+#### Scenario: Unrelated caller is still refused
+
+- **WHEN** a caller who neither uploaded the document nor owns the absence it's linked to requests it
+- **AND** that caller is not an administrator
+- **THEN** the request is refused
+
+### Requirement: Cancelled absences are excluded from aggregate views by default
+
+Aggregate or grouped queries over absences (totals, counts, and similar) SHALL exclude cancelled absences by default, consistent with how they are already excluded from list and detail queries.
+
+#### Scenario: Cancelled absence does not contribute to a total
+
+- **WHEN** an aggregate query totals a user's absence days
+- **AND** one of that user's absences has been cancelled
+- **THEN** the cancelled absence does not contribute to the total

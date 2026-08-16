@@ -1,8 +1,8 @@
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../config/prisma.js';
-import { Role } from '../generated/prisma/enums.js';
-import type { ClientModel, ProjectModel, TaskModel, UserModel } from '../generated/prisma/models.js';
+import { AbsenceType, Role } from '../generated/prisma/enums.js';
+import type { AbsenceModel, ClientModel, ProjectModel, TaskModel, UserModel } from '../generated/prisma/models.js';
 
 /**
  * Test data factories for the core entities, so integration tests build
@@ -60,6 +60,26 @@ export async function createTask(
     data: {
       name: overrides.name ?? `Task ${crypto.randomUUID()}`,
       projectId,
+      ...(overrides.isActive !== undefined ? { isActive: overrides.isActive } : {}),
+    },
+  });
+}
+
+export async function createAbsence(
+  overrides: Partial<
+    Pick<AbsenceModel, 'userId' | 'type' | 'startDate' | 'endDate' | 'halfDay' | 'isActive'>
+  > = {},
+): Promise<AbsenceModel> {
+  const userId = overrides.userId ?? (await createUser()).id;
+  const singleDay = new Date('2026-01-05');
+
+  return prisma.absence.create({
+    data: {
+      userId,
+      type: overrides.type ?? AbsenceType.VACATION,
+      startDate: overrides.startDate ?? singleDay,
+      endDate: overrides.endDate ?? singleDay,
+      ...(overrides.halfDay !== undefined ? { halfDay: overrides.halfDay } : {}),
       ...(overrides.isActive !== undefined ? { isActive: overrides.isActive } : {}),
     },
   });

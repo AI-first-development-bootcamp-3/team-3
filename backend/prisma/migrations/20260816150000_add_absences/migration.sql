@@ -19,8 +19,14 @@ CREATE TABLE "absences" (
     CONSTRAINT "absences_pkey" PRIMARY KEY ("id")
 );
 
+-- AddCheckConstraint
+-- Not representable via Prisma's schema syntax (no `@@check` in this
+-- Prisma version) — added as raw SQL so it exists at the database level
+-- regardless of which code path writes a row.
+ALTER TABLE "absences" ADD CONSTRAINT "absences_date_range_valid" CHECK ("endDate" >= "startDate");
+
 -- CreateIndex
-CREATE INDEX "absences_userId_startDate_endDate_idx" ON "absences"("userId", "startDate", "endDate");
+CREATE INDEX "absences_userId_isActive_startDate_endDate_idx" ON "absences"("userId", "isActive", "startDate", "endDate");
 
 -- AddForeignKey
 ALTER TABLE "absences" ADD CONSTRAINT "absences_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

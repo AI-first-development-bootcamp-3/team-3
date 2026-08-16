@@ -34,6 +34,12 @@ function softDeleteExtension(base: PrismaClient) {
         async count({ model, args, query }) {
           return query(withDefaultActiveFilter(model, args));
         },
+        async aggregate({ model, args, query }) {
+          return query(withDefaultActiveFilter(model, args));
+        },
+        async groupBy({ model, args, query }) {
+          return query(withDefaultActiveFilter(model, args));
+        },
         // `delete`/`deleteMany` are rewritten into an update against the base
         // (unextended) client — calling `query(args)` here would still run a
         // real DELETE, since the query component cannot change the operation.
