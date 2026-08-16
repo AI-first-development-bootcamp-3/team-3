@@ -2,7 +2,7 @@ import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
 import swaggerUi from 'swagger-ui-express';
-import { env } from './config/env.js';
+import { env, parseTrustProxy } from './config/env.js';
 import { openApiSpec } from './config/swagger.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { notFoundHandler } from './middleware/notFound.middleware.js';
@@ -22,6 +22,11 @@ import { timeReportRouter } from './routes/timeReport.routes.js';
 export const app = express();
 
 app.disable('x-powered-by');
+
+// Governs how req.ip is resolved from X-Forwarded-For. Disabled by default:
+// see TRUST_PROXY in config/env.ts for why trusting a proxy that isn't there
+// is worse than not trusting one that is.
+app.set('trust proxy', parseTrustProxy(env.TRUST_PROXY));
 
 app.use(helmet());
 app.use(

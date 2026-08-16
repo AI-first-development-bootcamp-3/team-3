@@ -34,6 +34,10 @@ function Login() {
         setFormError('Incorrect email or password.')
         return
       }
+      if (error instanceof ApiError && error.status === 429) {
+        setFormError('Too many attempts. Please wait a few minutes and try again.')
+        return
+      }
       setFormError('Something went wrong. Please try again.')
     }
   }
