@@ -29,6 +29,9 @@ const envSchema = z.object({
   STORAGE_DIR: z.string().min(1).default('./storage/uploads'),
   // 'silent' is a real pino level that disables logging entirely (used in tests).
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+}).refine((data) => data.JWT_REMEMBER_ME_EXPIRES_IN_SECONDS >= data.JWT_EXPIRES_IN_SECONDS, {
+  message: 'JWT_REMEMBER_ME_EXPIRES_IN_SECONDS must be >= JWT_EXPIRES_IN_SECONDS',
+  path: ['JWT_REMEMBER_ME_EXPIRES_IN_SECONDS'],
 });
 
 export type Env = z.infer<typeof envSchema>;
