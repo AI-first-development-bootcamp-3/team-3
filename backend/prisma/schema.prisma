@@ -12,6 +12,13 @@ enum Role {
   EMPLOYEE
 }
 
+enum AbsenceType {
+  VACATION
+  SICK
+  RESERVE_DUTY
+  OTHER
+}
+
 model User {
   id                 String       @id @default(uuid())
   email              String       @unique
@@ -23,6 +30,7 @@ model User {
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
   attachments        Attachment[]
+  absences           Absence[]
 
   @@map("users")
 }
@@ -63,10 +71,35 @@ model Task {
   @@map("tasks")
 }
 
+/// One row per absence, spanning startDate..endDate (never one row per day —
+/// see openspec/changes/absences-schema/design.md). isActive doubles as both
+/// the SCRUM-51 soft-delete flag and the "cancelled" business state; there is
+/// deliberately no separate status column. A CHECK ("endDate" >= "startDate")
+/// constraint on this table is added as raw SQL in the migration — Prisma
+/// 7.9.1 has no `@@check` attribute, so it isn't representable here.
+model Absence {
+  id        String       @id @default(uuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id])
+  type      AbsenceType
+  startDate DateTime     @db.Date
+  endDate   DateTime     @db.Date
+  halfDay   Boolean      @default(false)
+  isActive  Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  documents Attachment[]
+
+  @@index([userId, isActive, startDate, endDate])
+  @@map("absences")
+}
+
 /// File bytes live outside PostgreSQL, behind the FileStorage interface —
 /// this row is metadata plus a reference (storageKey), never the content
 /// itself. Not soft-deletable: attachments have no update/delete endpoint
-/// in this change.
+/// in this change. absenceId is nullable by design (see
+/// openspec/changes/absences-schema/design.md) so Attachment stays usable
+/// for non-absence uploads later without a further schema change.
 model Attachment {
   id         String   @id @default(uuid())
   filename   String
@@ -76,6 +109,8 @@ model Attachment {
   uploaderId String
   uploader   User     @relation(fields: [uploaderId], references: [id])
   uploadedAt DateTime @default(now())
+  absenceId  String?
+  absence    Absence? @relation(fields: [absenceId], references: [id])
 
   @@map("attachments")
 }
