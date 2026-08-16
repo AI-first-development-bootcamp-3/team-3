@@ -1,8 +1,9 @@
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { app } from '../../app.js';
 import { env } from '../../config/env.js';
+import { rateLimitStore } from '../../middleware/rateLimit.middleware.js';
 import { createUser } from '../../test/factories.js';
 import { resetDatabase } from '../../test/resetDatabase.js';
 
@@ -205,5 +206,150 @@ describe('PATCH /me/password', () => {
       .send({ newPassword: 'short' });
 
     expect(response.status).toBe(400);
+  });
+});
+
+describe('login rate limiting', () => {
+  const EMAIL_MAX = env.RATE_LIMIT_EMAIL_MAX_ATTEMPTS;
+  const IP_MAX = env.RATE_LIMIT_IP_MAX_ATTEMPTS;
+
+  beforeEach(() => {
+    rateLimitStore.reset();
+  });
+
+  afterEach(async () => {
+    await resetDatabase();
+  });
+
+  it('does not throttle attempts below the email threshold, and their 401s look unchanged', async () => {
+    const email = 'ratelimit-below-threshold@example.test';
+
+    for (let i = 0; i < EMAIL_MAX - 1; i++) {
+      const response = await request(app).post('/login').send({ email, password: 'wrong' });
+      expect(response.status).toBe(401);
+      expect(response.body).toEqual({ error: { code: 'UNAUTHORIZED', message: 'Invalid email or password' } });
+      expect(response.headers['retry-after']).toBeUndefined();
+    }
+  });
+
+  it('trips the email threshold to 429 with Retry-After, and still refuses correct credentials while throttled', async () => {
+    const user = await createUser({ email: 'ratelimit-trip@example.test' });
+
+    for (let i = 0; i < EMAIL_MAX; i++) {
+      const response = await request(app).post('/login').send({ email: user.email, password: 'wrong-password' });
+      expect(response.status).toBe(401);
+    }
+
+    const throttled = await request(app).post('/login').send({ email: user.email, password: 'password123' });
+
+    expect(throttled.status).toBe(429);
+    expect(throttled.headers['retry-after']).toMatch(/^\d+$/);
+    expect(Number(throttled.headers['retry-after'])).toBeGreaterThan(0);
+    expect(throttled.body).toEqual({
+      error: { code: 'TOO_MANY_REQUESTS', message: expect.any(String) },
+    });
+  });
+
+  it('throttles a registered and an unregistered email identically', async () => {
+    const registered = await createUser({ email: 'ratelimit-oracle-real@example.test' });
+    const unregistered = 'ratelimit-oracle-fake@example.test';
+
+    for (let i = 0; i < EMAIL_MAX; i++) {
+      await request(app).post('/login').send({ email: registered.email, password: 'wrong' });
+      await request(app).post('/login').send({ email: unregistered, password: 'wrong' });
+    }
+
+    const realThrottled = await request(app).post('/login').send({ email: registered.email, password: 'wrong' });
+    const fakeThrottled = await request(app).post('/login').send({ email: unregistered, password: 'wrong' });
+
+    expect(realThrottled.status).toBe(429);
+    expect(fakeThrottled.status).toBe(429);
+    expect(realThrottled.body).toEqual(fakeThrottled.body);
+  });
+
+  it('trips the address threshold at the configured max, and not one attempt below it', async () => {
+    for (let i = 0; i < IP_MAX; i++) {
+      const response = await request(app)
+        .post('/login')
+        .send({ email: `ratelimit-addr-${i}@example.test`, password: 'wrong' });
+      expect(response.status).toBe(401);
+    }
+
+    const blocked = await request(app).post('/login').send({ email: 'ratelimit-addr-final@example.test', password: 'wrong' });
+
+    expect(blocked.status).toBe(429);
+  });
+
+  it('does not count a 400 (malformed body) toward either threshold', async () => {
+    const email = 'ratelimit-malformed@example.test';
+
+    for (let i = 0; i < EMAIL_MAX; i++) {
+      const response = await request(app).post('/login').send({ email }); // no password -> 400
+      expect(response.status).toBe(400);
+    }
+
+    const wellFormed = await request(app).post('/login').send({ email, password: 'wrong' });
+    expect(wellFormed.status).toBe(401);
+  });
+
+  it('clears the email counter on success, and the window elapsing restores access with no intervention', async () => {
+    const user = await createUser({ email: 'ratelimit-recovery@example.test' });
+
+    for (let i = 0; i < EMAIL_MAX - 1; i++) {
+      await request(app).post('/login').send({ email: user.email, password: 'wrong' });
+    }
+
+    const success = await request(app).post('/login').send({ email: user.email, password: 'password123' });
+    expect(success.status).toBe(200);
+
+    // A fresh run of EMAIL_MAX failures starts from zero, proving the success
+    // cleared the count. The request that brings the count *to* the
+    // threshold still gets 401 itself - check() runs before the failure it
+    // caused is recorded, so only the request *after* this run sees 429.
+    for (let i = 0; i < EMAIL_MAX; i++) {
+      const response = await request(app).post('/login').send({ email: user.email, password: 'wrong' });
+      expect(response.status).toBe(401);
+    }
+
+    // Explicit `now`: vitest's fake clock defaults to the Unix epoch, which
+    // would make every timestamp already recorded under the real clock look
+    // impossibly far in the future and never age out.
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() });
+    try {
+      const tripped = await request(app).post('/login').send({ email: user.email, password: 'wrong' });
+      expect(tripped.status).toBe(429);
+
+      vi.advanceTimersByTime((env.RATE_LIMIT_WINDOW_SECONDS + 1) * 1000);
+
+      const afterWindow = await request(app).post('/login').send({ email: user.email, password: 'wrong' });
+      expect(afterWindow.status).toBe(401);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('throttles PATCH /me/password by address, and switching routes does not reset that counter', async () => {
+    const badToken = 'not-a-valid-token';
+
+    for (let i = 0; i < IP_MAX - 1; i++) {
+      const response = await request(app)
+        .patch('/me/password')
+        .set('Authorization', `Bearer ${badToken}`)
+        .send({ newPassword: 'a-brand-new-password' });
+      expect(response.status).toBe(401);
+    }
+
+    // One more failure, on the *other* route, tips the shared address
+    // counter over - proving it is not reset by switching routes.
+    const finalOnOtherRoute = await request(app)
+      .post('/login')
+      .send({ email: 'ratelimit-switch@example.test', password: 'wrong' });
+    expect(finalOnOtherRoute.status).toBe(401);
+
+    const blocked = await request(app)
+      .patch('/me/password')
+      .set('Authorization', `Bearer ${badToken}`)
+      .send({ newPassword: 'a-brand-new-password' });
+    expect(blocked.status).toBe(429);
   });
 });
