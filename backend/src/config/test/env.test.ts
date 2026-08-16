@@ -22,6 +22,8 @@ describe('parseEnv', () => {
       DATABASE_URL: minimalRequired.DATABASE_URL,
       CORS_ORIGIN: ['http://localhost:5173', 'http://localhost:3000'],
       JWT_SECRET: minimalRequired.JWT_SECRET,
+      JWT_EXPIRES_IN_SECONDS: 28800,
+      JWT_REMEMBER_ME_EXPIRES_IN_SECONDS: 2592000,
       LOG_LEVEL: 'debug',
       STORAGE_DIR: './storage/uploads',
     });
@@ -34,6 +36,34 @@ describe('parseEnv', () => {
     expect(env.PORT).toBe(3000);
     expect(env.LOG_LEVEL).toBe('info');
     expect(env.STORAGE_DIR).toBe('./storage/uploads');
+  });
+
+  it('applies defaults for JWT_EXPIRES_IN_SECONDS and JWT_REMEMBER_ME_EXPIRES_IN_SECONDS when omitted', () => {
+    const env = parseEnv(minimalRequired);
+
+    expect(env.JWT_EXPIRES_IN_SECONDS).toBe(28800);
+    expect(env.JWT_REMEMBER_ME_EXPIRES_IN_SECONDS).toBe(2592000);
+  });
+
+  it('accepts explicit JWT lifetime values', () => {
+    const env = parseEnv({
+      ...minimalRequired,
+      JWT_EXPIRES_IN_SECONDS: '3600',
+      JWT_REMEMBER_ME_EXPIRES_IN_SECONDS: '604800',
+    });
+
+    expect(env.JWT_EXPIRES_IN_SECONDS).toBe(3600);
+    expect(env.JWT_REMEMBER_ME_EXPIRES_IN_SECONDS).toBe(604800);
+  });
+
+  it('rejects a remember-me lifetime shorter than the default lifetime', () => {
+    expect(() =>
+      parseEnv({
+        ...minimalRequired,
+        JWT_EXPIRES_IN_SECONDS: '28800',
+        JWT_REMEMBER_ME_EXPIRES_IN_SECONDS: '3600',
+      }),
+    ).toThrow(EnvValidationError);
   });
 
   it('coerces PORT from a string to a number', () => {

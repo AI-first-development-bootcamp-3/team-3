@@ -45,6 +45,8 @@ describe('ChangePassword page', () => {
     sessionStore.getState().setSession(
       { id: '1', fullName: 'New Hire', email: 'new@abra.test', userType: 'regular', active: true, mustChangePassword: true },
       'a-jwt-token',
+      new Date(Date.now() + 60_000).toISOString(),
+      false,
     )
     mockFetchOnce({
       ok: true,
