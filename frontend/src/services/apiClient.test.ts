@@ -50,7 +50,12 @@ describe('apiClient request', () => {
   it('attaches the session token when one is set', async () => {
     sessionStore
       .getState()
-      .setSession({ id: '1', fullName: 'Dan', email: 'd@x.com', userType: 'admin', active: true }, 'abc123')
+      .setSession(
+        { id: '1', fullName: 'Dan', email: 'd@x.com', userType: 'admin', active: true },
+        'abc123',
+        new Date(Date.now() + 60_000).toISOString(),
+        false,
+      )
     const fetchMock = mockFetchOnce({ ok: true, status: 200, json: {} })
 
     await request('/protected')
@@ -78,7 +83,12 @@ describe('apiClient request', () => {
     const notificationSpy = vi.spyOn(notification, 'warning').mockImplementation(() => '' as unknown as void)
     sessionStore
       .getState()
-      .setSession({ id: '1', fullName: 'Dan', email: 'd@x.com', userType: 'admin', active: true }, 'abc123')
+      .setSession(
+        { id: '1', fullName: 'Dan', email: 'd@x.com', userType: 'admin', active: true },
+        'abc123',
+        new Date(Date.now() + 60_000).toISOString(),
+        false,
+      )
 
     mockFetchOnce({ ok: false, status: 401, json: {} })
 

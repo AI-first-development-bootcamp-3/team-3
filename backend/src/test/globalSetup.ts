@@ -16,5 +16,6 @@ export default function setup(): void {
   execFileSync('npx', ['prisma', 'migrate', 'deploy'], {
     stdio: 'inherit',
     env: { ...process.env, ...testEnv },
+    shell: true,
   });
 }
