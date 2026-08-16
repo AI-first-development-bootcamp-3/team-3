@@ -9,6 +9,7 @@ import NotFound from "./pages/NotFound";
 import SampleForm from "./components/SampleForm";
 import RequireAuth from "./components/RequireAuth";
 import RequireRole from "./components/RequireRole";
+import RequireGuest from "./components/RequireGuest";
 
 const router = createBrowserRouter([
   {
@@ -41,7 +42,14 @@ const router = createBrowserRouter([
           </RequireAuth>
         ),
       },
-      { path: "login", element: <Login /> },
+      {
+        path: "login",
+        element: (
+          <RequireGuest>
+            <Login />
+          </RequireGuest>
+        ),
+      },
       {
         path: "change-password",
         element: (
