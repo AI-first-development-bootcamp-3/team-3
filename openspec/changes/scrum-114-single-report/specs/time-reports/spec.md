@@ -49,7 +49,7 @@ The service SHALL expose the active client → project → task tree to any auth
 
 ### Requirement: Hebrew single-report entry form
 
-The home page (`/`) SHALL show a Hebrew RTL form for one report: date (default today), location, start/end time, cascading client → project → task (auto-select when exactly one option), and description. Saving SHALL call `POST /reports`, show success, and reset the form for a new entry. Empty hierarchy SHALL disable submit. Validation errors from `400` SHALL appear on the form.
+The home page (`/`) SHALL show a Hebrew RTL form matching the Figma **דיווח ידני** screen for one report: weekday date (default today), clock-in/out (`כניסה` / `יציאה`), a **דיווח פרויקטים** card with cascading client → project → task (auto-select when exactly one option), location, and description. Saving SHALL call `POST /reports`, show success, and reset the form for a new entry. Empty hierarchy SHALL disable submit. Validation errors from `400` SHALL appear on the form. The static daily standard label **תקן יומי 9 שע׳** MAY appear; remaining-hours warnings stay in SCRUM-115.
 
 #### Scenario: Employee saves a valid report
 

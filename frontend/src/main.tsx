@@ -12,10 +12,26 @@ import router from "./routes.tsx";
 
 sessionStore.getState().rehydrateSession();
 
+const theme = {
+  token: {
+    fontFamily: "'Assistant', system-ui, sans-serif",
+    colorPrimary: "#1b365d",
+    colorText: "#111827",
+    borderRadius: 12,
+    controlHeight: 44,
+  },
+  components: {
+    Button: {
+      controlHeight: 48,
+      fontWeight: 600,
+    },
+  },
+};
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <ConfigProvider direction="rtl" locale={heIL}>
+      <ConfigProvider direction="rtl" locale={heIL} theme={theme}>
         <App>
           <RouterProvider router={router} />
         </App>

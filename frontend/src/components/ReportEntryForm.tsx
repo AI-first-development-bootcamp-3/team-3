@@ -7,6 +7,7 @@ import { ApiError } from '../services/apiClient'
 import { createReport, getReportingOptions } from '../services/reports'
 import type { ReportingOptions, WorkLocation } from '../types'
 import { reportEntryFormSchema, type ReportEntryFormValues } from './ReportEntryForm.schema'
+import './ReportEntryForm.css'
 
 const TIME_FORMAT = 'HH:mm'
 
@@ -28,6 +29,12 @@ function freshDefaults(): ReportEntryFormValues {
     taskId: '',
     description: '',
   }
+}
+
+function formatReportDate(value: string): string {
+  const date = dayjs(value)
+  if (!date.isValid()) return ''
+  return `יום ${date.format('dd')} ${date.format('DD/MM/YY')}`
 }
 
 function apiFieldErrors(body: unknown): { field: string; message: string }[] {
@@ -58,6 +65,7 @@ function ReportEntryForm() {
     defaultValues: freshDefaults(),
   })
 
+  const date = useWatch({ control, name: 'date' })
   const clientId = useWatch({ control, name: 'clientId' })
   const projectId = useWatch({ control, name: 'projectId' })
   const taskId = useWatch({ control, name: 'taskId' })
@@ -152,207 +160,243 @@ function ReportEntryForm() {
   }
 
   if (loadError) {
-    return <Alert type="error" message={loadError} showIcon />
+    return (
+      <div className="report-entry">
+        <header className="report-entry__header">
+          <p className="report-entry__mode">דיווח ידני</p>
+          <p className="report-entry__quota">תקן יומי 9 שע׳</p>
+        </header>
+        <Alert type="error" message={loadError} showIcon />
+      </div>
+    )
   }
 
   if (!options) {
-    return <p>טוען…</p>
+    return (
+      <div className="report-entry">
+        <p>טוען…</p>
+      </div>
+    )
   }
 
   return (
-    <Form layout="vertical" onFinish={handleSubmit(onSubmit)}>
-      <h1>דיווח שעות</h1>
+    <div className="report-entry">
+      <header className="report-entry__header">
+        <p className="report-entry__mode">דיווח ידני</p>
+        <p className="report-entry__quota">תקן יומי 9 שע׳</p>
+      </header>
 
-      {formError && <Alert type="error" message={formError} showIcon style={{ marginBottom: 16 }} />}
+      <Form layout="vertical" onFinish={handleSubmit(onSubmit)}>
+        {formError && <Alert type="error" message={formError} showIcon style={{ marginBottom: 16 }} />}
 
-      {!hasHierarchy && (
-        <Alert
-          type="info"
-          message="אין משימות זמינות לדיווח"
-          style={{ marginBottom: 16 }}
-          showIcon
-        />
-      )}
+        {!hasHierarchy && (
+          <Alert
+            type="info"
+            message="אופססס... 😅"
+            description="אין מידע זמין כרגע, נסה שוב מאוחר יותר או פנה למנהל ישיר"
+            style={{ marginBottom: 16 }}
+            showIcon
+          />
+        )}
 
-      <Form.Item label="תאריך" htmlFor="date" validateStatus={errors.date ? 'error' : ''} help={errors.date?.message}>
-        <Controller
-          name="date"
-          control={control}
-          render={({ field }) => (
-            <DatePicker
-              id="date"
-              aria-label="תאריך"
-              format="YYYY-MM-DD"
-              value={field.value ? dayjs(field.value) : null}
-              onChange={(value) => field.onChange(value ? value.format('YYYY-MM-DD') : '')}
-              style={{ width: '100%' }}
+        <p className="report-entry__date-label">{formatReportDate(date) || 'תאריך'}</p>
+        <Form.Item htmlFor="date" validateStatus={errors.date ? 'error' : ''} help={errors.date?.message}>
+          <Controller
+            name="date"
+            control={control}
+            render={({ field }) => (
+              <DatePicker
+                id="date"
+                aria-label="תאריך"
+                format="DD/MM/YY"
+                allowClear={false}
+                value={field.value ? dayjs(field.value) : null}
+                onChange={(value) => field.onChange(value ? value.format('YYYY-MM-DD') : '')}
+              />
+            )}
+          />
+        </Form.Item>
+
+        <div className="report-entry__times">
+          <Form.Item
+            label="כניסה"
+            htmlFor="startTime"
+            validateStatus={errors.startTime ? 'error' : ''}
+            help={errors.startTime?.message}
+          >
+            <Controller
+              name="startTime"
+              control={control}
+              render={({ field }) => (
+                <TimePicker
+                  id="startTime"
+                  aria-label="כניסה"
+                  format={TIME_FORMAT}
+                  needConfirm={false}
+                  value={field.value ? dayjs(field.value, TIME_FORMAT) : null}
+                  onChange={(value) => field.onChange(value ? value.format(TIME_FORMAT) : '')}
+                />
+              )}
             />
-          )}
-        />
-      </Form.Item>
+          </Form.Item>
 
-      <Form.Item
-        label="מיקום"
-        htmlFor="workLocation"
-        validateStatus={errors.workLocation ? 'error' : ''}
-        help={errors.workLocation?.message}
-      >
-        <Controller
-          name="workLocation"
-          control={control}
-          render={({ field }) => (
-            <Select
-              id="workLocation"
-              aria-label="מיקום"
-              placeholder="בחרו מיקום"
-              options={LOCATION_OPTIONS}
-              value={field.value || undefined}
-              onChange={field.onChange}
-              allowClear
+          <Form.Item
+            label="יציאה"
+            htmlFor="endTime"
+            validateStatus={errors.endTime ? 'error' : ''}
+            help={errors.endTime?.message}
+          >
+            <Controller
+              name="endTime"
+              control={control}
+              render={({ field }) => (
+                <TimePicker
+                  id="endTime"
+                  aria-label="יציאה"
+                  format={TIME_FORMAT}
+                  needConfirm={false}
+                  value={field.value ? dayjs(field.value, TIME_FORMAT) : null}
+                  onChange={(value) => field.onChange(value ? value.format(TIME_FORMAT) : '')}
+                />
+              )}
             />
-          )}
-        />
-      </Form.Item>
+          </Form.Item>
+        </div>
 
-      <Form.Item
-        label="התחלה"
-        htmlFor="startTime"
-        validateStatus={errors.startTime ? 'error' : ''}
-        help={errors.startTime?.message}
-      >
-        <Controller
-          name="startTime"
-          control={control}
-          render={({ field }) => (
-            <TimePicker
-              id="startTime"
-              aria-label="התחלה"
-              format={TIME_FORMAT}
-              value={field.value ? dayjs(field.value, TIME_FORMAT) : null}
-              onChange={(value) => field.onChange(value ? value.format(TIME_FORMAT) : '')}
-              style={{ width: '100%' }}
+        <section className="report-entry__projects">
+          <h2 className="report-entry__projects-title">דיווח פרויקטים</h2>
+
+          <Form.Item
+            label="לקוח"
+            htmlFor="clientId"
+            validateStatus={errors.clientId ? 'error' : ''}
+            help={errors.clientId?.message}
+          >
+            <Controller
+              name="clientId"
+              control={control}
+              render={({ field }) => (
+                <Select
+                  id="clientId"
+                  aria-label="לקוח"
+                  placeholder="בחירה"
+                  options={options.clients.map((client) => ({ value: client.id, label: client.name }))}
+                  value={field.value || undefined}
+                  onChange={(value) => {
+                    field.onChange(value ?? '')
+                    setValue('projectId', '')
+                    setValue('taskId', '')
+                  }}
+                  disabled={!hasHierarchy}
+                />
+              )}
             />
-          )}
-        />
-      </Form.Item>
+          </Form.Item>
 
-      <Form.Item
-        label="סיום"
-        htmlFor="endTime"
-        validateStatus={errors.endTime ? 'error' : ''}
-        help={errors.endTime?.message}
-      >
-        <Controller
-          name="endTime"
-          control={control}
-          render={({ field }) => (
-            <TimePicker
-              id="endTime"
-              aria-label="סיום"
-              format={TIME_FORMAT}
-              value={field.value ? dayjs(field.value, TIME_FORMAT) : null}
-              onChange={(value) => field.onChange(value ? value.format(TIME_FORMAT) : '')}
-              style={{ width: '100%' }}
+          <Form.Item
+            label="פרויקט"
+            htmlFor="projectId"
+            validateStatus={errors.projectId ? 'error' : ''}
+            help={errors.projectId?.message}
+          >
+            <Controller
+              name="projectId"
+              control={control}
+              render={({ field }) => (
+                <Select
+                  id="projectId"
+                  aria-label="פרויקט"
+                  placeholder="בחירה"
+                  options={projects.map((project) => ({ value: project.id, label: project.name }))}
+                  value={field.value || undefined}
+                  onChange={(value) => {
+                    field.onChange(value ?? '')
+                    setValue('taskId', '')
+                  }}
+                  disabled={!clientId}
+                />
+              )}
             />
-          )}
-        />
-      </Form.Item>
+          </Form.Item>
 
-      <Form.Item
-        label="לקוח"
-        htmlFor="clientId"
-        validateStatus={errors.clientId ? 'error' : ''}
-        help={errors.clientId?.message}
-      >
-        <Controller
-          name="clientId"
-          control={control}
-          render={({ field }) => (
-            <Select
-              id="clientId"
-              aria-label="לקוח"
-              placeholder="בחרו לקוח"
-              options={options.clients.map((client) => ({ value: client.id, label: client.name }))}
-              value={field.value || undefined}
-              onChange={(value) => {
-                field.onChange(value ?? '')
-                setValue('projectId', '')
-                setValue('taskId', '')
-              }}
-              disabled={!hasHierarchy}
+          <Form.Item
+            label="משימה"
+            htmlFor="taskId"
+            validateStatus={errors.taskId ? 'error' : ''}
+            help={errors.taskId?.message}
+          >
+            <Controller
+              name="taskId"
+              control={control}
+              render={({ field }) => (
+                <Select
+                  id="taskId"
+                  aria-label="משימה"
+                  placeholder="בחירה"
+                  options={tasks.map((task) => ({ value: task.id, label: task.name }))}
+                  value={field.value || undefined}
+                  onChange={(value) => field.onChange(value ?? '')}
+                  disabled={!projectId}
+                />
+              )}
             />
-          )}
-        />
-      </Form.Item>
+          </Form.Item>
 
-      <Form.Item
-        label="פרויקט"
-        htmlFor="projectId"
-        validateStatus={errors.projectId ? 'error' : ''}
-        help={errors.projectId?.message}
-      >
-        <Controller
-          name="projectId"
-          control={control}
-          render={({ field }) => (
-            <Select
-              id="projectId"
-              aria-label="פרויקט"
-              placeholder="בחרו פרויקט"
-              options={projects.map((project) => ({ value: project.id, label: project.name }))}
-              value={field.value || undefined}
-              onChange={(value) => {
-                field.onChange(value ?? '')
-                setValue('taskId', '')
-              }}
-              disabled={!clientId}
+          <Form.Item
+            label="מיקום"
+            htmlFor="workLocation"
+            validateStatus={errors.workLocation ? 'error' : ''}
+            help={errors.workLocation?.message}
+          >
+            <Controller
+              name="workLocation"
+              control={control}
+              render={({ field }) => (
+                <Select
+                  id="workLocation"
+                  aria-label="מיקום"
+                  placeholder="בחירה"
+                  options={LOCATION_OPTIONS}
+                  value={field.value || undefined}
+                  onChange={field.onChange}
+                  allowClear
+                />
+              )}
             />
-          )}
-        />
-      </Form.Item>
+          </Form.Item>
 
-      <Form.Item
-        label="משימה"
-        htmlFor="taskId"
-        validateStatus={errors.taskId ? 'error' : ''}
-        help={errors.taskId?.message}
-      >
-        <Controller
-          name="taskId"
-          control={control}
-          render={({ field }) => (
-            <Select
-              id="taskId"
-              aria-label="משימה"
-              placeholder="בחרו משימה"
-              options={tasks.map((task) => ({ value: task.id, label: task.name }))}
-              value={field.value || undefined}
-              onChange={(value) => field.onChange(value ?? '')}
-              disabled={!projectId}
+          <Form.Item
+            htmlFor="description"
+            validateStatus={errors.description ? 'error' : ''}
+            help={errors.description?.message}
+          >
+            <Controller
+              name="description"
+              control={control}
+              render={({ field }) => (
+                <Input.TextArea
+                  {...field}
+                  id="description"
+                  aria-label="פירוט"
+                  placeholder="הוספת פירוט..."
+                  rows={3}
+                />
+              )}
             />
-          )}
-        />
-      </Form.Item>
+          </Form.Item>
+        </section>
 
-      <Form.Item
-        label="פירוט"
-        htmlFor="description"
-        validateStatus={errors.description ? 'error' : ''}
-        help={errors.description?.message}
-      >
-        <Controller
-          name="description"
-          control={control}
-          render={({ field }) => (
-            <Input.TextArea {...field} id="description" aria-label="פירוט" rows={3} />
-          )}
-        />
-      </Form.Item>
-
-      <Button type="primary" htmlType="submit" loading={isSubmitting} disabled={!hasHierarchy}>
-        שמירה
-      </Button>
-    </Form>
+        <Button
+          className="report-entry__save"
+          type="primary"
+          htmlType="submit"
+          loading={isSubmitting}
+          disabled={!hasHierarchy}
+        >
+          שמירה
+        </Button>
+      </Form>
+    </div>
   )
 }
 

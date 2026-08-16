@@ -87,6 +87,10 @@ describe('ReportEntryForm', { timeout: 15_000 }, () => {
     renderForm()
 
     expect(await screen.findByLabelText('פירוט')).toBeInTheDocument()
+    expect(screen.getByText('דיווח ידני')).toBeInTheDocument()
+    expect(screen.getByText('תקן יומי 9 שע׳')).toBeInTheDocument()
+    expect(screen.getByLabelText('כניסה')).toBeInTheDocument()
+    expect(screen.getByLabelText('יציאה')).toBeInTheDocument()
     await user.click(screen.getByLabelText('מיקום'))
     await user.click(await screen.findByText('משרד'))
     await user.type(screen.getByLabelText('פירוט'), 'עבודה')
