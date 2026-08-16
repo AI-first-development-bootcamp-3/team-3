@@ -1,5 +1,7 @@
+import ReportEntryForm from '../components/ReportEntryForm'
+
 function Reports() {
-  return <h1>Reports</h1>;
+  return <ReportEntryForm />
 }
 
-export default Reports;
+export default Reports
