@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Alert, Button, DatePicker, Form, Input, Select, TimePicker } from 'antd'
+import { Alert, App, Button, DatePicker, Form, Input, Select, TimePicker } from 'antd'
 import dayjs from 'dayjs'
-import { getReportingOptions } from '../services/reports'
+import { ApiError } from '../services/apiClient'
+import { createReport, getReportingOptions } from '../services/reports'
 import type { ReportingOptions, WorkLocation } from '../types'
 import { reportEntryFormSchema, type ReportEntryFormValues } from './ReportEntryForm.schema'
 
@@ -29,15 +30,29 @@ function freshDefaults(): ReportEntryFormValues {
   }
 }
 
+function apiFieldErrors(body: unknown): { field: string; message: string }[] {
+  if (!body || typeof body !== 'object' || !('error' in body)) return []
+  const error = (body as { error?: { details?: { field?: string; message?: string }[] } }).error
+  if (!error?.details) return []
+  return error.details.filter(
+    (detail): detail is { field: string; message: string } =>
+      typeof detail.field === 'string' && typeof detail.message === 'string',
+  )
+}
+
 function ReportEntryForm() {
+  const { message } = App.useApp()
   const [options, setOptions] = useState<ReportingOptions | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [formError, setFormError] = useState<string | null>(null)
 
   const {
     control,
     handleSubmit,
     setValue,
-    formState: { errors },
+    setError,
+    reset,
+    formState: { errors, isSubmitting },
   } = useForm<ReportEntryFormValues>({
     resolver: zodResolver(reportEntryFormSchema),
     defaultValues: freshDefaults(),
@@ -99,8 +114,41 @@ function ReportEntryForm() {
 
   const hasHierarchy = (options?.clients.length ?? 0) > 0
 
-  const onSubmit = () => {
-    // Persistence is wired in SCRUM-123.
+  const onSubmit = async (values: ReportEntryFormValues) => {
+    setFormError(null)
+    try {
+      await createReport({
+        date: values.date,
+        workLocation: values.workLocation as WorkLocation,
+        startTime: values.startTime,
+        endTime: values.endTime,
+        clientId: values.clientId,
+        projectId: values.projectId,
+        taskId: values.taskId,
+        description: values.description,
+      })
+      message.success('הדיווח נשמר בהצלחה')
+      const next = freshDefaults()
+      reset(next)
+      if (options?.clients.length === 1 && options.clients[0]) {
+        setValue('clientId', options.clients[0].id)
+      }
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 400) {
+        const details = apiFieldErrors(error.body)
+        if (details.length === 0) {
+          setFormError('לא ניתן לשמור את הדיווח. בדקו את השדות.')
+          return
+        }
+        for (const detail of details) {
+          if (detail.field in values) {
+            setError(detail.field as keyof ReportEntryFormValues, { message: detail.message })
+          }
+        }
+        return
+      }
+      setFormError('משהו השתבש. נסו שוב.')
+    }
   }
 
   if (loadError) {
@@ -114,6 +162,8 @@ function ReportEntryForm() {
   return (
     <Form layout="vertical" onFinish={handleSubmit(onSubmit)}>
       <h1>דיווח שעות</h1>
+
+      {formError && <Alert type="error" message={formError} showIcon style={{ marginBottom: 16 }} />}
 
       {!hasHierarchy && (
         <Alert
@@ -299,7 +349,7 @@ function ReportEntryForm() {
         />
       </Form.Item>
 
-      <Button type="primary" htmlType="submit" disabled={!hasHierarchy}>
+      <Button type="primary" htmlType="submit" loading={isSubmitting} disabled={!hasHierarchy}>
         שמירה
       </Button>
     </Form>
