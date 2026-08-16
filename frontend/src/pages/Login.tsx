@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Alert, Button, Form, Input } from 'antd'
+import { Alert, Button, Checkbox, Form, Input } from 'antd'
 import { useLocation, useNavigate, type Location } from 'react-router-dom'
 import { login } from '../services/auth'
 import { sessionStore } from '../services/sessionStore'
@@ -20,18 +20,22 @@ function Login() {
     formState: { errors, isSubmitting },
   } = useForm<LoginFormValues>({
     resolver: zodResolver(loginFormSchema),
-    defaultValues: { email: '', password: '' },
+    defaultValues: { email: '', password: '', rememberMe: false },
   })
 
   const onSubmit = async (values: LoginFormValues) => {
     setFormError(null)
     try {
-      const { user, token } = await login(values.email, values.password)
-      sessionStore.getState().setSession(user, token)
+      const { user, token, expiresAt } = await login(values.email, values.password, values.rememberMe)
+      sessionStore.getState().setSession(user, token, expiresAt, values.rememberMe)
       navigate(user.mustChangePassword ? '/change-password' : from, { replace: true })
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         setFormError('Incorrect email or password.')
+        return
+      }
+      if (error instanceof ApiError && error.status === 429) {
+        setFormError('Too many attempts. Please wait a few minutes and try again.')
         return
       }
       setFormError('Something went wrong. Please try again.')
@@ -57,6 +61,18 @@ function Login() {
           name="password"
           control={control}
           render={({ field }) => <Input.Password {...field} id="password" autoComplete="current-password" />}
+        />
+      </Form.Item>
+
+      <Form.Item>
+        <Controller
+          name="rememberMe"
+          control={control}
+          render={({ field: { value, onChange, ...field } }) => (
+            <Checkbox {...field} checked={value} onChange={(e) => onChange(e.target.checked)}>
+              Remember me
+            </Checkbox>
+          )}
         />
       </Form.Item>
 

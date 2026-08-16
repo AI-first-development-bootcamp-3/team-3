@@ -1,11 +1,12 @@
 import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { app } from '../../app.js';
 import { env } from '../../config/env.js';
 import { prisma } from '../../config/prisma.js';
 import { Role } from '../../generated/prisma/enums.js';
+import { emailSender } from '../../services/emailSender.js';
 import { createUser } from '../../test/factories.js';
 import { resetDatabase } from '../../test/resetDatabase.js';
 
@@ -16,6 +17,7 @@ function tokenFor(user: { id: string; role: string }): string {
 describe('POST /admin/users', () => {
   afterEach(async () => {
     await resetDatabase();
+    vi.restoreAllMocks();
   });
 
   it('creates a user with a generated temporary password, mustChangePassword: true, no password hash leaked', async () => {
@@ -130,6 +132,38 @@ describe('POST /admin/users', () => {
 
     const found = await prisma.user.findFirst({ where: { email: 'not-an-email' } });
     expect(found).toBeNull();
+  });
+
+  it('sends the temporary password by email on successful creation', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+    const sendSpy = vi.spyOn(emailSender, 'send').mockResolvedValue(undefined);
+
+    const response = await request(app)
+      .post('/admin/users')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ email: 'emailed@example.test', displayName: 'Emailed User', role: 'EMPLOYEE' });
+
+    expect(response.status).toBe(201);
+    expect(sendSpy).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        to: 'emailed@example.test',
+        text: expect.stringContaining(response.body.temporaryPassword),
+      }),
+    );
+  });
+
+  it('still creates the user and returns 201 when sending the credential email fails', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+    vi.spyOn(emailSender, 'send').mockRejectedValue(new Error('SMTP is down'));
+
+    const response = await request(app)
+      .post('/admin/users')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ email: 'email-fails@example.test', displayName: 'Email Fails', role: 'EMPLOYEE' });
+
+    expect(response.status).toBe(201);
+    const found = await prisma.user.findUnique({ where: { email: 'email-fails@example.test' } });
+    expect(found).not.toBeNull();
   });
 });
 
