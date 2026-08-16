@@ -23,7 +23,7 @@
 - [x] 2.3 Extend `frontend/src/services/sessionStore.ts` so `setSession(user, token, expiresAt, rememberMe)` persists to `localStorage` when remembered and `sessionStorage` otherwise, and `clearSession()` removes the key from **both** storages (design.md D6)
 - [x] 2.4 Add a synchronous `rehydrateSession()` to the session store that reads `sessionStorage` first then `localStorage`, discards an entry whose `expiresAt` has passed or whose shape is unexpected, and otherwise populates `user` and `token`
 - [x] 2.5 Add unit tests for the store: persists to the correct storage per flag, `clearSession` clears both, rehydrate restores a valid session, rehydrate discards an expired one, rehydrate discards a malformed one, and `sessionStorage` takes precedence when both hold an entry
-- [ ] 2.6 Call `rehydrateSession()` in `frontend/src/main.tsx` before the router is created, so the store is correct on `RequireAuth`'s first evaluation and no loading state is needed (design.md D7)
+- [x] 2.6 Call `rehydrateSession()` in `frontend/src/main.tsx` before the router is created, so the store is correct on `RequireAuth`'s first evaluation and no loading state is needed (design.md D7)
 - [ ] 2.7 Add `rememberMe: z.boolean()` to `loginFormSchema` in `frontend/src/pages/Login.schema.ts` and default it to `false` in the form's `defaultValues`
 - [ ] 2.8 Add an Ant Design `Checkbox` labelled "Remember me" to `frontend/src/pages/Login.tsx`, wired through `Controller` like the existing fields, and pass the value into `login()` and on to `setSession`
 - [ ] 2.9 Update `login()` in `frontend/src/services/auth.ts` to send `rememberMe` in the `POST /login` body and to return `expiresAt` from the response alongside `user` and `token`
