@@ -26,16 +26,16 @@ export const sessionStore = create<SessionState>((set) => ({
   user: null,
   token: null,
   setSession: (user, token, expiresAt, rememberMe) => {
-    writeSession(rememberMe ? localStorage : sessionStorage, { user, token, expiresAt })
+    writeSession(rememberMe ? window.localStorage : window.sessionStorage, { user, token, expiresAt })
     set({ user, token })
   },
   clearSession: () => {
-    removeSession(sessionStorage)
-    removeSession(localStorage)
+    removeSession(window.sessionStorage)
+    removeSession(window.localStorage)
     set({ user: null, token: null })
   },
   rehydrateSession: () => {
-    const stored = readSession(sessionStorage) ?? readSession(localStorage)
+    const stored = readSession(window.sessionStorage) ?? readSession(window.localStorage)
     if (!isValidStoredSession(stored)) return
     set({ user: stored.user as User, token: stored.token })
   },
