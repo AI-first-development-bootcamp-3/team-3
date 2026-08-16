@@ -106,6 +106,45 @@ describe('Login page', () => {
     expect(sessionStore.getState().token).toBeNull()
   })
 
+  it('shows a throttled message on 429 without redirecting or clearing session state', async () => {
+    mockFetchOnce({ ok: false, status: 429, json: { error: { code: 'TOO_MANY_REQUESTS', message: 'Too many attempts' } } })
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter>
+        <Login />
+      </MemoryRouter>,
+    )
+
+    await user.type(screen.getByLabelText(/email/i), 'admin@abra.test')
+    await user.type(screen.getByLabelText(/password/i), 'wrong-password')
+    await user.click(screen.getByRole('button', { name: /sign in/i }))
+
+    expect(await screen.findByText(/too many attempts/i)).toBeInTheDocument()
+    expect(screen.queryByText(/incorrect email or password/i)).not.toBeInTheDocument()
+    expect(sessionStore.getState().token).toBeNull()
+  })
+
+  it('keeps the typed email and password, and a submittable form, after a 429', async () => {
+    mockFetchOnce({ ok: false, status: 429, json: { error: { code: 'TOO_MANY_REQUESTS', message: 'Too many attempts' } } })
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter>
+        <Login />
+      </MemoryRouter>,
+    )
+
+    await user.type(screen.getByLabelText(/email/i), 'admin@abra.test')
+    await user.type(screen.getByLabelText(/password/i), 'wrong-password')
+    await user.click(screen.getByRole('button', { name: /sign in/i }))
+
+    expect(await screen.findByText(/too many attempts/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/email/i)).toHaveValue('admin@abra.test')
+    expect(screen.getByLabelText(/password/i)).toHaveValue('wrong-password')
+    expect(screen.getByRole('button', { name: /sign in/i })).toBeEnabled()
+  })
+
   it('sends rememberMe: false and stores the session in sessionStorage when left unchecked', async () => {
     const fetchMock = mockFetchOnce({
       ok: true,
