@@ -28,9 +28,15 @@
 - [x] 2.8 Add an Ant Design `Checkbox` labelled "Remember me" to `frontend/src/pages/Login.tsx`, wired through `Controller` like the existing fields, and pass the value into `login()` and on to `setSession`
 - [x] 2.9 Update `login()` in `frontend/src/services/auth.ts` to send `rememberMe` in the `POST /login` body and to return `expiresAt` from the response alongside `user` and `token`
 - [x] 2.10 Extend `frontend/src/pages/Login.test.tsx`: the checkbox renders unchecked by default, submitting unchecked sends `rememberMe: false`, submitting checked sends `true`, and the resulting session lands in the expected storage in each case
-- [ ] 2.11 Run `npm run lint` and `npm test` in `frontend/` and confirm green
+- [x] 2.11 Run `npm run lint` and `npm test` in `frontend/` and confirm green
 
 ## 3. Integration and closeout
+
+> **3.1-3.4 pending manual QA.** The API contract behind them was verified against a live backend + seeded
+> dev database: default and `rememberMe: false` return a token with an ~8h `expiresAt`, `rememberMe: true`
+> returns ~30d, and a non-boolean `rememberMe` gets a `400`. What's left needs a real browser (reload, tab
+> close, browser restart, devtools storage edits) that this session couldn't drive. Someone needs to click
+> through the four scenarios in a browser before this merges.
 
 - [ ] 3.1 Verify end to end against a running stack: log in unchecked → reload the page → still signed in; close the tab and reopen → back at `/login`
 - [ ] 3.2 Verify end to end: log in with "Remember me" → quit and reopen the browser → still signed in
