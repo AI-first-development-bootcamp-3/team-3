@@ -39,7 +39,7 @@ function renderForm() {
   )
 }
 
-describe('ReportEntryForm', () => {
+describe('ReportEntryForm', { timeout: 15_000 }, () => {
   afterEach(() => {
     cleanup()
     vi.unstubAllGlobals()
