@@ -49,6 +49,10 @@ first. See `.env.example` for the full annotated list; `DATABASE_URL`,
 | `JWT_SECRET` | **yes** | HS256 signing key, 32+ characters (`openssl rand -base64 32`) |
 | `LOG_LEVEL` | no (`info`) | pino level; `silent` disables logging (used in tests) |
 | `STORAGE_DIR` | no (`./storage/uploads`) | See [File storage](#file-storage) |
+| `RATE_LIMIT_EMAIL_MAX_ATTEMPTS` | no (`5`) | See [Login rate limiting](#login-rate-limiting) |
+| `RATE_LIMIT_IP_MAX_ATTEMPTS` | no (`50`) | See [Login rate limiting](#login-rate-limiting) |
+| `RATE_LIMIT_WINDOW_SECONDS` | no (`900`) | See [Login rate limiting](#login-rate-limiting) |
+| `TRUST_PROXY` | no (`false`) | See [Login rate limiting](#login-rate-limiting) |
 
 ## Conventions later epics should follow
 
@@ -160,6 +164,35 @@ file to keep in sync. Served in every environment except production:
 worked example, including both its 200 and 503 responses; the shared error
 contract is declared once as a reusable `Error` schema component and
 referenced from there.
+
+## Login rate limiting
+
+`POST /login` and `PATCH /me/password` (`src/middleware/rateLimit.middleware.ts`)
+count failed attempts within a rolling window and reject with `429` once a
+threshold is exceeded — `/login` on both the submitted email and the client
+address, `/me/password` on address only (see the comment at its route
+wiring in `src/routes/auth.routes.ts` for why it has no per-account leg).
+
+**Counters are in-process, not shared storage.** They live in a `Map`
+(`src/services/rateLimitStore.ts`), not Postgres or Redis — a deliberate
+trade-off to avoid a migration and a new service for what's a hint, not a
+hard security boundary (see `openspec/changes/login-rate-limiting/design.md`
+for the full reasoning). Two consequences to keep in mind:
+
+- **They reset on every restart and deploy.** An attacker who can trigger or
+  outlast a restart gets a fresh quota. Fine for raising attacker cost on an
+  internal app; don't treat it as a guarantee.
+- **They don't survive scaling past one backend replica.** Each replica
+  keeps its own counters, so N replicas give an attacker roughly N× the
+  effective attempts — nothing fails loudly when this happens. If this
+  service is ever scaled horizontally, move this to shared storage first.
+
+`TRUST_PROXY` governs how the client address is resolved from
+`X-Forwarded-For` (Express's `trust proxy` setting) and defaults to
+disabled — safe for this project's `docker-compose` setup, where there's no
+proxy in front of the backend. Set it only when deploying behind one you
+actually trust; enabling it without a real proxy in front lets any client
+pick its own rate-limit bucket by forging the header.
 
 ## File storage
 

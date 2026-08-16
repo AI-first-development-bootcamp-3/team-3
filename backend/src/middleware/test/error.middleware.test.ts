@@ -20,6 +20,10 @@ function buildTestApp() {
     throw new Error('connection failed: postgres://user:hunter2@db-host:5432/prod');
   });
 
+  testApp.get('/throttled', () => {
+    throw AppError.tooManyRequests(120);
+  });
+
   testApp.use(errorHandler);
 
   return testApp;
@@ -60,6 +64,22 @@ describe('errorHandler', () => {
     const serialised = JSON.stringify(response.body);
     expect(serialised).not.toContain('postgres://');
     expect(serialised).not.toContain('hunter2');
+  });
+
+  it('attaches Retry-After for a throttled error, without adding it to the body', async () => {
+    const response = await request(buildTestApp()).get('/throttled');
+
+    expect(response.status).toBe(429);
+    expect(response.headers['retry-after']).toBe('120');
+    expect(response.body).toEqual({
+      error: { code: 'TOO_MANY_REQUESTS', message: 'Too many attempts. Please try again later.' },
+    });
+  });
+
+  it('does not set Retry-After for an error that has none', async () => {
+    const response = await request(buildTestApp()).get('/known-error');
+
+    expect(response.headers['retry-after']).toBeUndefined();
   });
 
   it('logs the full unexpected error server-side for diagnosis', async () => {
