@@ -6,6 +6,8 @@ interface SessionState {
   user: User | null
   token: string | null
   setSession: (user: User, token: string, expiresAt: string, rememberMe: boolean) => void
+  /** Updates the signed-in user in place (e.g. after a password change) without touching the token/expiry. */
+  updateUser: (user: User) => void
   clearSession: () => void
   rehydrateSession: () => void
 }
@@ -22,12 +24,22 @@ function isValidStoredSession(stored: StoredSession | null): stored is StoredSes
  * Zustand, not React Context - apiClient.ts is a plain module and needs to
  * read the token outside React via getState(). See SCRUM-39's design.md.
  */
-export const sessionStore = create<SessionState>((set) => ({
+export const sessionStore = create<SessionState>((set, get) => ({
   user: null,
   token: null,
   setSession: (user, token, expiresAt, rememberMe) => {
     writeSession(rememberMe ? window.localStorage : window.sessionStorage, { user, token, expiresAt })
     set({ user, token })
+  },
+  updateUser: (user) => {
+    set({ user })
+    const { token } = get()
+    if (!token) return
+    const storage = readSession(window.localStorage) ? window.localStorage : window.sessionStorage
+    const stored = readSession(storage)
+    if (stored) {
+      writeSession(storage, { ...stored, user })
+    }
   },
   clearSession: () => {
     removeSession(window.sessionStorage)
