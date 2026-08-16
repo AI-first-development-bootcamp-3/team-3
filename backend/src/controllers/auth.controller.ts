@@ -5,8 +5,8 @@ import type { ChangePasswordBody, LoginBody } from '../types/auth.schema.js';
 
 export const postLogin: RequestHandler = async (req, res, next) => {
   try {
-    const { email, password } = req.body as LoginBody;
-    const result = await login(email, password);
+    const { email, password, rememberMe } = req.body as LoginBody;
+    const result = await login(email, password, rememberMe);
     res.status(200).json(result);
   } catch (error) {
     next(error);

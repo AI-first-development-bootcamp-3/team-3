@@ -12,6 +12,7 @@ interface BackendUser {
 
 interface LoginResponse {
   token: string
+  expiresAt: string
   user: BackendUser
 }
 
@@ -31,13 +32,17 @@ function toUser(backendUser: BackendUser): User {
   }
 }
 
-export async function login(email: string, password: string): Promise<{ user: User; token: string }> {
+export async function login(
+  email: string,
+  password: string,
+  rememberMe: boolean,
+): Promise<{ user: User; token: string; expiresAt: string }> {
   const response = await request<LoginResponse>('/login', {
     method: 'POST',
-    body: { email, password },
+    body: { email, password, rememberMe },
     handleUnauthorizedGlobally: false,
   })
-  return { user: toUser(response.user), token: response.token }
+  return { user: toUser(response.user), token: response.token, expiresAt: response.expiresAt }
 }
 
 export async function changeOwnPassword(newPassword: string): Promise<User> {

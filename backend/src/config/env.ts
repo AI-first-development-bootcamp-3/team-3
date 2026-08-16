@@ -18,15 +18,68 @@ const envSchema = z.object({
     ),
   // HS256 signing key. 32 chars is the practical floor for a symmetric secret.
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
+  // Default session lifetime, in seconds. 28800 = 8 hours.
+  JWT_EXPIRES_IN_SECONDS: z.coerce.number().int().positive().default(28800),
+  // Lifetime, in seconds, when the caller opts into "remember me" at login.
+  // 2592000 = 30 days.
+  JWT_REMEMBER_ME_EXPIRES_IN_SECONDS: z.coerce.number().int().positive().default(2592000),
   // Local-filesystem root for uploaded attachments — a mounted volume in
   // Docker/production. Free-tier container filesystems are ephemeral; see
   // backend/README.md -> File storage.
   STORAGE_DIR: z.string().min(1).default('./storage/uploads'),
   // 'silent' is a real pino level that disables logging entirely (used in tests).
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+  // Failed-attempt throttle on /login and /me/password. Both thresholds count
+  // failures within the same rolling window; the address threshold assumes
+  // ~10 people can plausibly share one office NAT address (5 * 10 = 50), so
+  // it never trips before every one of them has exhausted their own email
+  // threshold. See openspec/changes/login-rate-limiting/design.md.
+  RATE_LIMIT_EMAIL_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+  RATE_LIMIT_IP_MAX_ATTEMPTS: z.coerce.number().int().positive().default(50),
+  RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(900),
+  // How many reverse-proxy hops in front of this service to trust when
+  // resolving a client's address from X-Forwarded-For. Passed straight to
+  // Express's `trust proxy` setting. Disabled by default: trusting a proxy
+  // that isn't there lets any client pick its own rate-limit bucket by
+  // forging the header. 'true' trusts the first hop; a positive integer
+  // trusts that many hops; a comma-separated list trusts specific addresses
+  // or CIDR ranges (Express's own accepted forms).
+  TRUST_PROXY: z.string().default('false'),
+}).refine((data) => data.JWT_REMEMBER_ME_EXPIRES_IN_SECONDS >= data.JWT_EXPIRES_IN_SECONDS, {
+  message: 'JWT_REMEMBER_ME_EXPIRES_IN_SECONDS must be >= JWT_EXPIRES_IN_SECONDS',
+  path: ['JWT_REMEMBER_ME_EXPIRES_IN_SECONDS'],
+}).refine((data) => data.RATE_LIMIT_IP_MAX_ATTEMPTS >= data.RATE_LIMIT_EMAIL_MAX_ATTEMPTS, {
+  message: 'RATE_LIMIT_IP_MAX_ATTEMPTS must be >= RATE_LIMIT_EMAIL_MAX_ATTEMPTS',
+  path: ['RATE_LIMIT_IP_MAX_ATTEMPTS'],
 });
 
 export type Env = z.infer<typeof envSchema>;
+
+export type TrustProxySetting = boolean | number | string[];
+
+/**
+ * Parses TRUST_PROXY into whatever form Express's `trust proxy` setting
+ * expects. Kept separate from the schema (which just validates a string) so
+ * it's testable on its own — this is the part with real security weight.
+ */
+export function parseTrustProxy(value: string): TrustProxySetting {
+  const trimmed = value.trim().toLowerCase();
+
+  if (trimmed === '' || trimmed === 'false') {
+    return false;
+  }
+  if (trimmed === 'true') {
+    return true;
+  }
+  if (/^\d+$/.test(trimmed)) {
+    return Number(trimmed);
+  }
+
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
 
 export class EnvValidationError extends Error {
   readonly issues: readonly string[];

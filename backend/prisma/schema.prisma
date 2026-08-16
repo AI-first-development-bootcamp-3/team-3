@@ -12,11 +12,10 @@ enum Role {
   EMPLOYEE
 }
 
-enum AbsenceType {
-  VACATION
-  SICK
-  RESERVE_DUTY
-  OTHER
+enum WorkLocation {
+  OFFICE
+  CLIENT
+  HOME
 }
 
 model User {
@@ -30,7 +29,7 @@ model User {
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
   attachments        Attachment[]
-  absences           Absence[]
+  timeReports        TimeReport[]
 
   @@map("users")
 }
@@ -41,7 +40,8 @@ model Client {
   isActive  Boolean   @default(true)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
-  projects  Project[]
+  projects    Project[]
+  timeReports TimeReport[]
 
   @@map("clients")
 }
@@ -54,7 +54,8 @@ model Project {
   updatedAt DateTime @updatedAt
   clientId  String
   client    Client   @relation(fields: [clientId], references: [id])
-  tasks     Task[]
+  tasks       Task[]
+  timeReports TimeReport[]
 
   @@map("projects")
 }
@@ -66,7 +67,8 @@ model Task {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   projectId String
-  project   Project  @relation(fields: [projectId], references: [id])
+  project     Project      @relation(fields: [projectId], references: [id])
+  timeReports TimeReport[]
 
   @@map("tasks")
 }
@@ -113,4 +115,25 @@ model Attachment {
   absence    Absence? @relation(fields: [absenceId], references: [id])
 
   @@map("attachments")
+}
+
+model TimeReport {
+  id           String       @id @default(uuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id])
+  clientId     String
+  client       Client       @relation(fields: [clientId], references: [id])
+  projectId    String
+  project      Project      @relation(fields: [projectId], references: [id])
+  taskId       String
+  task         Task         @relation(fields: [taskId], references: [id])
+  date         DateTime     @db.Date
+  workLocation WorkLocation
+  startTime    DateTime     @db.Time
+  endTime      DateTime     @db.Time
+  description  String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@map("time_reports")
 }

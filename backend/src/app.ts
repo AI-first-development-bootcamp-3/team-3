@@ -2,7 +2,7 @@ import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
 import swaggerUi from 'swagger-ui-express';
-import { env } from './config/env.js';
+import { env, parseTrustProxy } from './config/env.js';
 import { openApiSpec } from './config/swagger.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { notFoundHandler } from './middleware/notFound.middleware.js';
@@ -12,6 +12,7 @@ import { attachmentRouter } from './routes/attachment.routes.js';
 import { authRouter } from './routes/auth.routes.js';
 import { healthRouter } from './routes/health.routes.js';
 import { sampleRouter } from './routes/sample.routes.js';
+import { timeReportRouter } from './routes/timeReport.routes.js';
 
 /**
  * The Express app, fully configured but never listening. Kept separate from
@@ -21,6 +22,11 @@ import { sampleRouter } from './routes/sample.routes.js';
 export const app = express();
 
 app.disable('x-powered-by');
+
+// Governs how req.ip is resolved from X-Forwarded-For. Disabled by default:
+// see TRUST_PROXY in config/env.ts for why trusting a proxy that isn't there
+// is worse than not trusting one that is.
+app.set('trust proxy', parseTrustProxy(env.TRUST_PROXY));
 
 app.use(helmet());
 app.use(
@@ -38,6 +44,7 @@ app.use(sampleRouter);
 app.use(attachmentRouter);
 app.use(authRouter);
 app.use(adminUserRouter);
+app.use(timeReportRouter);
 
 // Interactive docs leak endpoint shapes and are dev/QA tooling, not a
 // production surface — disabled there by configuration.
