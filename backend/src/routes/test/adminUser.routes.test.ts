@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -163,5 +164,139 @@ describe('POST /admin/users', () => {
     expect(response.status).toBe(201);
     const found = await prisma.user.findUnique({ where: { email: 'email-fails@example.test' } });
     expect(found).not.toBeNull();
+  });
+});
+
+describe('PATCH /admin/users/:id/reset-password', () => {
+  afterEach(async () => {
+    await resetDatabase();
+  });
+
+  it('generates a new temporary password, sets mustChangePassword: true, and the new password logs in', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+    const target = await createUser({ email: 'reset-me@example.test', mustChangePassword: false });
+
+    const response = await request(app)
+      .patch(`/admin/users/${target.id}/reset-password`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send();
+
+    expect(response.status).toBe(200);
+    expect(response.body.temporaryPassword).toEqual(expect.any(String));
+    expect(response.body.user).toMatchObject({ id: target.id, mustChangePassword: true });
+    expect(response.body.user.passwordHash).toBeUndefined();
+
+    const loginResponse = await request(app)
+      .post('/login')
+      .send({ email: 'reset-me@example.test', password: response.body.temporaryPassword });
+    expect(loginResponse.status).toBe(200);
+  });
+
+  it('rejects a non-admin caller with 403', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    const target = await createUser();
+
+    const response = await request(app)
+      .patch(`/admin/users/${target.id}/reset-password`)
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send();
+
+    expect(response.status).toBe(403);
+  });
+
+  it('rejects an unauthenticated caller with 401', async () => {
+    const target = await createUser();
+
+    const response = await request(app).patch(`/admin/users/${target.id}/reset-password`).send();
+
+    expect(response.status).toBe(401);
+  });
+
+  it('returns 404 for an unknown user id', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+
+    const response = await request(app)
+      .patch(`/admin/users/${crypto.randomUUID()}/reset-password`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send();
+
+    expect(response.status).toBe(404);
+  });
+
+  it('rejects a malformed id with 400', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+
+    const response = await request(app)
+      .patch('/admin/users/not-a-uuid/reset-password')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send();
+
+    expect(response.status).toBe(400);
+  });
+});
+
+describe('PATCH /admin/users/:id/role', () => {
+  afterEach(async () => {
+    await resetDatabase();
+  });
+
+  it("changes the user's role", async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+    const target = await createUser({ role: Role.EMPLOYEE });
+
+    const response = await request(app)
+      .patch(`/admin/users/${target.id}/role`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ role: 'ADMIN' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.user).toMatchObject({ id: target.id, role: 'ADMIN' });
+    expect(response.body.user.passwordHash).toBeUndefined();
+
+    const updated = await prisma.user.findUniqueOrThrow({ where: { id: target.id } });
+    expect(updated.role).toBe(Role.ADMIN);
+  });
+
+  it('rejects a non-admin caller with 403', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    const target = await createUser();
+
+    const response = await request(app)
+      .patch(`/admin/users/${target.id}/role`)
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({ role: 'ADMIN' });
+
+    expect(response.status).toBe(403);
+  });
+
+  it('rejects an unauthenticated caller with 401', async () => {
+    const target = await createUser();
+
+    const response = await request(app).patch(`/admin/users/${target.id}/role`).send({ role: 'ADMIN' });
+
+    expect(response.status).toBe(401);
+  });
+
+  it('returns 404 for an unknown user id', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+
+    const response = await request(app)
+      .patch(`/admin/users/${crypto.randomUUID()}/role`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ role: 'ADMIN' });
+
+    expect(response.status).toBe(404);
+  });
+
+  it('rejects an invalid role value with 400', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+    const target = await createUser();
+
+    const response = await request(app)
+      .patch(`/admin/users/${target.id}/role`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ role: 'SUPERUSER' });
+
+    expect(response.status).toBe(400);
   });
 });
