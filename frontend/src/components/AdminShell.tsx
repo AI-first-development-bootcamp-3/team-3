@@ -18,7 +18,7 @@ function AdminShell() {
 
   return (
     <div className="admin-shell">
-      <Menu mode="horizontal" selectedKeys={[pathname]} items={items} />
+      <Menu mode="horizontal" selectedKeys={[pathname]} items={items} style={{ direction: 'rtl' }} />
       <main className="admin-shell__content">
         <Outlet />
       </main>
