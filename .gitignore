@@ -30,6 +30,8 @@ npm-debug.log*
 .idea/
 .vscode/*
 !.vscode/extensions.json
+.cursor/
+AGENTS.md
 
 # Claude Code local overrides (shared config in .claude/ stays tracked)
 .claude/settings.local.json
