@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { postAbsence } from '../controllers/absence.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
+import { writeRateLimit } from '../middleware/writeRateLimit.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
 import { createAbsenceBodySchema } from '../types/absence.schema.js';
 
@@ -44,4 +45,13 @@ export const absenceRouter = Router();
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
  */
-absenceRouter.post('/absences', authenticate, validate({ body: createAbsenceBodySchema }), postAbsence);
+absenceRouter.post(
+  '/absences',
+  // Ahead of `authenticate` on purpose, so the token verify and user-row read
+  // that middleware performs sit behind the limiter rather than in front of it.
+  // Subject-keyed so each user gets their own budget for absence reporting.
+  writeRateLimit,
+  authenticate,
+  validate({ body: createAbsenceBodySchema }),
+  postAbsence,
+);

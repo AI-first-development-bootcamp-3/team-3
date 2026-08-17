@@ -6,6 +6,7 @@ import {
   postAdminUser,
 } from '../controllers/adminUser.controller.js';
 import { authenticate, requireRole } from '../middleware/auth.middleware.js';
+import { writeRateLimit } from '../middleware/writeRateLimit.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
 import { Role } from '../generated/prisma/enums.js';
 import {
@@ -62,6 +63,10 @@ export const adminUserRouter = Router();
  */
 adminUserRouter.post(
   '/admin/users',
+  // Ahead of `authenticate` on purpose, so the token verify and user-row read
+  // that middleware performs sit behind the limiter rather than in front of it.
+  // Subject-keyed so each user gets their own budget for admin operations.
+  writeRateLimit,
   authenticate,
   requireRole(Role.ADMIN),
   validate({ body: createUserBodySchema }),
@@ -106,6 +111,10 @@ adminUserRouter.post(
  */
 adminUserRouter.patch(
   '/admin/users/:id/reset-password',
+  // Ahead of `authenticate` on purpose, so the token verify and user-row read
+  // that middleware performs sit behind the limiter rather than in front of it.
+  // Subject-keyed so each user gets their own budget for admin operations.
+  writeRateLimit,
   authenticate,
   requireRole(Role.ADMIN),
   validate({ params: userIdParamSchema }),
@@ -159,6 +168,10 @@ adminUserRouter.patch(
  */
 adminUserRouter.patch(
   '/admin/users/:id/role',
+  // Ahead of `authenticate` on purpose, so the token verify and user-row read
+  // that middleware performs sit behind the limiter rather than in front of it.
+  // Subject-keyed so each user gets their own budget for admin operations.
+  writeRateLimit,
   authenticate,
   requireRole(Role.ADMIN),
   validate({ params: userIdParamSchema, body: changeRoleBodySchema }),
@@ -212,6 +225,10 @@ adminUserRouter.patch(
  */
 adminUserRouter.patch(
   '/admin/users/:id/status',
+  // Ahead of `authenticate` on purpose, so the token verify and user-row read
+  // that middleware performs sit behind the limiter rather than in front of it.
+  // Subject-keyed so each user gets their own budget for admin operations.
+  writeRateLimit,
   authenticate,
   requireRole(Role.ADMIN),
   validate({ params: userIdParamSchema, body: setUserActiveBodySchema }),

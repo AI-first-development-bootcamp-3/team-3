@@ -4,6 +4,7 @@ import multer from 'multer';
 import { upload } from '../config/multer.js';
 import { getAttachment, postAttachment } from '../controllers/attachment.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
+import { readRateLimit, writeRateLimit } from '../middleware/writeRateLimit.middleware.js';
 import { AppError } from '../types/errors.js';
 
 export const attachmentRouter = Router();
@@ -65,7 +66,16 @@ function handleUpload(req: Request, res: Response, next: NextFunction): void {
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
  */
-attachmentRouter.post('/attachments', authenticate, handleUpload, postAttachment);
+attachmentRouter.post(
+  '/attachments',
+  // Ahead of `authenticate` on purpose, so the token verify and user-row read
+  // that middleware performs sit behind the limiter rather than in front of it.
+  // Subject-keyed so each user gets their own budget for uploads.
+  writeRateLimit,
+  authenticate,
+  handleUpload,
+  postAttachment,
+);
 
 /**
  * @openapi
@@ -98,4 +108,12 @@ attachmentRouter.post('/attachments', authenticate, handleUpload, postAttachment
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
  */
-attachmentRouter.get('/attachments/:id', authenticate, getAttachment);
+attachmentRouter.get(
+  '/attachments/:id',
+  // Ahead of `authenticate` on purpose, so the token verify and user-row read
+  // that middleware performs sit behind the limiter rather than in front of it.
+  // Address-keyed as a consequence — see the middleware's own comment.
+  readRateLimit,
+  authenticate,
+  getAttachment,
+);

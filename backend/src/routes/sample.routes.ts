@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate, requireRole } from '../middleware/auth.middleware.js';
+import { readRateLimit, writeRateLimit } from '../middleware/writeRateLimit.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
 import { Role } from '../generated/prisma/enums.js';
 import { echoBodySchema } from '../types/sample.schema.js';
@@ -12,11 +13,11 @@ import { getAdminOnly, getProtected, postEcho } from '../controllers/sample.cont
  */
 export const sampleRouter = Router();
 
-sampleRouter.post('/sample/echo', validate({ body: echoBodySchema }), postEcho);
+sampleRouter.post('/sample/echo', writeRateLimit, validate({ body: echoBodySchema }), postEcho);
 
 /**
  * Demonstrates the auth middlewares: `/sample/protected` requires any valid
  * token, `/sample/admin-only` additionally requires the ADMIN role.
  */
-sampleRouter.get('/sample/protected', authenticate, getProtected);
-sampleRouter.get('/sample/admin-only', authenticate, requireRole(Role.ADMIN), getAdminOnly);
+sampleRouter.get('/sample/protected', readRateLimit, authenticate, getProtected);
+sampleRouter.get('/sample/admin-only', readRateLimit, authenticate, requireRole(Role.ADMIN), getAdminOnly);
