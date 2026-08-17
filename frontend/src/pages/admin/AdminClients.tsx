@@ -57,7 +57,7 @@ function AdminClients() {
     <div dir="rtl">
       <h1>לקוחות</h1>
 
-      {editingClient ? (
+      {editingClient && (
         <AdminClientForm
           initialValues={{ name: editingClient.name, contactDetails: editingClient.contactDetails ?? '' }}
           active={editingClient.isActive}
@@ -70,22 +70,23 @@ function AdminClients() {
             await updateMutation.mutateAsync({ id: editingClient.id, ...values })
             setEditingClient(null)
           }}
+          onCancel={() => setEditingClient(null)}
         />
-      ) : (
-        <>
-          <Button type="primary" onClick={() => setShowCreateForm(!showCreateForm)} style={{ marginBottom: 16 }}>
-            לקוח חדש
-          </Button>
-          {showCreateForm && (
-            <AdminClientForm
-              submitLabel="יצירה"
-              onSubmit={async (values) => {
-                await createMutation.mutateAsync(values)
-              }}
-            />
-          )}
-        </>
       )}
+
+      {showCreateForm && (
+        <AdminClientForm
+          submitLabel="יצירה"
+          onSubmit={async (values) => {
+            await createMutation.mutateAsync(values)
+          }}
+          onCancel={() => setShowCreateForm(false)}
+        />
+      )}
+
+      <Button type="primary" onClick={() => setShowCreateForm(!showCreateForm)} style={{ marginBottom: 16 }}>
+        לקוח חדש
+      </Button>
 
       <AdminEntityTable columns={columns} dataSource={clients} rowKey="id" loading={isLoading} />
     </div>
