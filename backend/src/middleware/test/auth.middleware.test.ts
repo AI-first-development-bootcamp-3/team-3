@@ -1,23 +1,32 @@
+import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { app } from '../../app.js';
 import { env } from '../../config/env.js';
+import { prisma } from '../../config/prisma.js';
 import { Role } from '../../generated/prisma/enums.js';
+import { createUser } from '../../test/factories.js';
+import { resetDatabase } from '../../test/resetDatabase.js';
 
 function signToken(payload: object, options?: jwt.SignOptions): string {
   return jwt.sign(payload, env.JWT_SECRET, options);
 }
 
 describe('authenticate', () => {
+  afterEach(async () => {
+    await resetDatabase();
+  });
+
   it('allows a request with a valid, unexpired token and exposes the identity', async () => {
-    const token = signToken({ sub: 'user-1', role: Role.EMPLOYEE }, { expiresIn: '1h' });
+    const user = await createUser({ role: Role.EMPLOYEE });
+    const token = signToken({ sub: user.id, role: Role.EMPLOYEE }, { expiresIn: '1h' });
 
     const response = await request(app).get('/sample/protected').set('Authorization', `Bearer ${token}`);
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
-      user: expect.objectContaining({ sub: 'user-1', role: Role.EMPLOYEE }),
+      user: expect.objectContaining({ sub: user.id, role: Role.EMPLOYEE }),
     });
   });
 
@@ -52,11 +61,41 @@ describe('authenticate', () => {
     expect(response.status).toBe(401);
     expect(response.body.error.code).toBe('TOKEN_EXPIRED');
   });
+
+  it('rejects a valid token for a deactivated user with ACCOUNT_DEACTIVATED', async () => {
+    const user = await createUser({ role: Role.EMPLOYEE, isActive: false });
+    const token = signToken({ sub: user.id, role: Role.EMPLOYEE }, { expiresIn: '1h' });
+
+    const response = await request(app).get('/sample/protected').set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('ACCOUNT_DEACTIVATED');
+  });
+
+  it('rejects a valid token whose subject matches no stored user with UNAUTHORIZED', async () => {
+    const token = signToken({ sub: crypto.randomUUID(), role: Role.EMPLOYEE }, { expiresIn: '1h' });
+
+    const response = await request(app).get('/sample/protected').set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('UNAUTHORIZED');
+  });
+
+  it('allows an unauthenticated request to a public route', async () => {
+    const response = await request(app).get('/health');
+
+    expect(response.status).toBe(200);
+  });
 });
 
 describe('requireRole', () => {
+  afterEach(async () => {
+    await resetDatabase();
+  });
+
   it('permits an administrator on the admin-only route', async () => {
-    const token = signToken({ sub: 'admin-1', role: Role.ADMIN }, { expiresIn: '1h' });
+    const admin = await createUser({ role: Role.ADMIN });
+    const token = signToken({ sub: admin.id, role: Role.ADMIN }, { expiresIn: '1h' });
 
     const response = await request(app).get('/sample/admin-only').set('Authorization', `Bearer ${token}`);
 
@@ -64,7 +103,8 @@ describe('requireRole', () => {
   });
 
   it('refuses an employee on the admin-only route with 403', async () => {
-    const token = signToken({ sub: 'user-1', role: Role.EMPLOYEE }, { expiresIn: '1h' });
+    const user = await createUser({ role: Role.EMPLOYEE });
+    const token = signToken({ sub: user.id, role: Role.EMPLOYEE }, { expiresIn: '1h' });
 
     const response = await request(app).get('/sample/admin-only').set('Authorization', `Bearer ${token}`);
 
@@ -79,8 +119,9 @@ describe('requireRole', () => {
     expect(response.body.error.code).toBe('UNAUTHORIZED');
   });
 
-  it("takes the role from the verified token, ignoring a contradicting role in the request body", async () => {
-    const token = signToken({ sub: 'user-1', role: Role.EMPLOYEE }, { expiresIn: '1h' });
+  it("takes the role from the stored account, ignoring a contradicting role in the request body", async () => {
+    const user = await createUser({ role: Role.EMPLOYEE });
+    const token = signToken({ sub: user.id, role: Role.EMPLOYEE }, { expiresIn: '1h' });
 
     const response = await request(app)
       .get('/sample/admin-only')
@@ -88,5 +129,27 @@ describe('requireRole', () => {
       .send({ role: 'ADMIN' });
 
     expect(response.status).toBe(403);
+  });
+
+  it('refuses a demoted administrator on the admin-only route with the same still-valid token', async () => {
+    const user = await createUser({ role: Role.ADMIN });
+    const token = signToken({ sub: user.id, role: Role.ADMIN }, { expiresIn: '1h' });
+
+    await prisma.user.update({ where: { id: user.id }, data: { role: Role.EMPLOYEE } });
+
+    const response = await request(app).get('/sample/admin-only').set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(403);
+  });
+
+  it('permits a promoted user on the admin-only route with the same still-valid token', async () => {
+    const user = await createUser({ role: Role.EMPLOYEE });
+    const token = signToken({ sub: user.id, role: Role.EMPLOYEE }, { expiresIn: '1h' });
+
+    await prisma.user.update({ where: { id: user.id }, data: { role: Role.ADMIN } });
+
+    const response = await request(app).get('/sample/admin-only').set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
   });
 });

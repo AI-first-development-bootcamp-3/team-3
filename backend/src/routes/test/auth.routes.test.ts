@@ -3,6 +3,7 @@ import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { app } from '../../app.js';
 import { env } from '../../config/env.js';
+import { prisma } from '../../config/prisma.js';
 import { rateLimitStore } from '../../middleware/rateLimit.middleware.js';
 import { createUser } from '../../test/factories.js';
 import { resetDatabase } from '../../test/resetDatabase.js';
@@ -11,8 +12,26 @@ function tokenFor(user: { id: string; role: string }): string {
   return jwt.sign({ sub: user.id, role: user.role }, env.JWT_SECRET, { expiresIn: '1h' });
 }
 
+/**
+ * The attempt-recording write in rateLimit.middleware.ts is deliberately
+ * fire-and-forget (never awaited by the response) so a slow or failing
+ * write cannot delay or break the client's response - see
+ * openspec/changes/login-account-lockout/design.md, "Hook into the
+ * existing res.on('finish') seam". Every test in this file hits a
+ * credential-handling route, so every `afterEach` here calls this before
+ * `resetDatabase()`: without it, a write from the test that just finished
+ * can still be committing an INSERT into login_attempts when the next
+ * test's TRUNCATE starts, which Postgres can resolve as a deadlock -
+ * resetDatabase's own retry is a backstop for the rare remaining case, not
+ * a substitute for settling here first.
+ */
+async function flushAttemptWrites(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 50));
+}
+
 describe('POST /login', () => {
   afterEach(async () => {
+    await flushAttemptWrites();
     await resetDatabase();
   });
 
@@ -171,6 +190,7 @@ describe('POST /login', () => {
 
 describe('PATCH /me/password', () => {
   afterEach(async () => {
+    await flushAttemptWrites();
     await resetDatabase();
   });
 
@@ -218,6 +238,7 @@ describe('login rate limiting', () => {
   });
 
   afterEach(async () => {
+    await flushAttemptWrites();
     await resetDatabase();
   });
 
@@ -351,5 +372,234 @@ describe('login rate limiting', () => {
       .set('Authorization', `Bearer ${badToken}`)
       .send({ newPassword: 'a-brand-new-password' });
     expect(blocked.status).toBe(429);
+  });
+});
+
+describe('login account lockout', () => {
+  const LOCKOUT_MAX = env.LOCKOUT_MAX_ATTEMPTS;
+  const EMAIL_MAX = env.RATE_LIMIT_EMAIL_MAX_ATTEMPTS;
+
+  beforeEach(() => {
+    rateLimitStore.reset();
+  });
+
+  afterEach(async () => {
+    await flushAttemptWrites();
+    await resetDatabase();
+  });
+
+  /**
+   * Drives `count` genuine 401s for one email through the real endpoint
+   * without ever tripping the in-memory throttle (EMAIL_MAX), by resetting
+   * that store between bursts smaller than its threshold. The throttle and
+   * the lock are independent tiers with independent storage - see
+   * design.md - so this is a legitimate way to accumulate durable
+   * CREDENTIAL_REJECTED rows for a lock test.
+   *
+   * Flushes attempt writes before returning: every caller immediately
+   * checks a lock decision (or a row count) that depends on every one of
+   * these attempts having actually landed in `login_attempts`, not just
+   * having been responded to - see flushAttemptWrites above.
+   */
+  async function failCredentialsBypassingThrottle(email: string, count: number, password = 'wrong-password'): Promise<void> {
+    let remaining = count;
+    while (remaining > 0) {
+      rateLimitStore.reset();
+      const burst = Math.min(remaining, EMAIL_MAX - 1);
+      for (let i = 0; i < burst; i++) {
+        const response = await request(app).post('/login').send({ email, password });
+        expect(response.status).toBe(401);
+      }
+      remaining -= burst;
+    }
+    await flushAttemptWrites();
+  }
+
+  /** Seeds `count` durable CREDENTIAL_REJECTED rows directly, spaced `stepMs`
+   * apart, ending `agoMs` before now. Bypasses the endpoint entirely so
+   * timing-sensitive tests don't depend on the real clock or on fake-timers
+   * (which cannot move the database's own `createdAt` default - see
+   * design.md, "Clock skew across replicas"). */
+  async function seedFailures(
+    email: string,
+    count: number,
+    { agoMs, stepMs = 1000 }: { agoMs: number; stepMs?: number },
+  ): Promise<void> {
+    const emailNormalised = email.trim().toLowerCase();
+    const start = Date.now() - agoMs - (count - 1) * stepMs;
+    for (let i = 0; i < count; i++) {
+      await prisma.loginAttempt.create({
+        data: {
+          emailNormalised,
+          ipAddress: '127.0.0.1',
+          outcome: 'CREDENTIAL_REJECTED',
+          createdAt: new Date(start + i * stepMs),
+        },
+      });
+    }
+  }
+
+  it('trips the lock at the configured threshold and not one attempt below it', async () => {
+    const email = 'lockout-threshold@example.test';
+
+    await failCredentialsBypassingThrottle(email, LOCKOUT_MAX - 1);
+    rateLimitStore.reset();
+    const stillBelow = await request(app).post('/login').send({ email, password: 'wrong-password' });
+    expect(stillBelow.status).toBe(401);
+
+    rateLimitStore.reset();
+    const locked = await request(app).post('/login').send({ email, password: 'wrong-password' });
+
+    expect(locked.status).toBe(423);
+    expect(locked.headers['retry-after']).toMatch(/^\d+$/);
+    expect(Number(locked.headers['retry-after'])).toBeGreaterThan(0);
+    expect(locked.body).toEqual({ error: { code: 'LOCKED', message: expect.any(String) } });
+  });
+
+  it('refuses correct credentials while locked, and issues no session', async () => {
+    const user = await createUser({ email: 'lockout-correct-pw@example.test' });
+    await failCredentialsBypassingThrottle(user.email, LOCKOUT_MAX);
+
+    rateLimitStore.reset();
+    const response = await request(app).post('/login').send({ email: user.email, password: 'password123' });
+
+    expect(response.status).toBe(423);
+    expect(response.body.token).toBeUndefined();
+  });
+
+  it('locks a registered and an unregistered email identically', async () => {
+    const registered = await createUser({ email: 'lockout-oracle-real@example.test' });
+    const unregistered = 'lockout-oracle-fake@example.test';
+
+    await failCredentialsBypassingThrottle(registered.email, LOCKOUT_MAX);
+    await failCredentialsBypassingThrottle(unregistered, LOCKOUT_MAX);
+
+    rateLimitStore.reset();
+    const realLocked = await request(app).post('/login').send({ email: registered.email, password: 'wrong' });
+    rateLimitStore.reset();
+    const fakeLocked = await request(app).post('/login').send({ email: unregistered, password: 'wrong' });
+
+    expect(realLocked.status).toBe(423);
+    expect(fakeLocked.status).toBe(423);
+    expect(realLocked.body).toEqual(fakeLocked.body);
+  });
+
+  it('reports a decreasing Retry-After while locked, and does not extend the lock', async () => {
+    const email = 'lockout-retry-after@example.test';
+    // Anchor is 5 seconds old: comfortably inside the lock, with the vast
+    // majority of the duration still remaining.
+    await seedFailures(email, LOCKOUT_MAX, { agoMs: 5000 });
+
+    const first = await request(app).post('/login').send({ email, password: 'wrong' });
+    expect(first.status).toBe(423);
+    const firstRetryAfter = Number(first.headers['retry-after']);
+
+    // This attempt is refused while already locked, so it is recorded as
+    // LOCKED, not CREDENTIAL_REJECTED - it must not push the anchor forward.
+    const second = await request(app).post('/login').send({ email, password: 'wrong' });
+    expect(second.status).toBe(423);
+    const secondRetryAfter = Number(second.headers['retry-after']);
+
+    expect(secondRetryAfter).toBeLessThanOrEqual(firstRetryAfter);
+    // Not reset back up near the full configured duration - proves the
+    // second attempt did not re-arm the lock from scratch.
+    expect(secondRetryAfter).toBeLessThan(env.LOCKOUT_DURATION_MINUTES * 60);
+  });
+
+  it('expires the lock on its own once the duration elapses, with no intervention', async () => {
+    const email = 'lockout-expiry@example.test';
+    const alreadyExpiredAgoMs = (env.LOCKOUT_DURATION_MINUTES + 5) * 60 * 1000;
+    await seedFailures(email, LOCKOUT_MAX, { agoMs: alreadyExpiredAgoMs });
+
+    const response = await request(app).post('/login').send({ email, password: 'wrong' });
+
+    // Back to ordinary credential handling, not locked - and since the
+    // throttle store was reset in beforeEach, this is a plain 401.
+    expect(response.status).toBe(401);
+  });
+
+  it('clears accumulated failures on success, and the failure rows survive that clearing unaltered', async () => {
+    const user = await createUser({ email: 'lockout-success-clears@example.test' });
+    await failCredentialsBypassingThrottle(user.email, EMAIL_MAX - 1);
+
+    rateLimitStore.reset();
+    const success = await request(app).post('/login').send({ email: user.email, password: 'password123' });
+    expect(success.status).toBe(200);
+    await flushAttemptWrites();
+
+    const emailNormalised = user.email.trim().toLowerCase();
+    const failuresBeforeSuccess = await prisma.loginAttempt.count({
+      where: { emailNormalised, outcome: 'CREDENTIAL_REJECTED' },
+    });
+    expect(failuresBeforeSuccess).toBe(EMAIL_MAX - 1);
+
+    // A fresh run of LOCKOUT_MAX failures after the success must still
+    // reach the full threshold before locking - proving the pre-success
+    // failures no longer count, without their rows having been touched.
+    await failCredentialsBypassingThrottle(user.email, LOCKOUT_MAX - 1);
+    rateLimitStore.reset();
+    const stillUnlocked = await request(app).post('/login').send({ email: user.email, password: 'wrong' });
+    expect(stillUnlocked.status).toBe(401);
+    await flushAttemptWrites();
+
+    const failuresAfterSecondRun = await prisma.loginAttempt.count({
+      where: { emailNormalised, outcome: 'CREDENTIAL_REJECTED' },
+    });
+    expect(failuresAfterSecondRun).toBe(EMAIL_MAX - 1 + LOCKOUT_MAX);
+  });
+
+  it('survives a rebuilt in-memory rate-limit store, proving the lock is not process-local', async () => {
+    const email = 'lockout-survives-restart@example.test';
+    await failCredentialsBypassingThrottle(email, LOCKOUT_MAX);
+
+    // Simulates the in-memory throttle store being rebuilt on process
+    // restart. The lock is derived from the database, not this store, so
+    // it must be unaffected.
+    rateLimitStore.reset();
+
+    const response = await request(app).post('/login').send({ email, password: 'wrong' });
+    expect(response.status).toBe(423);
+  });
+
+  it('records attempt rows with the expected fields, and never records the submitted password', async () => {
+    const user = await createUser({ email: 'lockout-audit-fields@example.test' });
+    const unregistered = 'lockout-audit-unregistered@example.test';
+    const secretPassword = 'super-secret-password-value';
+
+    await request(app).post('/login').send({ email: user.email, password: secretPassword });
+    await request(app).post('/login').send({ email: unregistered, password: secretPassword });
+    await flushAttemptWrites();
+
+    const registeredRow = await prisma.loginAttempt.findFirstOrThrow({
+      where: { emailNormalised: user.email.trim().toLowerCase() },
+    });
+    expect(registeredRow).toMatchObject({
+      emailNormalised: user.email.trim().toLowerCase(),
+      userId: user.id,
+      outcome: 'CREDENTIAL_REJECTED',
+    });
+    expect(registeredRow.ipAddress).toEqual(expect.any(String));
+    expect(registeredRow.createdAt).toBeInstanceOf(Date);
+
+    const unregisteredRow = await prisma.loginAttempt.findFirstOrThrow({
+      where: { emailNormalised: unregistered },
+    });
+    expect(unregisteredRow.userId).toBeNull();
+    expect(unregisteredRow.outcome).toBe('CREDENTIAL_REJECTED');
+
+    const allRows = await prisma.loginAttempt.findMany();
+    const serialised = JSON.stringify(allRows);
+    expect(serialised).not.toContain(secretPassword);
+  });
+
+  it('records nothing for a malformed request (400)', async () => {
+    const email = 'lockout-malformed@example.test';
+
+    const response = await request(app).post('/login').send({ email });
+    expect(response.status).toBe(400);
+    await flushAttemptWrites();
+
+    const count = await prisma.loginAttempt.count({ where: { emailNormalised: email } });
+    expect(count).toBe(0);
   });
 });

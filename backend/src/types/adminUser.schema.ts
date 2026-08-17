@@ -23,3 +23,9 @@ export const changeRoleBodySchema = z.object({
 });
 
 export type ChangeRoleBody = z.infer<typeof changeRoleBodySchema>;
+
+export const setUserActiveBodySchema = z.object({
+  isActive: z.boolean(),
+});
+
+export type SetUserActiveBody = z.infer<typeof setUserActiveBodySchema>;

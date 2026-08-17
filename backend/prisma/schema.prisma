@@ -25,21 +25,53 @@ enum AbsenceType {
   OTHER
 }
 
+enum LoginAttemptOutcome {
+  CREDENTIAL_REJECTED
+  THROTTLED
+  LOCKED
+  SUCCESS
+}
+
 model User {
-  id                 String       @id @default(uuid())
-  email              String       @unique
+  id                 String        @id @default(uuid())
+  email              String        @unique
   passwordHash       String
   displayName        String
   role               Role
-  isActive           Boolean      @default(true)
-  mustChangePassword Boolean      @default(true)
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
+  isActive           Boolean       @default(true)
+  mustChangePassword Boolean       @default(true)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
   attachments        Attachment[]
   timeReports        TimeReport[]
   absences           Absence[]
-  
+  loginAttempts      LoginAttempt[]
+
   @@map("users")
+}
+
+/**
+ * Durable, append-only audit trail of failed and successful credential
+ * attempts. The account-lockout tier (see openspec/changes/login-account-lockout)
+ * derives its decisions by counting rows here rather than storing a lock
+ * flag, so this table is both the audit log and the lock mechanism.
+ *
+ * emailNormalised is the lock/audit key, not userId - a lock keyed on the
+ * user row could never fire for an unregistered email, which would turn
+ * lock behavior into an account-existence oracle. userId is recorded only
+ * to make the trail joinable for review.
+ */
+model LoginAttempt {
+  id               String               @id @default(uuid())
+  emailNormalised  String
+  userId           String?
+  user             User?                @relation(fields: [userId], references: [id])
+  ipAddress        String
+  outcome          LoginAttemptOutcome
+  createdAt        DateTime             @default(now())
+
+  @@index([emailNormalised, createdAt])
+  @@map("login_attempts")
 }
 
 model Client {
