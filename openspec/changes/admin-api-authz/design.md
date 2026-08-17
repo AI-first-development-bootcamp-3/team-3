@@ -26,9 +26,11 @@ tell "this is the admin guard" from any other middleware by name alone.
 (`handler.__isAdminRoleGuard = true`), detected via route-stack
 introspection.** `requireRole` sets this property on the function it
 returns before returning it. The coverage test walks
-`app._router.stack`, finds every `route.path` starting with `/admin`
-across all registered routers, and checks that at least one middleware
-layer in that route's stack carries the marker.
+`app.router.stack` (Express 5's route-stack property - `app._router.stack`
+in Express 4, confirmed by inspecting the running app since this repo is on
+Express 5), finds every `route.path` starting with `/admin` across all
+registered routers, and checks that at least one middleware layer in that
+route's stack carries the marker.
 
 *Alternative considered:* maintain a manually-updated list of "admin routes"
 that must have the guard, checked against actual routes. Rejected — that
@@ -43,8 +45,9 @@ for a test, not a lint rule.
 
 ## Risks / Trade-offs
 
-- [Reaching into `app._router.stack` (an Express internal, not a public API)
-  is a bit fragile across Express major versions] → Acceptable: the backend
-  already pins its Express version; if it's upgraded, this test failing to
-  even run would itself be a strong, immediate signal to update the
-  introspection approach.
+- [Reaching into `app.router.stack` (an Express internal, not a public API)
+  is a bit fragile across Express major versions - it already differs from
+  Express 4's `app._router.stack`] → Acceptable: the backend already pins
+  its Express version; if it's upgraded, this test failing to even run
+  would itself be a strong, immediate signal to update the introspection
+  approach.
