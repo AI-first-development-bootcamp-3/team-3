@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useFieldArray, useForm, useWatch } from 'react-hook-form'
+import { useFieldArray, useForm, useWatch, type FieldPath } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { App } from 'antd'
 import { ApiError } from '../services/apiClient'
@@ -12,9 +12,22 @@ import ManualReportPicker from './ManualReportPicker'
 import { type PickerStep } from './ManualReport.constants'
 import ManualReportProjectCard, { type RowErrors } from './ManualReportProjectCard'
 import { CloseMark, WarningTriangle } from './ManualReportIcons'
-import addCircle from '../assets/manual-report/add-circle.svg'
-import closeIcon from '../assets/manual-report/close.svg'
-import schedule from '../assets/manual-report/schedule.svg'
+import addCircleBlue from '../assets/manual-report/desktop/add-circle-blue.svg'
+import alertFill from '../assets/manual-report/desktop/alert-fill.svg'
+import buildingIcon from '../assets/manual-report/desktop/building.svg'
+import calendarJobs from '../assets/manual-report/desktop/calendar-jobs.svg'
+import clockLinear from '../assets/manual-report/desktop/clock-linear.svg'
+import closeCircle from '../assets/manual-report/desktop/close-circle.svg'
+import infoCircle from '../assets/manual-report/desktop/info-circle.svg'
+import messageEdit from '../assets/manual-report/desktop/message-edit.svg'
+import noteIcon from '../assets/manual-report/desktop/note.svg'
+import scheduleGreen from '../assets/manual-report/desktop/schedule-green.svg'
+import sectionChevron from '../assets/manual-report/desktop/section-chevron.svg'
+import trashIcon from '../assets/manual-report/desktop/trash.svg'
+import cactusIllustration from '../assets/manual-report/desktop/cactus-illustration.svg'
+import tagCheckGreen from '../assets/home/tag-check-green.svg'
+import tagAlertOrange from '../assets/home/tag-alert-orange.svg'
+import tagCloseBlue from '../assets/home/tag-close-blue.svg'
 import './ManualReport.css'
 
 const STANDARD_HOURS = 9
@@ -38,20 +51,40 @@ const SAVE_FAILED = {
   detail: 'לא הצלחנו לשמור את הדיווח. בדקו את החיבור ונסו שוב.',
 }
 
+export type ManualReportHeaderTone = 'missing' | 'full' | 'partial' | 'weekend'
+
+export type ManualReportHeaderTag = { text: string; icon?: string }
+
+export type ManualReportHeaderMeta = {
+  status: string
+  tone: ManualReportHeaderTone
+  tags: ManualReportHeaderTag[]
+}
+
 interface Props {
   onClose: () => void
+  onSaved?: () => void
+  initialDate?: string
+  headerMeta?: ManualReportHeaderMeta
+}
+
+const STATUS_ICONS: Record<ManualReportHeaderTone, string> = {
+  missing: alertFill,
+  full: tagCheckGreen,
+  partial: tagAlertOrange,
+  weekend: tagCloseBlue,
 }
 
 function emptyRow(startTime: string, endTime: string): ProjectRowValues {
   return { clientId: '', projectId: '', taskId: '', workLocation: '', startTime, endTime, description: '' }
 }
 
-function freshDay(): ManualReportValues {
-  const now = dayjs()
+function freshDay(date?: string): ManualReportValues {
+  const day = date ? dayjs(date) : dayjs()
   return {
-    date: now.format('YYYY-MM-DD'),
-    dayStart: now.format('HH:mm'),
-    dayEnd: now.format('HH:mm'),
+    date: day.isValid() ? day.format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
+    dayStart: '09:00',
+    dayEnd: '18:00',
     rows: [],
   }
 }
@@ -68,9 +101,14 @@ function formatHours(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1)
 }
 
-function formatDay(date: string): string {
+function formatDayTitle(date: string): string {
   const day = dayjs(date)
-  return day.isValid() ? `יום ${day.format('ddd')} ${day.format('DD/MM/YY')}` : ''
+  return day.isValid() ? `${day.format('DD/MM/YY')}, ${day.format('dddd')}` : ''
+}
+
+function formatTotalHoursLabel(hours: number): string {
+  if (hours <= 0) return '0 שעות'
+  return Number.isInteger(hours) ? `${hours} שעות` : `${hours.toFixed(1)} שעות`
 }
 
 function apiFieldErrors(body: unknown): { field: string; message: string }[] {
@@ -82,17 +120,58 @@ function apiFieldErrors(body: unknown): { field: string; message: string }[] {
   )
 }
 
+function translateApiMessage(message: string): string {
+  if (/invalid uuid/i.test(message)) {
+    return 'ערך לא תקין — בחרו שוב מהרשימה'
+  }
+  return message
+}
+
+function applyApiFieldErrors(
+  details: { field: string; message: string }[],
+  setError: (name: FieldPath<ManualReportValues>, error: { message: string }) => void,
+) {
+  for (const detail of details) {
+    setError(detail.field as FieldPath<ManualReportValues>, {
+      message: translateApiMessage(detail.message),
+    })
+  }
+}
+
+function tagIcon(tag: ManualReportHeaderTag): string {
+  if (tag.icon) return tag.icon
+  if (tag.text.includes('פרויקט')) return noteIcon
+  return buildingIcon
+}
+
+function deriveHeader(
+  headerMeta: ManualReportHeaderMeta | undefined,
+  projectCount: number,
+  reportedHours: number,
+): ManualReportHeaderMeta {
+  if (headerMeta?.tone === 'weekend') {
+    return { status: headerMeta.status, tone: 'weekend', tags: [] }
+  }
+  if (projectCount > 0 && reportedHours >= STANDARD_HOURS) {
+    return { status: 'מלא', tone: 'full', tags: [] }
+  }
+  if (reportedHours > 0) {
+    return { status: 'חלקי', tone: 'partial', tags: [] }
+  }
+  return { status: 'חסר', tone: 'missing', tags: [] }
+}
+
 /**
- * The דיווח ידני screen: one attendance window plus any number of project
- * cards, saved together. Figma frames 1:1621 (empty) and 1:4352 (with a card).
+ * Desktop דיווח ידני side panel — Figma frame 1:17385 beside the hours home.
  */
-function ManualReport({ onClose }: Props) {
+function ManualReport({ onClose, onSaved, initialDate, headerMeta }: Props) {
   const { message } = App.useApp()
   const [options, setOptions] = useState<ReportingOptions | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [banner, setBanner] = useState<{ title: string; detail: string } | null>(null)
   const [picker, setPicker] = useState<{ row: number; step: PickerStep } | null>(null)
   const [pendingRemoval, setPendingRemoval] = useState<number | null>(null)
+  const [hoursOpen, setHoursOpen] = useState(true)
 
   const {
     control,
@@ -100,16 +179,21 @@ function ManualReport({ onClose }: Props) {
     handleSubmit,
     setValue,
     setError,
+    clearErrors,
     reset,
     formState: { errors, isSubmitting },
   } = useForm<ManualReportValues>({
     resolver: zodResolver(manualReportSchema),
-    defaultValues: freshDay(),
+    defaultValues: freshDay(initialDate),
   })
 
   const { fields, append, remove } = useFieldArray({ control, name: 'rows' })
   const day = useWatch({ control })
   const rows = useMemo(() => (day.rows ?? []) as ProjectRowValues[], [day.rows])
+
+  useEffect(() => {
+    reset(freshDay(initialDate))
+  }, [initialDate, reset])
 
   useEffect(() => {
     let cancelled = false
@@ -125,24 +209,44 @@ function ManualReport({ onClose }: Props) {
     }
   }, [])
 
+  const dayTotal = useMemo(
+    () => hoursBetween(day.dayStart ?? '', day.dayEnd ?? ''),
+    [day.dayStart, day.dayEnd],
+  )
   const reported = useMemo(
     () => rows.reduce((total, row) => total + hoursBetween(row.startTime, row.endTime), 0),
     [rows],
   )
   const remaining = Math.max(STANDARD_HOURS - reported, 0)
   const hasHierarchy = (options?.clients.length ?? 0) > 0
+  const header = deriveHeader(headerMeta, fields.length, reported)
+
+  const progressHint =
+    fields.length === 0
+      ? 'הוסיפו פרויקטים כדי לדווח את השעות'
+      : remaining > 0
+        ? `חסרות ${formatHours(remaining)} שעות לדיווח`
+        : 'הדיווח הושלם'
 
   const rowErrors = (index: number): RowErrors => {
     const issues = errors.rows?.[index]
     if (!issues) return {}
+    const projectMessage = issues.clientId?.message ?? issues.projectId?.message
     return {
-      projectId: issues.projectId?.message,
+      projectId: projectMessage,
       taskId: issues.taskId?.message,
       workLocation: issues.workLocation?.message,
       startTime: issues.startTime?.message,
       endTime: issues.endTime?.message,
       description: issues.description?.message,
     }
+  }
+
+  const clearRowFieldErrors = (index: number) => {
+    const paths = (
+      ['clientId', 'projectId', 'taskId', 'workLocation', 'startTime', 'endTime', 'description'] as const
+    ).map((field) => `rows.${index}.${field}` as FieldPath<ManualReportValues>)
+    clearErrors(paths)
   }
 
   const addRow = () => {
@@ -152,14 +256,18 @@ function ManualReport({ onClose }: Props) {
   }
 
   const selectProject = (index: number, clientId: string, projectId: string) => {
-    setValue(`rows.${index}.clientId`, clientId, { shouldValidate: false })
-    setValue(`rows.${index}.projectId`, projectId, { shouldValidate: false })
+    setBanner(null)
+    clearRowFieldErrors(index)
+    setValue(`rows.${index}.clientId`, clientId, { shouldValidate: false, shouldDirty: true })
+    setValue(`rows.${index}.projectId`, projectId, { shouldValidate: false, shouldDirty: true })
     const tasks =
       options?.clients
         .find((client) => client.id === clientId)
         ?.projects.find((project) => project.id === projectId)?.tasks ?? []
-    // One task means there is nothing to choose; the step still shows it as selected.
-    setValue(`rows.${index}.taskId`, tasks.length === 1 && tasks[0] ? tasks[0].id : '')
+    setValue(`rows.${index}.taskId`, tasks.length === 1 && tasks[0] ? tasks[0].id : '', {
+      shouldValidate: false,
+      shouldDirty: true,
+    })
   }
 
   const advancePicker = () => {
@@ -177,7 +285,6 @@ function ManualReport({ onClose }: Props) {
 
   const openPicker = (row: number, step: PickerStep) => {
     const values = rows[row]
-    // Task cannot be chosen before its project, so fall back to the first step.
     if (step === 'task' && !values?.projectId) setPicker({ row, step: 'project' })
     else setPicker({ row, step })
   }
@@ -198,13 +305,13 @@ function ManualReport({ onClose }: Props) {
         })),
       })
       message.success('הדיווח נשמר בהצלחה')
-      reset(freshDay())
+      onSaved?.()
+      reset(freshDay(initialDate))
+      onClose()
     } catch (error) {
       if (error instanceof ApiError && error.status === 400) {
         const details = apiFieldErrors(error.body)
-        for (const detail of details) {
-          setError(detail.field as keyof ManualReportValues, { message: detail.message })
-        }
+        applyApiFieldErrors(details, setError)
         setBanner(MISSING_DETAILS)
         return
       }
@@ -216,46 +323,86 @@ function ManualReport({ onClose }: Props) {
 
   if (loadError) {
     return (
-      <div className="manual-report">
-        <header className="manual-report__header">
-          <h1 className="manual-report__title">דיווח ידני</h1>
-          <button type="button" className="manual-report__close" onClick={onClose} aria-label="סגירה">
-            <img src={closeIcon} alt="" width={11} height={11} />
+      <div className="manual-report manual-report--desktop">
+        <header className="manual-report__top">
+          <button type="button" className="manual-report__icon-btn" onClick={onClose} aria-label="סגירה">
+            <img src={closeCircle} alt="" width={24} height={24} />
           </button>
+          <p className="manual-report__load-error">{loadError}</p>
         </header>
-        <div className="manual-report__body">
-          <p className="manual-report__empty">{loadError}</p>
-        </div>
       </div>
     )
   }
 
   return (
-    <form className="manual-report" onSubmit={handleSubmit(onSubmit, onInvalid)} noValidate>
-      <header className="manual-report__header">
-        <h1 className="manual-report__title">דיווח ידני</h1>
-        <button type="button" className="manual-report__close" onClick={onClose} aria-label="סגירה">
-          <img src={closeIcon} alt="" width={11} height={11} />
-        </button>
-      </header>
+    <form
+      className="manual-report manual-report--desktop"
+      onSubmit={handleSubmit(onSubmit, onInvalid)}
+      noValidate
+      aria-labelledby="manual-report-day-title"
+    >
+      <div className="manual-report__scroll">
+        <header className="manual-report__top">
+          <div className="manual-report__top-actions">
+            <button type="button" className="manual-report__icon-btn" onClick={onClose} aria-label="סגירה">
+              <img src={closeCircle} alt="" width={24} height={24} />
+            </button>
+            <button
+              type="button"
+              className="manual-report__delete-day"
+              disabled
+              title="בקרוב"
+              aria-disabled="true"
+            >
+              <img src={trashIcon} alt="" width={24} height={24} />
+              מחיקת דיווח
+            </button>
+          </div>
 
-      <div className="manual-report__body">
-        <div className="manual-report__segmented" role="tablist" aria-label="סוג דיווח">
-          <button type="button" role="tab" className="manual-report__segment" aria-selected="true">
-            דיווח עבודה
+          <div className="manual-report__top-meta">
+            <div className="manual-report__header-tags">
+              <span className={`manual-report__header-tag manual-report__header-tag--${header.tone}`}>
+                {header.status}
+                <img src={STATUS_ICONS[header.tone]} alt="" width={16} height={16} />
+              </span>
+              {header.tags.length > 0 ? <span className="manual-report__header-sep" aria-hidden="true" /> : null}
+              {header.tags.map((tag) => (
+                <span key={tag.text} className="manual-report__header-tag manual-report__header-tag--neutral">
+                  {tag.text}
+                  <img src={tagIcon(tag)} alt="" width={16} height={16} />
+                </span>
+              ))}
+            </div>
+            <div className="manual-report__top-date">
+              <label className="manual-report__date-picker">
+                <span className="manual-report__date" id="manual-report-day-title">
+                  {formatDayTitle(day.date ?? '')}
+                </span>
+                <span className="manual-report__date-icon" aria-hidden="true">
+                  <img src={calendarJobs} alt="" width={24} height={24} />
+                </span>
+                <input
+                  type="date"
+                  className="manual-report__date-input"
+                  aria-label="תאריך הדיווח"
+                  {...register('date')}
+                />
+              </label>
+            </div>
+          </div>
+          {errors.date ? <p className="manual-report__field-error manual-report__date-error">{errors.date.message}</p> : null}
+        </header>
+
+        <div className="manual-report__tabs" role="tablist" aria-label="סוג דיווח">
+          <button type="button" role="tab" className="manual-report__tab manual-report__tab--active" aria-selected="true">
+            דיווח ידני
           </button>
-          <button
-            type="button"
-            role="tab"
-            className="manual-report__segment"
-            aria-selected="false"
-            disabled
-          >
-            דיווח היעדרות
+          <button type="button" role="tab" className="manual-report__tab" aria-selected="false" disabled>
+            דיווח העדרות
           </button>
         </div>
 
-        {banner && (
+        {banner ? (
           <div className="manual-report__banner" role="alert">
             <span className="manual-report__banner-icon">
               <WarningTriangle />
@@ -268,71 +415,122 @@ function ManualReport({ onClose }: Props) {
               <CloseMark />
             </button>
           </div>
-        )}
+        ) : null}
 
-        <section className="manual-report__section">
-          <div className="manual-report__day-head">
-            <p className="manual-report__date">{formatDay(day.date ?? '')}</p>
-            {fields.length > 0 && (
+        <section className="manual-report__hours">
+          <button
+            type="button"
+            className="manual-report__hours-head"
+            onClick={() => setHoursOpen((open) => !open)}
+            aria-expanded={hoursOpen}
+          >
+            <img
+              src={sectionChevron}
+              alt=""
+              className={`manual-report__hours-chevron${hoursOpen ? ' manual-report__hours-chevron--open' : ''}`}
+              width={12}
+              height={6}
+            />
+            <div className="manual-report__hours-title">
+              <img src={clockLinear} alt="" width={24} height={24} />
+              <span>שעות עבודה</span>
+              <img src={infoCircle} alt="" width={16} height={16} />
               <span className="manual-report__quota">
-                <img src={schedule} alt="" width={10} height={10} />
+                <img src={scheduleGreen} alt="" width={16} height={16} />
                 תקן יומי {STANDARD_HOURS} שע׳
               </span>
-            )}
-          </div>
+            </div>
+          </button>
 
-          <div className="mr-card">
-            <label className="mr-cell">
-              <span className="mr-cell__label">כניסה</span>
-              <span className="mr-cell__value">
-                <input type="time" className="mr-cell__time" aria-label="כניסה" {...register('dayStart')} />
-              </span>
-            </label>
-            <label className="mr-cell">
-              <span className="mr-cell__label">יציאה</span>
-              <span className="mr-cell__value">
-                <input type="time" className="mr-cell__time" aria-label="יציאה" {...register('dayEnd')} />
-              </span>
-            </label>
-          </div>
-          {errors.dayEnd && <p className="mr-cell__error">{errors.dayEnd.message}</p>}
+          {hoursOpen ? (
+            <div className="manual-report__hours-fields">
+              <label className="manual-report__field">
+                <span className="manual-report__field-label">שעת כניסה</span>
+                <input type="time" className="manual-report__field-input" aria-label="שעת כניסה" {...register('dayStart')} />
+              </label>
+              <label className="manual-report__field">
+                <span className="manual-report__field-label">שעת יציאה</span>
+                <input type="time" className="manual-report__field-input" aria-label="שעת יציאה" {...register('dayEnd')} />
+              </label>
+              <div className="manual-report__field">
+                <span className="manual-report__field-label">סה״כ שעות</span>
+                <output className="manual-report__field-input manual-report__field-input--readonly" aria-live="polite">
+                  {formatTotalHoursLabel(dayTotal)}
+                </output>
+              </div>
+            </div>
+          ) : null}
+          {errors.dayEnd ? <p className="manual-report__field-error">{errors.dayEnd.message}</p> : null}
         </section>
 
-        {fields.length > 0 && <h2 className="manual-report__section-title">דיווח פרויקטים</h2>}
+        <section className="manual-report__projects">
+          <div className="manual-report__projects-head">
+            <img src={messageEdit} alt="" width={24} height={24} />
+            <h2>פרויקטים</h2>
+          </div>
 
-        {options &&
-          fields.map((field, index) => (
-            <ManualReportProjectCard
-              key={field.id}
-              index={index}
-              values={rows[index] ?? emptyRow('', '')}
-              options={options}
-              errors={rowErrors(index)}
-              register={register}
-              onPick={(step) => openPicker(index, step)}
-              onRemove={() => setPendingRemoval(index)}
-            />
-          ))}
+          {fields.length === 0 ? (
+            <div className="manual-report__projects-empty">
+              <img
+                src={cactusIllustration}
+                alt=""
+                className="manual-report__projects-empty-art"
+                width={124}
+                height={124}
+              />
+              <p className="manual-report__projects-empty-title">עדיין אין פרויקטים מדווחים</p>
+              <p className="manual-report__projects-empty-hint">
+                לחצו על כפתור ״הוספת פרויקט״ ותתחילו למלא את הפרטים הרלוונטים.
+              </p>
+            </div>
+          ) : null}
 
-        {!hasHierarchy && options && (
-          <p className="manual-report__empty">אין מידע זמין כרגע, נסו שוב מאוחר יותר או פנו למנהל ישיר</p>
-        )}
+          {options
+            ? fields.map((field, index) => (
+                <ManualReportProjectCard
+                  key={field.id}
+                  index={index}
+                  variant="desktop"
+                  values={rows[index] ?? emptyRow('', '')}
+                  options={options}
+                  errors={rowErrors(index)}
+                  register={register}
+                  onPick={(step) => openPicker(index, step)}
+                  onRemove={() => setPendingRemoval(index)}
+                />
+              ))
+            : null}
 
-        <button type="button" className="manual-report__add" onClick={addRow} disabled={!hasHierarchy}>
-          <img src={addCircle} alt="" width={24} height={24} />
-          הוספת פרויקט
-        </button>
+          {!hasHierarchy && options ? (
+            <p className="manual-report__empty-hierarchy">אין מידע זמין כרגע, נסו שוב מאוחר יותר או פנו למנהל ישיר</p>
+          ) : null}
 
-        {errors.rows?.message && <p className="mr-cell__error">{errors.rows.message}</p>}
+          <button type="button" className="manual-report__add" onClick={addRow} disabled={!hasHierarchy}>
+            הוספת פרויקט
+            <img src={addCircleBlue} alt="" width={24} height={24} />
+          </button>
+          {errors.rows?.message ? <p className="manual-report__field-error">{errors.rows.message}</p> : null}
+        </section>
       </div>
 
       <footer className="manual-report__footer">
-        <div className="manual-report__progress">
+        <div className="manual-report__summary">
+          <div className="manual-report__summary-head">
+            <span className="manual-report__summary-title">סיכום</span>
+            <div className="manual-report__summary-badges">
+              {fields.length > 0 ? (
+                <span className="manual-report__summary-badge">{fields.length} פרויקטים</span>
+              ) : null}
+              {reported > 0 ? (
+                <span className="manual-report__summary-badge">סה״כ {formatHours(reported)} שעות</span>
+              ) : null}
+            </div>
+          </div>
           <div className="manual-report__progress-labels">
+            <span>{progressHint}</span>
             <span>
               {formatHours(reported)} מתוך {STANDARD_HOURS} שעות
             </span>
-            <span>{remaining > 0 ? `חסרות ${formatHours(remaining)} שעות לדיווח` : 'הדיווח הושלם'}</span>
           </div>
           <div
             className="manual-report__progress-track"
@@ -352,7 +550,7 @@ function ManualReport({ onClose }: Props) {
         </button>
       </footer>
 
-      {picker && options && (
+      {picker && options ? (
         <ManualReportPicker
           step={picker.step}
           options={options}
@@ -361,14 +559,22 @@ function ManualReport({ onClose }: Props) {
           taskId={rows[picker.row]?.taskId ?? ''}
           workLocation={rows[picker.row]?.workLocation ?? ''}
           onSelectProject={(clientId, projectId) => selectProject(picker.row, clientId, projectId)}
-          onSelectTask={(taskId) => setValue(`rows.${picker.row}.taskId`, taskId)}
-          onSelectLocation={(location) => setValue(`rows.${picker.row}.workLocation`, location)}
+          onSelectTask={(taskId) => {
+            setBanner(null)
+            clearRowFieldErrors(picker.row)
+            setValue(`rows.${picker.row}.taskId`, taskId, { shouldValidate: false, shouldDirty: true })
+          }}
+          onSelectLocation={(location) => {
+            setBanner(null)
+            clearRowFieldErrors(picker.row)
+            setValue(`rows.${picker.row}.workLocation`, location, { shouldValidate: false, shouldDirty: true })
+          }}
           onBack={stepBack}
           onContinue={advancePicker}
         />
-      )}
+      ) : null}
 
-      {pendingRemoval !== null && (
+      {pendingRemoval !== null ? (
         <ManualReportDeleteDialog
           onCancel={() => setPendingRemoval(null)}
           onConfirm={() => {
@@ -376,7 +582,7 @@ function ManualReport({ onClose }: Props) {
             setPendingRemoval(null)
           }}
         />
-      )}
+      ) : null}
     </form>
   )
 }

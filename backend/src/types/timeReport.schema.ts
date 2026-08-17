@@ -59,3 +59,10 @@ export const createTimeReportBatchBodySchema = z.object({
 
 export type CreateTimeReportBatchBody = z.infer<typeof createTimeReportBatchBodySchema>;
 export type TimeReportRow = z.infer<typeof timeReportRowSchema>;
+
+export const listTimeReportsQuerySchema = z.object({
+  month: z.coerce.number().int().min(1, 'Month must be 1–12').max(12, 'Month must be 1–12'),
+  year: z.coerce.number().int().min(2000, 'Year out of range').max(2100, 'Year out of range'),
+});
+
+export type ListTimeReportsQuery = z.infer<typeof listTimeReportsQuerySchema>;

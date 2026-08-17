@@ -5,7 +5,10 @@ import { app } from '../../app.js';
 import { env } from '../../config/env.js';
 import { openApiSpec } from '../../config/swagger.js';
 import { prisma } from '../../config/prisma.js';
-import { reportWriteRateLimitStore } from '../../middleware/writeRateLimit.middleware.js';
+import {
+  reportReadRateLimitStore,
+  reportWriteRateLimitStore,
+} from '../../middleware/writeRateLimit.middleware.js';
 import { Role } from '../../generated/prisma/enums.js';
 import { createClient, createProject, createTask, createUser } from '../../test/factories.js';
 import { resetDatabase } from '../../test/resetDatabase.js';
@@ -397,10 +400,134 @@ describe('report write rate limiting', () => {
   });
 });
 
+describe('GET /reports', () => {
+  afterEach(async () => {
+    await resetDatabase();
+  });
+
+  it('returns the caller rows for the requested month with names and duration', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    const other = await createUser({ role: Role.EMPLOYEE });
+    const client = await createClient({ name: 'Globex' });
+    const project = await createProject({ name: 'Mobile app', clientId: client.id });
+    const task = await createTask({ name: 'QA', projectId: project.id });
+
+    await prisma.timeReport.create({
+      data: {
+        userId: employee.id,
+        clientId: client.id,
+        projectId: project.id,
+        taskId: task.id,
+        date: new Date('2026-08-17T00:00:00.000Z'),
+        workLocation: 'CLIENT',
+        startTime: new Date('1970-01-01T09:00:00.000Z'),
+        endTime: new Date('1970-01-01T18:00:00.000Z'),
+        description: 'Manual test',
+      },
+    });
+    await prisma.timeReport.create({
+      data: {
+        userId: other.id,
+        clientId: client.id,
+        projectId: project.id,
+        taskId: task.id,
+        date: new Date('2026-08-17T00:00:00.000Z'),
+        workLocation: 'OFFICE',
+        startTime: new Date('1970-01-01T09:00:00.000Z'),
+        endTime: new Date('1970-01-01T12:00:00.000Z'),
+        description: 'Not mine',
+      },
+    });
+    await prisma.timeReport.create({
+      data: {
+        userId: employee.id,
+        clientId: client.id,
+        projectId: project.id,
+        taskId: task.id,
+        date: new Date('2026-07-31T00:00:00.000Z'),
+        workLocation: 'HOME',
+        startTime: new Date('1970-01-01T09:00:00.000Z'),
+        endTime: new Date('1970-01-01T10:00:00.000Z'),
+        description: 'Previous month',
+      },
+    });
+
+    const response = await request(app)
+      .get('/reports')
+      .query({ month: 8, year: 2026 })
+      .set('Authorization', `Bearer ${tokenFor(employee)}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.reports).toHaveLength(1);
+    expect(response.body.reports[0]).toMatchObject({
+      userId: employee.id,
+      date: '2026-08-17',
+      clientName: 'Globex',
+      projectName: 'Mobile app',
+      taskName: 'QA',
+      durationHours: 9,
+      description: 'Manual test',
+    });
+  });
+
+  it('rejects missing month or year with 400', async () => {
+    const employee = await createUser();
+
+    const response = await request(app)
+      .get('/reports')
+      .query({ year: 2026 })
+      .set('Authorization', `Bearer ${tokenFor(employee)}`);
+
+    expect(response.status).toBe(400);
+  });
+
+  it('rejects an unauthenticated caller with 401', async () => {
+    const response = await request(app).get('/reports').query({ month: 8, year: 2026 });
+
+    expect(response.status).toBe(401);
+  });
+});
+
+describe('report read rate limiting', () => {
+  const MAX = env.RATE_LIMIT_READ_MAX_REQUESTS;
+
+  beforeEach(async () => {
+    await reportReadRateLimitStore.resetAll();
+  });
+
+  afterEach(async () => {
+    await reportReadRateLimitStore.resetAll();
+    await resetDatabase();
+  });
+
+  it('answers 429 with Retry-After once an address passes the read quota', async () => {
+    // Sent without a token on purpose: the limiter sits ahead of `authenticate`
+    // so the token verify and user-row read that middleware performs are
+    // themselves capped, which means even rejected reads spend quota. Issued in
+    // batches rather than one Promise.all over the whole quota to keep the
+    // number of concurrent sockets bounded.
+    for (let sent = 0; sent < MAX; sent += 60) {
+      const batch = Math.min(60, MAX - sent);
+      await Promise.all(
+        Array.from({ length: batch }, () => request(app).get('/reports').expect(401)),
+      );
+    }
+
+    const throttled = await request(app).get('/reports').query({ month: 8, year: 2026 });
+
+    expect(throttled.status).toBe(429);
+    expect(Number(throttled.headers['retry-after'])).toBeGreaterThan(0);
+    expect(throttled.body).toEqual({
+      error: { code: 'TOO_MANY_REQUESTS', message: expect.any(String) },
+    });
+  });
+});
+
 describe('OpenAPI for time reports', () => {
   it('documents POST /reports, POST /reports/batch and GET /me/reporting-options', () => {
     const spec = openApiSpec as { paths?: Record<string, { post?: unknown; get?: unknown }> };
     expect(spec.paths?.['/reports']).toHaveProperty('post');
+    expect(spec.paths?.['/reports']).toHaveProperty('get');
     expect(spec.paths?.['/reports/batch']).toHaveProperty('post');
     expect(spec.paths?.['/me/reporting-options']).toHaveProperty('get');
   });

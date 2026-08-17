@@ -8,6 +8,8 @@ export type {
   ReportRowInput,
   CreateReportBatchInput,
   CreateReportBatchResult,
+  ListReportsResult,
+  TimeReportListItem,
   WorkLocation,
   ReportingOptions,
   ReportingClientOption,

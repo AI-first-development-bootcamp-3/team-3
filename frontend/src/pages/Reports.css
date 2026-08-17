@@ -12,9 +12,22 @@
     0 3px 6px rgb(139 138 183 / 10%), 0 11px 11px rgb(139 138 183 / 9%),
     0 25px 15px rgb(139 138 183 / 5%);
 
+  flex: 1;
+  min-width: 0;
   margin: -16px;
   color: var(--home-text);
   background: var(--home-bg);
+  min-height: 100svh;
+}
+
+.reports-layout {
+  display: flex;
+  flex-direction: row;
+  min-height: 100svh;
+  background: var(--home-bg);
+}
+
+.reports-layout--panel-open .home-shell {
   min-height: 100svh;
 }
 
@@ -347,13 +360,28 @@
   list-style: none;
 }
 
+.home-shell__days > li {
+  margin: 0;
+  padding: 0;
+}
+
 .home-shell__day {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   padding: 16px 24px;
+  border: 0;
   background: var(--home-card);
   border-radius: var(--home-radius);
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+.home-shell__day:hover {
+  box-shadow: var(--home-shadow);
 }
 
 .home-shell__day-main {
