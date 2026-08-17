@@ -31,6 +31,10 @@ function toISODate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+function toUTCMidnight(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
 function* eachDateUTC(start: Date, end: Date): Generator<Date> {
   const last = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
   let cursor = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
@@ -56,7 +60,11 @@ function* eachDateUTC(start: Date, end: Date): Generator<Date> {
 export async function checkAbsenceConflicts(
   input: CheckAbsenceConflictsInput,
 ): Promise<AbsenceConflictCheckResult> {
-  const { userId, startDate, endDate, halfDay, excludeAbsenceId } = input;
+  const { userId, halfDay, excludeAbsenceId } = input;
+  // Normalize once so every comparison and query below operates on UTC-midnight
+  // dates consistently - callers may pass Date objects carrying a time-of-day.
+  const startDate = toUTCMidnight(input.startDate);
+  const endDate = toUTCMidnight(input.endDate);
 
   if (endDate.getTime() < startDate.getTime()) {
     throw AppError.badRequest('End date must not be before start date');
