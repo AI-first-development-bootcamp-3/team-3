@@ -1,96 +1,93 @@
-import { Button, Input, Space, Table, Tooltip } from 'antd'
-import { DeleteOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons'
 import { useState } from 'react'
-
-interface ClientRecord {
-  key: string
-  name: string
-  email: string
-  phone: string
-  status: string
-}
-
-const mockData: ClientRecord[] = [
-  { key: '1', name: 'EL-AL', email: 'contact@elal.com', phone: '+972-2-9777777', status: 'Active' },
-  { key: '2', name: 'Cargo Systems', email: 'info@cargo.com', phone: '+972-3-1234567', status: 'Active' },
-  { key: '3', name: 'Global Solutions', email: 'sales@global.com', phone: '+972-4-5678901', status: 'Active' },
-]
+import { Button, Tag } from 'antd'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import AdminEntityTable from '../../components/AdminEntityTable'
+import AdminClientForm from '../../components/AdminClientForm'
+import { createClient, listClients, updateClient, type AdminClient } from '../../services/adminClients'
 
 function AdminClients() {
-  const [searchText, setSearchText] = useState('')
+  const queryClient = useQueryClient()
+  const { data: clients = [], isLoading } = useQuery({ queryKey: ['adminClients'], queryFn: listClients })
+
+  const [editingClient, setEditingClient] = useState<AdminClient | null>(null)
+  const [showCreateForm, setShowCreateForm] = useState(false)
+
+  const createMutation = useMutation({
+    mutationFn: createClient,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminClients'] })
+      setShowCreateForm(false)
+    },
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, ...input }: { id: string; name?: string; contactDetails?: string; isActive?: boolean }) =>
+      updateClient(id, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminClients'] })
+    },
+  })
 
   const columns = [
     {
-      title: 'פעולות',
-      key: 'actions',
-      width: 120,
-      align: 'center' as const,
-      render: () => (
-        <Space>
-          <Tooltip title="Delete">
-            <DeleteOutlined style={{ color: '#dc2626', cursor: 'pointer', fontSize: 18 }} />
-          </Tooltip>
-          <Tooltip title="Edit">
-            <EditOutlined style={{ color: '#dc2626', cursor: 'pointer', fontSize: 18 }} />
-          </Tooltip>
-        </Space>
-      ),
-    },
-    {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
-      width: 120,
-    },
-    {
-      title: 'Phone',
-      dataIndex: 'phone',
-      key: 'phone',
-      width: 150,
-    },
-    {
-      title: 'Email',
-      dataIndex: 'email',
-      key: 'email',
-      width: 180,
-    },
-    {
-      title: 'Client Name',
+      title: 'שם',
       dataIndex: 'name',
       key: 'name',
-      flex: 1,
+      sorter: (a: AdminClient, b: AdminClient) => a.name.localeCompare(b.name),
+    },
+    {
+      title: 'סטטוס',
+      dataIndex: 'isActive',
+      key: 'isActive',
+      render: (isActive: boolean) => <Tag color={isActive ? 'green' : 'default'}>{isActive ? 'פעיל' : 'לא פעיל'}</Tag>,
+      sorter: (a: AdminClient, b: AdminClient) => Number(a.isActive) - Number(b.isActive),
+    },
+    {
+      title: '',
+      key: 'actions',
+      render: (_: unknown, client: AdminClient) => (
+        <Button type="link" onClick={() => setEditingClient(client)}>
+          עריכה
+        </Button>
+      ),
     },
   ]
 
   return (
     <div dir="rtl">
-      <div style={{ marginBottom: 24, display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-        <Button type="primary" style={{ minWidth: 106, height: 48 }}>
-          יצירה
-        </Button>
-        <Input
-          placeholder="חיפוש לפי שם לקוח"
-          prefix={<SearchOutlined />}
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          style={{ width: 400, height: 48 }}
-        />
-        <div style={{ marginLeft: 'auto', textAlign: 'right', flex: 1 }}>
-          <h2 style={{ margin: '0 0 8px 0', fontSize: 24, fontWeight: 500 }}>לקוחות</h2>
-          <p style={{ margin: 0, fontSize: 14, color: '#666' }}>
-            ניהול לקוחות. יצירה, עריכה והסרה של פרטי לקוחות.
-          </p>
-        </div>
-      </div>
+      <h1>לקוחות</h1>
 
-      <Table
-        columns={columns}
-        dataSource={mockData}
-        pagination={{ pageSize: 10, align: 'center' }}
-        style={{ direction: 'rtl' }}
-        size="middle"
-        bordered={false}
-      />
+      {editingClient ? (
+        <AdminClientForm
+          initialValues={{ name: editingClient.name, contactDetails: editingClient.contactDetails ?? '' }}
+          active={editingClient.isActive}
+          onActiveChange={(nextActive) => {
+            updateMutation.mutate({ id: editingClient.id, isActive: nextActive })
+            setEditingClient({ ...editingClient, isActive: nextActive })
+          }}
+          submitLabel="שמירה"
+          onSubmit={async (values) => {
+            await updateMutation.mutateAsync({ id: editingClient.id, ...values })
+            setEditingClient(null)
+          }}
+        />
+      ) : (
+        <>
+          <Button type="primary" onClick={() => setShowCreateForm(!showCreateForm)} style={{ marginBottom: 16 }}>
+            לקוח חדש
+          </Button>
+          {showCreateForm && (
+            <AdminClientForm
+              submitLabel="יצירה"
+              onSubmit={async (values) => {
+                await createMutation.mutateAsync(values)
+              }}
+            />
+          )}
+        </>
+      )}
+
+      <AdminEntityTable columns={columns} dataSource={clients} rowKey="id" loading={isLoading} />
     </div>
   )
 }
