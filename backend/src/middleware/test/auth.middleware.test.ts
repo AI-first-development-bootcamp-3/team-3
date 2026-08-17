@@ -1,9 +1,11 @@
+import type { RequestHandler } from 'express';
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { app } from '../../app.js';
 import { env } from '../../config/env.js';
 import { Role } from '../../generated/prisma/enums.js';
+import { requireRole } from '../auth.middleware.js';
 
 function signToken(payload: object, options?: jwt.SignOptions): string {
   return jwt.sign(payload, env.JWT_SECRET, options);
@@ -88,5 +90,17 @@ describe('requireRole', () => {
       .send({ role: 'ADMIN' });
 
     expect(response.status).toBe(403);
+  });
+
+  it('does not stamp the admin route-guard marker on a non-admin role guard', () => {
+    const handler = requireRole(Role.EMPLOYEE) as RequestHandler & { __isAdminRoleGuard?: true };
+
+    expect(handler.__isAdminRoleGuard).toBeFalsy();
+  });
+
+  it('stamps the admin route-guard marker when guarding the admin role', () => {
+    const handler = requireRole(Role.ADMIN) as RequestHandler & { __isAdminRoleGuard?: true };
+
+    expect(handler.__isAdminRoleGuard).toBe(true);
   });
 });
