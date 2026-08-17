@@ -102,6 +102,76 @@ describe('apiClient request', () => {
     notificationSpy.mockRestore()
   })
 
+  it('shows the "revoked" copy on a 401 whose body error code is SESSION_REVOKED', async () => {
+    const redirectSpy = vi.spyOn(navigation, 'redirectToLogin').mockImplementation(() => {})
+    const notificationSpy = vi.spyOn(notification, 'warning').mockImplementation(() => '' as unknown as void)
+    sessionStore
+      .getState()
+      .setSession(
+        { id: '1', fullName: 'Dan', email: 'd@x.com', userType: 'admin', active: true },
+        'abc123',
+        new Date(Date.now() + 60_000).toISOString(),
+        false,
+      )
+
+    mockFetchOnce({ ok: false, status: 401, json: { error: { code: 'SESSION_REVOKED', message: 'Session has ended' } } })
+
+    await expect(request('/protected')).rejects.toBeInstanceOf(ApiError)
+
+    expect(notificationSpy).toHaveBeenCalledWith({ message: 'החיבור נותק', description: 'התנתקת מהמערכת' })
+    redirectSpy.mockRestore()
+    notificationSpy.mockRestore()
+  })
+
+  it('shows the "expired" copy on a 401 whose body error code is not SESSION_REVOKED', async () => {
+    const redirectSpy = vi.spyOn(navigation, 'redirectToLogin').mockImplementation(() => {})
+    const notificationSpy = vi.spyOn(notification, 'warning').mockImplementation(() => '' as unknown as void)
+    sessionStore
+      .getState()
+      .setSession(
+        { id: '1', fullName: 'Dan', email: 'd@x.com', userType: 'admin', active: true },
+        'abc123',
+        new Date(Date.now() + 60_000).toISOString(),
+        false,
+      )
+
+    mockFetchOnce({ ok: false, status: 401, json: { error: { code: 'TOKEN_EXPIRED', message: 'Token expired' } } })
+
+    await expect(request('/protected')).rejects.toBeInstanceOf(ApiError)
+
+    expect(notificationSpy).toHaveBeenCalledWith({ message: 'החיבור פג ונותק', description: 'יש להתחבר שוב' })
+    redirectSpy.mockRestore()
+    notificationSpy.mockRestore()
+  })
+
+  it('shows the "expired" copy on a 401 with no JSON body', async () => {
+    const redirectSpy = vi.spyOn(navigation, 'redirectToLogin').mockImplementation(() => {})
+    const notificationSpy = vi.spyOn(notification, 'warning').mockImplementation(() => '' as unknown as void)
+    sessionStore
+      .getState()
+      .setSession(
+        { id: '1', fullName: 'Dan', email: 'd@x.com', userType: 'admin', active: true },
+        'abc123',
+        new Date(Date.now() + 60_000).toISOString(),
+        false,
+      )
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      headers: new Headers(),
+      json: async () => {
+        throw new Error('not json')
+      },
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(request('/protected')).rejects.toBeInstanceOf(ApiError)
+
+    expect(notificationSpy).toHaveBeenCalledWith({ message: 'החיבור פג ונותק', description: 'יש להתחבר שוב' })
+    redirectSpy.mockRestore()
+    notificationSpy.mockRestore()
+  })
+
   it('surfaces the Retry-After header on ApiError as retryAfterSeconds', async () => {
     mockFetchOnce({ ok: false, status: 423, json: {}, headers: { 'retry-after': '1800' } })
 

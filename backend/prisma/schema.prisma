@@ -42,6 +42,14 @@ model User {
   mustChangePassword Boolean       @default(true)
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
+  /// Session-validity boundary (see openspec/changes/user-logout/design.md,
+  /// D1): a token whose `iat` predates this moment is refused by
+  /// `authenticate`. Only an explicit logout moves this forward - logging in
+  /// leaves it untouched, so signing in on one device never ends another
+  /// device's session. `@default(now())` is correct for newly created users;
+  /// existing rows at migration time are backfilled to a timestamp older
+  /// than any live token (see the migration itself), not to `now()`.
+  sessionsValidFrom  DateTime      @default(now())
   attachments        Attachment[]
   timeReports        TimeReport[]
   absences           Absence[]
