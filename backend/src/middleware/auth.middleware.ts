@@ -69,6 +69,35 @@ export const authenticate: RequestHandler = async (
     return;
   }
 
+  // A token that cannot state when it was issued cannot be proven newer
+  // than a logout, so it is treated as failing the check rather than
+  // passing it (design.md D3). `JwtPayload` declares `iat` as required, but
+  // that's a compile-time promise about tokens this service issues, not a
+  // runtime guarantee about whatever was decoded above - only jwt.sign()
+  // reliably stamps it.
+  if (typeof payload.iat !== 'number') {
+    next(AppError.unauthorized('Invalid authentication token'));
+    return;
+  }
+
+  // sessionsValidFrom is a millisecond DateTime; `iat` is whole seconds -
+  // the JWT spec gives no finer resolution. Flooring the boundary to its
+  // second, rather than ceiling or comparing raw milliseconds, is
+  // deliberate: it means a token minted in the very same wall-clock second
+  // as a logout survives the check. The alternative - rejecting that
+  // token - would also reject a legitimate login that happens a fraction of
+  // a second *after* the logout, since both carry the same `iat` second and
+  // are indistinguishable from one another. That would make an immediate
+  // re-login after logout instantly refused, a reproducible user-visible
+  // bug traded for closing a sub-second window that an attacker cannot hit
+  // without already controlling the timing of the victim's logout (see
+  // design.md D2).
+  const boundarySeconds = Math.floor(user.sessionsValidFrom.getTime() / 1000);
+  if (payload.iat < boundarySeconds) {
+    next(new AppError(401, 'SESSION_REVOKED', 'Session has ended'));
+    return;
+  }
+
   req.user = { sub: payload.sub, role: user.role };
   next();
 };

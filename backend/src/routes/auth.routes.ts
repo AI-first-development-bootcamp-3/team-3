@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { patchMyPassword, postLogin } from '../controllers/auth.controller.js';
+import { patchMyPassword, postLogin, postLogout } from '../controllers/auth.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { rateLimit } from '../middleware/rateLimit.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
@@ -110,6 +110,29 @@ authRouter.post(
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
  */
+/**
+ * @openapi
+ * /logout:
+ *   post:
+ *     summary: End the authenticated caller's session
+ *     description: >
+ *       Ends every session for the calling account, not only the one
+ *       presented here - every token issued before this call stops being
+ *       accepted, on every device. Idempotent: calling it again with a
+ *       token that is still valid succeeds the same way.
+ *     tags: [Auth]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       204:
+ *         description: Session ended. No content.
+ *       401:
+ *         description: Missing, malformed, expired, or already-revoked token.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ */
+authRouter.post('/logout', authenticate, postLogout);
+
 authRouter.patch(
   '/me/password',
   validate({ body: changePasswordBodySchema }),

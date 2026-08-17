@@ -188,6 +188,123 @@ describe('POST /login', () => {
   });
 });
 
+describe('POST /logout', () => {
+  afterEach(async () => {
+    await flushAttemptWrites();
+    await resetDatabase();
+  });
+
+  /**
+   * The revocation boundary compares at whole-second resolution and floors
+   * it (design.md D2), so a token signed and then immediately logged out
+   * with in the same wall-clock second is deliberately NOT revoked - that
+   * is the fail-open that keeps an instant re-login from being refused.
+   * Tests that need a token to actually be revoked by a later /logout call
+   * must let a full second elapse first, rather than relying on real login
+   * and logout calls happening to land in different seconds - which would
+   * make the test flaky depending on which second it runs in.
+   */
+  async function sleepPastSecondBoundary(): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+  }
+
+  it('logs out and returns 204 with no body', async () => {
+    const user = await createUser();
+    const token = tokenFor(user);
+
+    const response = await request(app).post('/logout').set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(204);
+    expect(response.body).toEqual({});
+  });
+
+  it('refuses the same token on a protected endpoint after logout, with SESSION_REVOKED', async () => {
+    const user = await createUser();
+    const token = tokenFor(user);
+    await sleepPastSecondBoundary();
+
+    const logoutResponse = await request(app).post('/logout').set('Authorization', `Bearer ${token}`);
+    expect(logoutResponse.status).toBe(204);
+
+    const reuse = await request(app).get('/sample/protected').set('Authorization', `Bearer ${token}`);
+    expect(reuse.status).toBe(401);
+    expect(reuse.body.error.code).toBe('SESSION_REVOKED');
+  });
+
+  it('rejects logout with no token', async () => {
+    const response = await request(app).post('/logout');
+
+    expect(response.status).toBe(401);
+  });
+
+  it('revokes a second token from a separate login for the same user (global revocation)', async () => {
+    const user = await createUser();
+    const tokenFromDeviceOne = tokenFor(user);
+    const tokenFromDeviceTwo = tokenFor(user);
+    await sleepPastSecondBoundary();
+
+    const logoutResponse = await request(app)
+      .post('/logout')
+      .set('Authorization', `Bearer ${tokenFromDeviceOne}`);
+    expect(logoutResponse.status).toBe(204);
+
+    const deviceOneReuse = await request(app)
+      .get('/sample/protected')
+      .set('Authorization', `Bearer ${tokenFromDeviceOne}`);
+    const deviceTwoReuse = await request(app)
+      .get('/sample/protected')
+      .set('Authorization', `Bearer ${tokenFromDeviceTwo}`);
+
+    expect(deviceOneReuse.status).toBe(401);
+    expect(deviceOneReuse.body.error.code).toBe('SESSION_REVOKED');
+    expect(deviceTwoReuse.status).toBe(401);
+    expect(deviceTwoReuse.body.error.code).toBe('SESSION_REVOKED');
+  });
+
+  it('ignores a body-supplied user id - another account\'s token still works after a caller logs out naming it', async () => {
+    const caller = await createUser();
+    const otherAccount = await createUser();
+    const callerToken = tokenFor(caller);
+    const otherAccountToken = tokenFor(otherAccount);
+
+    const response = await request(app)
+      .post('/logout')
+      .set('Authorization', `Bearer ${callerToken}`)
+      .send({ userId: otherAccount.id });
+
+    expect(response.status).toBe(204);
+
+    const otherAccountStillWorks = await request(app)
+      .get('/sample/protected')
+      .set('Authorization', `Bearer ${otherAccountToken}`);
+    expect(otherAccountStillWorks.status).toBe(200);
+  });
+
+  it('lets logging in again after logout yield a working token, while the pre-logout token stays refused', async () => {
+    const user = await createUser({ email: 'logout-then-relogin@example.test' });
+    const preLogoutToken = tokenFor(user);
+    await sleepPastSecondBoundary();
+
+    const logoutResponse = await request(app).post('/logout').set('Authorization', `Bearer ${preLogoutToken}`);
+    expect(logoutResponse.status).toBe(204);
+
+    const loginResponse = await request(app)
+      .post('/login')
+      .send({ email: 'logout-then-relogin@example.test', password: 'password123' });
+    expect(loginResponse.status).toBe(200);
+    const newToken = loginResponse.body.token as string;
+
+    const newTokenWorks = await request(app).get('/sample/protected').set('Authorization', `Bearer ${newToken}`);
+    expect(newTokenWorks.status).toBe(200);
+
+    const preLogoutStillRefused = await request(app)
+      .get('/sample/protected')
+      .set('Authorization', `Bearer ${preLogoutToken}`);
+    expect(preLogoutStillRefused.status).toBe(401);
+    expect(preLogoutStillRefused.body.error.code).toBe('SESSION_REVOKED');
+  });
+});
+
 describe('PATCH /me/password', () => {
   afterEach(async () => {
     await flushAttemptWrites();
