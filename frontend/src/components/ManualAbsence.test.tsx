@@ -79,8 +79,8 @@ describe('ManualAbsence', { timeout: 20_000 }, () => {
     const user = userEvent.setup()
     renderScreen()
 
-    await user.click(screen.getByRole('button', { name: 'סוג היעדרות' }))
-    await user.click(await screen.findByRole('button', { name: /חופשה - חצי יום/ }))
+    await user.click(screen.getByRole('combobox'))
+    await user.click(await screen.findByText(/חופשה - חצי יום/))
     await user.click(screen.getByRole('button', { name: 'שמירה' }))
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())
@@ -111,8 +111,8 @@ describe('ManualAbsence', { timeout: 20_000 }, () => {
     const user = userEvent.setup()
     renderScreen()
 
-    await user.click(screen.getByRole('button', { name: 'סוג היעדרות' }))
-    await user.click(await screen.findByRole('button', { name: /מחלה/ }))
+    await user.click(screen.getByRole('combobox'))
+    await user.click(await screen.findByText(/מחלה/))
     await user.click(screen.getByRole('button', { name: 'שמירה' }))
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())
@@ -137,8 +137,8 @@ describe('ManualAbsence', { timeout: 20_000 }, () => {
     const user = userEvent.setup()
     renderScreen()
 
-    await user.click(screen.getByRole('button', { name: 'סוג היעדרות' }))
-    await user.click(await screen.findByRole('button', { name: /מחלה/ }))
+    await user.click(screen.getByRole('combobox'))
+    await user.click(await screen.findByText(/מחלה/))
     await user.click(screen.getByRole('button', { name: 'שמירה' }))
 
     expect(await screen.findByText(/התאריך חופף להיעדרות קיימת/)).toBeInTheDocument()
@@ -161,8 +161,8 @@ describe('ManualAbsence', { timeout: 20_000 }, () => {
     const user = userEvent.setup()
     renderScreen()
 
-    await user.click(screen.getByRole('button', { name: 'סוג היעדרות' }))
-    await user.click(await screen.findByRole('button', { name: /מחלה/ }))
+    await user.click(screen.getByRole('combobox'))
+    await user.click(await screen.findByText(/מחלה/))
     await user.click(screen.getByRole('button', { name: 'שמירה' }))
 
     expect(await screen.findByText('תאריך שגוי')).toBeInTheDocument()
@@ -203,8 +203,8 @@ describe('ManualAbsence', { timeout: 20_000 }, () => {
     const user = userEvent.setup()
     renderScreen()
 
-    await user.click(screen.getByRole('button', { name: 'סוג היעדרות' }))
-    await user.click(await screen.findByRole('button', { name: /מחלה/ }))
+    await user.click(screen.getByRole('combobox'))
+    await user.click(await screen.findByText(/מחלה/))
     await user.click(screen.getByText('לדווח על היעדרות ליותר מיום אחד'))
 
     const endDateInput = screen.getByLabelText('תאריך סיום')
