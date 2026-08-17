@@ -55,7 +55,11 @@ export const sessionStore = create<SessionState>((set, get) => ({
     clearExpiryTimer()
   },
   rehydrateSession: () => {
-    const stored = readSession(window.localStorage)
+    // sessionStorage fallback is for sessions established before this
+    // deploy, when non-"remember me" logins were still written there -
+    // setSession() no longer writes to it, but a pre-existing one must
+    // still be readable or that user is silently logged out.
+    const stored = readSession(window.localStorage) ?? readSession(window.sessionStorage)
     if (!isValidStoredSession(stored)) return
     set({ user: stored.user as User, token: stored.token })
     armExpiryTimer(stored.expiresAt)
@@ -125,6 +129,11 @@ function armExpiryTimer(expiresAt: string): void {
  * explicit user-initiated logout: clear state, toast, redirect. The two
  * callers below differ only in which copy applies. */
 function endSessionLocally(message: string, description: string): void {
+  // apiClient's reactive 401 handling may have already torn this session
+  // down for the same underlying expiry (a request in flight at the exact
+  // expiry instant) - skip the redundant toast/redirect rather than
+  // showing it twice.
+  if (!sessionStore.getState().token) return
   sessionStore.getState().clearSession()
   notification.warning({ message, description })
   redirectToLogin()
@@ -168,4 +177,11 @@ function handleStorageEvent(event: StorageEvent): void {
 
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', handleStorageEvent)
+  // Without this, every dev-mode HMR reload of this module registers
+  // another listener on top of the last one (never removed), so a single
+  // cross-tab event fires handleStorageEvent multiple times after a few
+  // edit-save cycles.
+  if (import.meta.hot) {
+    import.meta.hot.dispose(() => window.removeEventListener('storage', handleStorageEvent))
+  }
 }
