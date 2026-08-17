@@ -94,19 +94,32 @@ export const logoutRateLimit = rateLimit({
   handler: rejectAsTooManyRequests,
 });
 
-/** Exported so tests can clear the counters between cases. */
+/** Exported so tests can clear the counters between cases. Separate from the
+ * write and logout stores: reading the month must not spend a caller's budget
+ * for saving it. */
 export const reportReadRateLimitStore = new MemoryStore();
 
-/** Same shape as writeRateLimit — satisfies CodeQL on authenticated GET routes. */
+/**
+ * Bounds how fast one address can drive the report read routes (the monthly
+ * list). Like the write limiter it counts every request, not only failures.
+ *
+ * Mounted *ahead* of `authenticate` for the same reason `logoutRateLimit` is:
+ * that middleware's token verify and user-row read are the work most worth
+ * capping against an unauthenticated caller, and a limiter placed after it
+ * leaves it unprotected — both to CodeQL's js/missing-rate-limiting and in
+ * fact. Running first makes this necessarily address-keyed, since no verified
+ * identity exists yet.
+ *
+ * Sized for that shared key on the same ~10-people-per-office-NAT assumption
+ * as RATE_LIMIT_IP_MAX_ATTEMPTS, so a colleague behind the same address cannot
+ * exhaust the budget by browsing months.
+ */
 export const readRateLimit = rateLimit({
   windowMs: env.RATE_LIMIT_WINDOW_SECONDS * 1000,
   limit: env.RATE_LIMIT_READ_MAX_REQUESTS,
   store: reportReadRateLimitStore,
   standardHeaders: false,
   legacyHeaders: false,
-  keyGenerator: (req: Request) => req.user?.sub ?? ipKeyGenerator(req.ip ?? ''),
-  handler: (req, _res, next) => {
-    const info = (req as Request & { rateLimit?: RateLimitInfo }).rateLimit;
-    next(AppError.tooManyRequests(retryAfterSeconds(info?.resetTime)));
-  },
+  keyGenerator: (req: Request) => ipKeyGenerator(req.ip ?? ''),
+  handler: rejectAsTooManyRequests,
 });

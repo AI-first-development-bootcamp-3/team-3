@@ -2,7 +2,6 @@ import { request } from './apiClient'
 import type {
   CreateReportBatchInput,
   CreateReportBatchResult,
-  CreateReportInput,
   ListReportsResult,
   Report,
   ReportingOptions,

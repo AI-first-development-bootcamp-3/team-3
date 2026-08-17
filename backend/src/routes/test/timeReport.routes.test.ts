@@ -5,7 +5,10 @@ import { app } from '../../app.js';
 import { env } from '../../config/env.js';
 import { openApiSpec } from '../../config/swagger.js';
 import { prisma } from '../../config/prisma.js';
-import { reportWriteRateLimitStore } from '../../middleware/writeRateLimit.middleware.js';
+import {
+  reportReadRateLimitStore,
+  reportWriteRateLimitStore,
+} from '../../middleware/writeRateLimit.middleware.js';
 import { Role } from '../../generated/prisma/enums.js';
 import { createClient, createProject, createTask, createUser } from '../../test/factories.js';
 import { resetDatabase } from '../../test/resetDatabase.js';
@@ -482,6 +485,41 @@ describe('GET /reports', () => {
     const response = await request(app).get('/reports').query({ month: 8, year: 2026 });
 
     expect(response.status).toBe(401);
+  });
+});
+
+describe('report read rate limiting', () => {
+  const MAX = env.RATE_LIMIT_READ_MAX_REQUESTS;
+
+  beforeEach(async () => {
+    await reportReadRateLimitStore.resetAll();
+  });
+
+  afterEach(async () => {
+    await reportReadRateLimitStore.resetAll();
+    await resetDatabase();
+  });
+
+  it('answers 429 with Retry-After once an address passes the read quota', async () => {
+    // Sent without a token on purpose: the limiter sits ahead of `authenticate`
+    // so the token verify and user-row read that middleware performs are
+    // themselves capped, which means even rejected reads spend quota. Issued in
+    // batches rather than one Promise.all over the whole quota to keep the
+    // number of concurrent sockets bounded.
+    for (let sent = 0; sent < MAX; sent += 60) {
+      const batch = Math.min(60, MAX - sent);
+      await Promise.all(
+        Array.from({ length: batch }, () => request(app).get('/reports').expect(401)),
+      );
+    }
+
+    const throttled = await request(app).get('/reports').query({ month: 8, year: 2026 });
+
+    expect(throttled.status).toBe(429);
+    expect(Number(throttled.headers['retry-after'])).toBeGreaterThan(0);
+    expect(throttled.body).toEqual({
+      error: { code: 'TOO_MANY_REQUESTS', message: expect.any(String) },
+    });
   });
 });
 

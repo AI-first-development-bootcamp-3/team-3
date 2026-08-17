@@ -64,10 +64,12 @@ function dateToCalendarDate(value: Date): string {
   return value.toISOString().slice(0, 10);
 }
 
-function hoursBetween(start: string, end: string): number {
-  const [startHours, startMinutes] = start.split(':').map(Number);
-  const [endHours, endMinutes] = end.split(':').map(Number);
-  return (endHours * 60 + endMinutes - startHours * 60 - startMinutes) / 60;
+/**
+ * Both times are stored anchored to the same epoch day (see `hhmmToDate`), so
+ * their raw millisecond difference is the worked duration.
+ */
+function hoursBetween(start: Date, end: Date): number {
+  return (end.getTime() - start.getTime()) / 3_600_000;
 }
 
 function toDto(row: {
@@ -234,17 +236,13 @@ export async function listTimeReportsForMonth(
     orderBy: [{ date: 'desc' }, { startTime: 'asc' }],
   });
 
-  return rows.map((row) => {
-    const startTime = dateToHhmm(row.startTime);
-    const endTime = dateToHhmm(row.endTime);
-    return {
-      ...toDto(row),
-      clientName: row.client.name,
-      projectName: row.project.name,
-      taskName: row.task.name,
-      durationHours: hoursBetween(startTime, endTime),
-    };
-  });
+  return rows.map((row) => ({
+    ...toDto(row),
+    clientName: row.client.name,
+    projectName: row.project.name,
+    taskName: row.task.name,
+    durationHours: hoursBetween(row.startTime, row.endTime),
+  }));
 }
 
 export async function listReportingOptions(): Promise<ReportingOptions> {

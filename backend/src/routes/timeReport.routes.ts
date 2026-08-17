@@ -103,8 +103,11 @@ export const timeReportRouter = Router();
  */
 timeReportRouter.get(
   '/reports',
-  authenticate,
+  // Ahead of `authenticate` on purpose, so the token verify and user-row read
+  // that middleware performs sit behind the limiter rather than in front of it.
+  // Address-keyed as a consequence — see the middleware's own comment.
   readRateLimit,
+  authenticate,
   validate({ query: listTimeReportsQuerySchema }),
   getMyTimeReports,
 );

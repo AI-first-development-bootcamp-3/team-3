@@ -51,9 +51,13 @@ const envSchema = z.object({
   // room for retries and an impatient reload while still bounding how fast one
   // token can drive multi-row inserts.
   RATE_LIMIT_WRITE_MAX_REQUESTS: z.coerce.number().int().positive().default(60),
-  // Authenticated report reads (monthly list). Higher than writes — one page
-  // load plus month navigation should not trip the cap during normal use.
-  RATE_LIMIT_READ_MAX_REQUESTS: z.coerce.number().int().positive().default(120),
+  // Requests to the report read routes (the monthly list) one *address* may
+  // make within that same window. Address-keyed, not subject-keyed, because
+  // this limiter runs ahead of `authenticate` (see writeRateLimit.middleware.ts)
+  // so there is no verified identity yet. Sized as a generous per-person read
+  // budget — a page load plus heavy month navigation is well under 60 — times
+  // the same ~10-people-per-office-NAT assumption as RATE_LIMIT_IP_MAX_ATTEMPTS.
+  RATE_LIMIT_READ_MAX_REQUESTS: z.coerce.number().int().positive().default(600),
   // Requests to POST /logout one *address* may make within that same window.
   // Address-keyed, not subject-keyed, because this limiter deliberately runs
   // ahead of `authenticate` (see writeRateLimit.middleware.ts), so there is no
