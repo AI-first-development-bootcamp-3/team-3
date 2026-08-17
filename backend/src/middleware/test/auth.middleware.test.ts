@@ -86,6 +86,72 @@ describe('authenticate', () => {
 
     expect(response.status).toBe(200);
   });
+
+  // Every token signed via signToken()/tokenFor() above already carries a
+  // plausible `iat` — jsonwebtoken stamps it automatically unless
+  // `noTimestamp` is set — so those tests exercise the new `iat` contract
+  // for free. The tests below drive the revocation gate itself (design.md
+  // D7): rather than backdating a token's `iat` (which, combined with
+  // `expiresIn`, would produce an already-expired token and trip
+  // TOKEN_EXPIRED instead of SESSION_REVOKED), they move the user's
+  // `sessionsValidFrom` boundary directly.
+  it('rejects a token issued before the session-validity boundary with SESSION_REVOKED', async () => {
+    const user = await createUser({ role: Role.EMPLOYEE });
+    const token = signToken({ sub: user.id, role: Role.EMPLOYEE }, { expiresIn: '1h' });
+
+    // Move the boundary to strictly after the token's `iat` second, without
+    // touching the token itself.
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { sessionsValidFrom: new Date(Date.now() + 2000) },
+    });
+
+    const response = await request(app).get('/sample/protected').set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('SESSION_REVOKED');
+  });
+
+  it('allows a token issued after the session-validity boundary', async () => {
+    const user = await createUser({ role: Role.EMPLOYEE });
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { sessionsValidFrom: new Date(Date.now() - 5000) },
+    });
+    const token = signToken({ sub: user.id, role: Role.EMPLOYEE }, { expiresIn: '1h' });
+
+    const response = await request(app).get('/sample/protected').set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+  });
+
+  it('rejects a token with no iat claim', async () => {
+    const user = await createUser({ role: Role.EMPLOYEE });
+    const token = signToken({ sub: user.id, role: Role.EMPLOYEE }, { noTimestamp: true, expiresIn: '1h' });
+
+    const response = await request(app).get('/sample/protected').set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('UNAUTHORIZED');
+  });
+
+  it('leaves an earlier token working after authenticating again', async () => {
+    const user = await createUser({ role: Role.EMPLOYEE });
+    const earlierToken = signToken({ sub: user.id, role: Role.EMPLOYEE }, { expiresIn: '1h' });
+    const laterToken = signToken({ sub: user.id, role: Role.EMPLOYEE }, { expiresIn: '1h' });
+
+    // "Authenticating again" with a second token must not disturb the
+    // first — logging in never moves sessionsValidFrom (design.md D6).
+    const laterResponse = await request(app)
+      .get('/sample/protected')
+      .set('Authorization', `Bearer ${laterToken}`);
+    expect(laterResponse.status).toBe(200);
+
+    const earlierResponse = await request(app)
+      .get('/sample/protected')
+      .set('Authorization', `Bearer ${earlierToken}`);
+    expect(earlierResponse.status).toBe(200);
+  });
 });
 
 describe('requireRole', () => {
