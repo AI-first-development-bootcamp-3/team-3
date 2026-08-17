@@ -1,3 +1,4 @@
 schema: spec-driven
 created: 2026-08-15
 goal: Close frontend test gaps for the admin create-user feature - non-admin route guard and the backend 400 response path (SCRUM-211)
+skip_specs: true
