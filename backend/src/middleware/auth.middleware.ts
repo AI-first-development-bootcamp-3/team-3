@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { AppError } from '../types/errors.js';
 import type { JwtPayload } from '../types/auth.js';
+import { Role } from '../generated/prisma/enums.js';
 
 function extractBearerToken(req: Request): string | undefined {
   const header = req.headers.authorization;
@@ -40,13 +41,23 @@ export const authenticate: RequestHandler = (req: Request, _res: Response, next:
   }
 };
 
+/** Handler shape carrying the marker `requireRole` stamps on what it returns. */
+export interface RoleGuardHandler extends RequestHandler {
+  __isAdminRoleGuard?: true;
+}
+
 /**
  * Restricts a route to a given role. Must run after `authenticate` — an
  * unauthenticated caller is rejected 401 by that middleware before this one
  * ever runs, so a missing `req.user` here means the guard was misapplied.
+ *
+ * Stamps the returned handler with `__isAdminRoleGuard` so a route-stack
+ * coverage test (see admin-api-authz) can positively identify "this route
+ * has the admin guard applied" by inspecting Express's registered routes —
+ * an inline arrow function otherwise has no reliable `.name` to check by.
  */
 export function requireRole(role: JwtPayload['role']): RequestHandler {
-  return (req: Request, _res: Response, next: NextFunction): void => {
+  const handler: RoleGuardHandler = (req: Request, _res: Response, next: NextFunction): void => {
     if (!req.user) {
       next(AppError.unauthorized('Authentication required'));
       return;
@@ -59,4 +70,9 @@ export function requireRole(role: JwtPayload['role']): RequestHandler {
 
     next();
   };
+
+  if (role === Role.ADMIN) {
+    handler.__isAdminRoleGuard = true;
+  }
+  return handler;
 }

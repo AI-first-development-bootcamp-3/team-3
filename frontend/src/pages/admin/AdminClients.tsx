@@ -1,40 +1,97 @@
-import AdminListPage from '../../components/AdminListPage'
-import { actionsColumn } from '../../components/adminActionsColumn'
+import { useState } from 'react'
+import { Button, Tag } from 'antd'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import AdminEntityTable from '../../components/AdminEntityTable'
+import AdminClientForm from '../../components/AdminClientForm'
+import { createClient, listClients, updateClient, type AdminClient } from '../../services/adminClients'
 
-interface ClientRecord {
-  key: string
-  name: string
-  email: string
-  phone: string
-  status: string
-}
+function AdminClients() {
+  const queryClient = useQueryClient()
+  const { data: clients = [], isLoading } = useQuery({ queryKey: ['adminClients'], queryFn: listClients })
 
-const mockData: ClientRecord[] = [
-  { key: '1', name: 'EL-AL', email: 'contact@elal.com', phone: '+972-2-9777777', status: 'Active' },
-  { key: '2', name: 'Cargo Systems', email: 'info@cargo.com', phone: '+972-3-1234567', status: 'Active' },
-  { key: '3', name: 'Global Solutions', email: 'sales@global.com', phone: '+972-4-5678901', status: 'Active' },
-]
+  const [editingClient, setEditingClient] = useState<AdminClient | null>(null)
+  const [showCreateForm, setShowCreateForm] = useState(false)
 
-const columns = [
-  actionsColumn,
-  { title: 'Status', dataIndex: 'status', key: 'status', width: 120 },
-  { title: 'Phone', dataIndex: 'phone', key: 'phone', width: 150 },
-  { title: 'Email', dataIndex: 'email', key: 'email', width: 180 },
-  { title: 'Client Name', dataIndex: 'name', key: 'name' },
-]
+  const createMutation = useMutation({
+    mutationFn: createClient,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminClients'] })
+      setShowCreateForm(false)
+    },
+  })
 
-const matchesName = (client: ClientRecord, query: string) => client.name.toLowerCase().includes(query)
+  const updateMutation = useMutation({
+    mutationFn: ({ id, ...input }: { id: string; name?: string; contactDetails?: string; isActive?: boolean }) =>
+      updateClient(id, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminClients'] })
+    },
+  })
+
+  const columns = [
+    {
+      title: 'שם',
+      dataIndex: 'name',
+      key: 'name',
+      sorter: (a: AdminClient, b: AdminClient) => a.name.localeCompare(b.name),
+    },
+    {
+      title: 'סטטוס',
+      dataIndex: 'isActive',
+      key: 'isActive',
+      render: (isActive: boolean) => <Tag color={isActive ? 'green' : 'default'}>{isActive ? 'פעיל' : 'לא פעיל'}</Tag>,
+      sorter: (a: AdminClient, b: AdminClient) => Number(a.isActive) - Number(b.isActive),
+    },
+    {
+      title: '',
+      key: 'actions',
+      render: (_: unknown, client: AdminClient) => (
+        <Button type="link" onClick={() => setEditingClient(client)}>
+          עריכה
+        </Button>
+      ),
+    },
+  ]
 
 function AdminClients() {
   return (
-    <AdminListPage
-      title="לקוחות"
-      description="ניהול לקוחות. יצירה, עריכה והסרה של פרטי לקוחות."
-      searchPlaceholder="חיפוש לפי שם לקוח"
-      data={mockData}
-      columns={columns}
-      filter={matchesName}
-    />
+    <div dir="rtl">
+      <h1>לקוחות</h1>
+
+      {editingClient && (
+        <AdminClientForm
+          key={editingClient.id}
+          initialValues={{ name: editingClient.name, contactDetails: editingClient.contactDetails ?? '' }}
+          active={editingClient.isActive}
+          onActiveChange={(nextActive) => {
+            updateMutation.mutate({ id: editingClient.id, isActive: nextActive })
+            setEditingClient({ ...editingClient, isActive: nextActive })
+          }}
+          submitLabel="שמירה"
+          onSubmit={async (values) => {
+            await updateMutation.mutateAsync({ id: editingClient.id, ...values })
+            setEditingClient(null)
+          }}
+          onCancel={() => setEditingClient(null)}
+        />
+      )}
+
+      {showCreateForm && (
+        <AdminClientForm
+          submitLabel="יצירה"
+          onSubmit={async (values) => {
+            await createMutation.mutateAsync(values)
+          }}
+          onCancel={() => setShowCreateForm(false)}
+        />
+      )}
+
+      <Button type="primary" onClick={() => setShowCreateForm(!showCreateForm)} style={{ marginBottom: 16 }}>
+        לקוח חדש
+      </Button>
+
+      <AdminEntityTable columns={columns} dataSource={clients} rowKey="id" loading={isLoading} />
+    </div>
   )
 }
 
