@@ -1,9 +1,19 @@
 import { Router } from 'express';
-import { patchAdminUserResetPassword, patchAdminUserRole, postAdminUser } from '../controllers/adminUser.controller.js';
+import {
+  patchAdminUserResetPassword,
+  patchAdminUserRole,
+  patchAdminUserStatus,
+  postAdminUser,
+} from '../controllers/adminUser.controller.js';
 import { authenticate, requireRole } from '../middleware/auth.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
 import { Role } from '../generated/prisma/enums.js';
-import { changeRoleBodySchema, createUserBodySchema, userIdParamSchema } from '../types/adminUser.schema.js';
+import {
+  changeRoleBodySchema,
+  createUserBodySchema,
+  setUserActiveBodySchema,
+  userIdParamSchema,
+} from '../types/adminUser.schema.js';
 
 export const adminUserRouter = Router();
 
@@ -153,4 +163,57 @@ adminUserRouter.patch(
   requireRole(Role.ADMIN),
   validate({ params: userIdParamSchema, body: changeRoleBodySchema }),
   patchAdminUserRole,
+);
+
+/**
+ * @openapi
+ * /admin/users/{id}/status:
+ *   patch:
+ *     summary: Deactivate or reactivate a user account (admin only)
+ *     tags: [Admin]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [isActive]
+ *             properties:
+ *               isActive: { type: boolean }
+ *     responses:
+ *       200:
+ *         description: The updated user.
+ *       400:
+ *         description: Malformed id or missing/non-boolean isActive.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ *       401:
+ *         description: Authentication required.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ *       403:
+ *         description: Caller is authenticated but not an administrator.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ *       404:
+ *         description: No user with that id.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ */
+adminUserRouter.patch(
+  '/admin/users/:id/status',
+  authenticate,
+  requireRole(Role.ADMIN),
+  validate({ params: userIdParamSchema, body: setUserActiveBodySchema }),
+  patchAdminUserStatus,
 );
