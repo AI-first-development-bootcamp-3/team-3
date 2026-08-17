@@ -20,14 +20,28 @@ export class AppError extends Error {
   readonly status: number;
   readonly code: string;
   readonly details?: ErrorDetail[];
+  /**
+   * Seconds the client should wait before retrying — surfaced by the error
+   * handler as a `Retry-After` header, never as part of the response body.
+   */
+  readonly retryAfterSeconds?: number;
 
-  constructor(status: number, code: string, message: string, details?: ErrorDetail[]) {
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    details?: ErrorDetail[],
+    retryAfterSeconds?: number,
+  ) {
     super(message);
     this.name = 'AppError';
     this.status = status;
     this.code = code;
     if (details) {
       this.details = details;
+    }
+    if (retryAfterSeconds !== undefined) {
+      this.retryAfterSeconds = retryAfterSeconds;
     }
     Error.captureStackTrace(this, AppError);
   }
@@ -64,6 +78,25 @@ export class AppError extends Error {
 
   static payloadTooLarge(message = 'Payload too large'): AppError {
     return new AppError(413, 'PAYLOAD_TOO_LARGE', message);
+  }
+
+  static tooManyRequests(
+    retryAfterSeconds: number,
+    message = 'Too many attempts. Please try again later.',
+  ): AppError {
+    return new AppError(429, 'TOO_MANY_REQUESTS', message, undefined, retryAfterSeconds);
+  }
+
+  /**
+   * Distinct from tooManyRequests(429): this is the durable account-lockout
+   * tier, not the in-memory throttle. Never conditioned on whether the
+   * email is registered - see openspec/changes/login-account-lockout.
+   */
+  static locked(
+    retryAfterSeconds: number,
+    message = 'This account is temporarily locked due to too many failed attempts. Please try again later.',
+  ): AppError {
+    return new AppError(423, 'LOCKED', message, undefined, retryAfterSeconds);
   }
 
   static internal(message = 'Internal server error'): AppError {

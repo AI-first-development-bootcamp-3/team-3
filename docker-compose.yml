@@ -32,6 +32,15 @@ services:
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
       JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-please-32chars-min}
       LOG_LEVEL: ${LOG_LEVEL:-debug}
+      RATE_LIMIT_EMAIL_MAX_ATTEMPTS: ${RATE_LIMIT_EMAIL_MAX_ATTEMPTS:-5}
+      RATE_LIMIT_IP_MAX_ATTEMPTS: ${RATE_LIMIT_IP_MAX_ATTEMPTS:-50}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-900}
+      RATE_LIMIT_WRITE_MAX_REQUESTS: ${RATE_LIMIT_WRITE_MAX_REQUESTS:-60}
+      LOCKOUT_MAX_ATTEMPTS: ${LOCKOUT_MAX_ATTEMPTS:-10}
+      LOCKOUT_WINDOW_HOURS: ${LOCKOUT_WINDOW_HOURS:-24}
+      LOCKOUT_DURATION_MINUTES: ${LOCKOUT_DURATION_MINUTES:-30}
+      # No proxy sits in front of the backend in this compose stack - leave disabled
+      TRUST_PROXY: ${TRUST_PROXY:-false}
     ports:
       - '${BACKEND_PORT:-3000}:3000'
     depends_on:

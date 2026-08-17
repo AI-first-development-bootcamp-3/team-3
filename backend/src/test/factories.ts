@@ -1,8 +1,15 @@
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../config/prisma.js';
-import { Role } from '../generated/prisma/enums.js';
-import type { ClientModel, ProjectModel, TaskModel, UserModel } from '../generated/prisma/models.js';
+import { AbsenceType, Role } from '../generated/prisma/enums.js';
+import type {
+  AbsenceModel,
+  ClientModel,
+  ProjectModel,
+  TaskModel,
+  TimeReportModel,
+  UserModel,
+} from '../generated/prisma/models.js';
 
 /**
  * Test data factories for the core entities, so integration tests build
@@ -60,6 +67,64 @@ export async function createTask(
     data: {
       name: overrides.name ?? `Task ${crypto.randomUUID()}`,
       projectId,
+      ...(overrides.isActive !== undefined ? { isActive: overrides.isActive } : {}),
+    },
+  });
+}
+
+export async function createTimeReport(
+  overrides: Partial<
+    Pick<
+      TimeReportModel,
+      'userId' | 'clientId' | 'projectId' | 'taskId' | 'date' | 'workLocation' | 'startTime' | 'endTime' | 'description'
+    >
+  > = {},
+): Promise<TimeReportModel> {
+  let taskId: string;
+  let projectId: string;
+  let clientId: string;
+
+  if (overrides.taskId) {
+    const task = await prisma.task.findFirstOrThrow({
+      where: { id: overrides.taskId },
+      include: { project: true },
+    });
+    taskId = task.id;
+    projectId = overrides.projectId ?? task.projectId;
+    clientId = overrides.clientId ?? task.project.clientId;
+  } else {
+    const task = await createTask(overrides.projectId ? { projectId: overrides.projectId } : {});
+    const project = await prisma.project.findFirstOrThrow({ where: { id: task.projectId } });
+    taskId = task.id;
+    projectId = overrides.projectId ?? task.projectId;
+    clientId = overrides.clientId ?? project.clientId;
+  }
+
+  return prisma.timeReport.create({
+    data: {
+      userId: overrides.userId ?? (await createUser()).id,
+      clientId,
+      projectId,
+      taskId,
+      date: overrides.date ?? new Date('2026-08-16T00:00:00.000Z'),
+      workLocation: overrides.workLocation ?? 'OFFICE',
+      startTime: overrides.startTime ?? new Date('1970-01-01T09:00:00.000Z'),
+      endTime: overrides.endTime ?? new Date('1970-01-01T18:00:00.000Z'),
+      description: overrides.description ?? 'Test report',
+    },
+  });
+}
+
+export async function createAbsence(
+  overrides: Partial<Pick<AbsenceModel, 'userId' | 'type' | 'startDate' | 'endDate' | 'halfDay' | 'isActive'>> = {},
+): Promise<AbsenceModel> {
+  return prisma.absence.create({
+    data: {
+      userId: overrides.userId ?? (await createUser()).id,
+      type: overrides.type ?? AbsenceType.VACATION,
+      startDate: overrides.startDate ?? new Date('2026-08-16T00:00:00.000Z'),
+      endDate: overrides.endDate ?? new Date('2026-08-16T00:00:00.000Z'),
+      ...(overrides.halfDay !== undefined ? { halfDay: overrides.halfDay } : {}),
       ...(overrides.isActive !== undefined ? { isActive: overrides.isActive } : {}),
     },
   });

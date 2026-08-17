@@ -29,12 +29,8 @@ function ChangePassword() {
   const onSubmit = async (values: ChangePasswordFormValues) => {
     setFormError(null)
     try {
-      const { setSession } = sessionStore.getState()
-      const { token } = sessionStore.getState()
       const updatedUser = await changeOwnPassword(values.newPassword)
-      if (token) {
-        setSession(updatedUser, token)
-      }
+      sessionStore.getState().updateUser(updatedUser)
       navigate('/', { replace: true })
     } catch {
       setFormError('Could not update your password. Please try again.')

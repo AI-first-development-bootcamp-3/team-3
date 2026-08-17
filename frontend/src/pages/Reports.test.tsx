@@ -1,0 +1,142 @@
+import { render, screen, cleanup } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { App, ConfigProvider } from 'antd'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import Reports from './Reports'
+import { sessionStore } from '../services/sessionStore'
+import dayjs from '../services/dayjs'
+
+const KPI_LABELS = [
+  'שעות חודשיות',
+  'ימי חופשה',
+  'ימי מחלה',
+  'דיווחים חסרים',
+  'פרויקטים מדווחים',
+]
+
+const options = {
+  clients: [
+    {
+      id: 'client-1',
+      name: 'Acme',
+      projects: [{ id: 'project-1', name: 'Website', tasks: [{ id: 'task-1', name: 'Design' }] }],
+    },
+  ],
+}
+
+function mockReportingOptions() {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => options,
+    }),
+  )
+}
+
+function renderHome() {
+  return render(
+    <ConfigProvider>
+      <App>
+        <Reports />
+      </App>
+    </ConfigProvider>,
+  )
+}
+
+describe('Reports home shell', () => {
+  afterEach(() => {
+    window.history.replaceState({}, '', '/')
+    cleanup()
+    vi.unstubAllGlobals()
+    sessionStore.getState().clearSession()
+    window.sessionStorage.clear()
+    window.localStorage.clear()
+  })
+
+  function signIn() {
+    sessionStore.getState().setSession(
+      { id: 'u1', fullName: 'Gal', email: 'gal@test.com', userType: 'regular', active: true },
+      'token',
+      new Date(Date.now() + 60_000).toISOString(),
+      false,
+    )
+  }
+
+  it('shows Figma chrome, five empty KPI cards, and an empty daily list', () => {
+    renderHome()
+
+    expect(screen.getByRole('img', { name: 'abra' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'דיווח שעות' })).toBeInTheDocument()
+    expect(screen.getByTestId('month-label')).toHaveTextContent(dayjs().format('MMMM'))
+    expect(screen.getByRole('button', { name: 'דיווח ידני' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'כל הדיווחים' })).toBeDisabled()
+
+    const clock = screen.getByRole('button', { name: /הפעלת שעון/ })
+    expect(clock).toBeDisabled()
+    expect(clock).toHaveAttribute('aria-disabled', 'true')
+    expect(clock).toHaveAccessibleName(/בקרוב/)
+
+    for (const label of KPI_LABELS) {
+      expect(screen.getByRole('heading', { name: label })).toBeInTheDocument()
+    }
+    expect(screen.getAllByText('אין נתונים עדיין')).toHaveLength(5)
+    expect(screen.queryByText('142.5')).not.toBeInTheDocument()
+    expect(screen.queryByText('180')).not.toBeInTheDocument()
+
+    expect(screen.getByRole('heading', { name: 'פירוט יומי' })).toBeInTheDocument()
+    expect(screen.getByText('אין דיווחים להצגה')).toBeInTheDocument()
+  })
+
+  it('advances the month label without changing empty copy', async () => {
+    const user = userEvent.setup()
+    renderHome()
+
+    const label = screen.getByTestId('month-label')
+    const before = label.textContent
+    await user.click(screen.getByRole('button', { name: 'חודש הבא' }))
+    expect(label.textContent).not.toBe(before)
+    expect(screen.getAllByText('אין נתונים עדיין')).toHaveLength(5)
+    expect(screen.getByText('אין דיווחים להצגה')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'חודש קודם' }))
+    expect(label).toHaveTextContent(before ?? '')
+  })
+
+  it('renders the Figma preview rows only when ?demo=1 asks for them', () => {
+    renderHome()
+    expect(screen.queryByText('חסר')).not.toBeInTheDocument()
+    cleanup()
+
+    window.history.replaceState({}, '', '/?demo=1')
+    renderHome()
+
+    expect(screen.getByText('96')).toBeInTheDocument()
+    expect(screen.queryByText('142.5')).not.toBeInTheDocument()
+    expect(screen.getAllByText('חסר')).toHaveLength(2)
+    expect(screen.getAllByText('9 שעות')).toHaveLength(2)
+    expect(screen.getByText('5.5 שעות')).toBeInTheDocument()
+    expect(screen.getByText('4 שעות')).toBeInTheDocument()
+    expect(screen.getAllByText('סופ״ש')).toHaveLength(2)
+    expect(screen.queryByText('אין דיווחים להצגה')).not.toBeInTheDocument()
+  })
+
+  it('opens the manual report on דיווח ידני and returns home on סגירה', async () => {
+    signIn()
+    mockReportingOptions()
+    const user = userEvent.setup()
+    renderHome()
+
+    await user.click(screen.getByRole('button', { name: 'דיווח ידני' }))
+    expect(await screen.findByRole('heading', { name: 'דיווח ידני' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'דיווח שעות' })).not.toBeInTheDocument()
+    expect(screen.queryByText('אין דיווחים להצגה')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'סגירה' }))
+    expect(screen.getByRole('heading', { name: 'דיווח שעות' })).toBeInTheDocument()
+    expect(screen.getByText('אין דיווחים להצגה')).toBeInTheDocument()
+    expect(screen.getAllByText('אין נתונים עדיין')).toHaveLength(5)
+  })
+})

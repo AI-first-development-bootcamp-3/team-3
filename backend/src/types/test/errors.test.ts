@@ -36,6 +36,8 @@ describe('AppError', () => {
     [AppError.notFound(), 404, 'NOT_FOUND'],
     [AppError.conflict('x'), 409, 'CONFLICT'],
     [AppError.payloadTooLarge(), 413, 'PAYLOAD_TOO_LARGE'],
+    [AppError.tooManyRequests(60), 429, 'TOO_MANY_REQUESTS'],
+    [AppError.locked(60), 423, 'LOCKED'],
     [AppError.internal(), 500, 'INTERNAL_ERROR'],
   ];
 
@@ -50,5 +52,30 @@ describe('AppError', () => {
     expect(AppError.notFound().message).toBe('Resource not found');
     expect(AppError.payloadTooLarge().message).toBe('Payload too large');
     expect(AppError.internal().message).toBe('Internal server error');
+  });
+
+  it('carries retryAfterSeconds for tooManyRequests but keeps it out of the response body', () => {
+    const error = AppError.tooManyRequests(120);
+
+    expect(error.retryAfterSeconds).toBe(120);
+    expect(error.toResponseBody()).toEqual({
+      error: { code: 'TOO_MANY_REQUESTS', message: 'Too many attempts. Please try again later.' },
+    });
+  });
+
+  it('has no retryAfterSeconds for errors that were not given one', () => {
+    expect(AppError.unauthorized().retryAfterSeconds).toBeUndefined();
+  });
+
+  it('carries retryAfterSeconds for locked but keeps it out of the response body', () => {
+    const error = AppError.locked(1800);
+
+    expect(error.retryAfterSeconds).toBe(1800);
+    expect(error.toResponseBody()).toEqual({
+      error: {
+        code: 'LOCKED',
+        message: 'This account is temporarily locked due to too many failed attempts. Please try again later.',
+      },
+    });
   });
 });
