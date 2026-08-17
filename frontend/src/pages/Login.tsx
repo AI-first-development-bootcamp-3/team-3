@@ -7,6 +7,7 @@ import { login } from '../services/auth'
 import { sessionStore } from '../services/sessionStore'
 import { ApiError } from '../services/apiClient'
 import { loginFormSchema, type LoginFormValues } from './Login.schema'
+import './Login.css'
 
 function Login() {
   const navigate = useNavigate()
@@ -31,36 +32,36 @@ function Login() {
       navigate(user.mustChangePassword ? '/change-password' : from, { replace: true })
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
-        setFormError('Incorrect email or password.')
+        setFormError('אימייל או סיסמה שגויים.')
         return
       }
       if (error instanceof ApiError && error.status === 429) {
-        setFormError('Too many attempts. Please wait a few minutes and try again.')
+        setFormError('יותר מדי ניסיונות. יש להמתין מספר דקות ולנסות שוב.')
         return
       }
-      setFormError('Something went wrong. Please try again.')
+      setFormError('משהו השתבש. נסו שוב.')
     }
   }
 
   return (
-    <Form layout="vertical" onFinish={handleSubmit(onSubmit)}>
-      <h1>Login</h1>
+    <Form className="login" layout="vertical" onFinish={handleSubmit(onSubmit)}>
+      <h1>התחברות</h1>
 
       {formError && <Alert type="error" message={formError} showIcon style={{ marginBottom: 16 }} />}
 
-      <Form.Item label="Email" htmlFor="email" validateStatus={errors.email ? 'error' : ''} help={errors.email?.message}>
+      <Form.Item label="אימייל" htmlFor="email" validateStatus={errors.email ? 'error' : ''} help={errors.email?.message}>
         <Controller
           name="email"
           control={control}
-          render={({ field }) => <Input {...field} id="email" type="email" autoComplete="username" />}
+          render={({ field }) => <Input {...field} id="email" type="email" autoComplete="username" dir="ltr" />}
         />
       </Form.Item>
 
-      <Form.Item label="Password" htmlFor="password" validateStatus={errors.password ? 'error' : ''} help={errors.password?.message}>
+      <Form.Item label="סיסמה" htmlFor="password" validateStatus={errors.password ? 'error' : ''} help={errors.password?.message}>
         <Controller
           name="password"
           control={control}
-          render={({ field }) => <Input.Password {...field} id="password" autoComplete="current-password" />}
+          render={({ field }) => <Input.Password {...field} id="password" autoComplete="current-password" dir="ltr" />}
         />
       </Form.Item>
 
@@ -70,14 +71,14 @@ function Login() {
           control={control}
           render={({ field: { value, onChange, ...field } }) => (
             <Checkbox {...field} checked={value} onChange={(e) => onChange(e.target.checked)}>
-              Remember me
+              זכור אותי
             </Checkbox>
           )}
         />
       </Form.Item>
 
       <Button type="primary" htmlType="submit" loading={isSubmitting}>
-        Sign in
+        התחבר
       </Button>
     </Form>
   )
