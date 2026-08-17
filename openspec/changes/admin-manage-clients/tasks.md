@@ -15,8 +15,7 @@
 - [x] 2.2 `AdminClients.tsx` page using `AdminEntityTable` (name, status)
       and `AdminEntityForm` (name, contact details, active toggle)
 - [x] 2.3 Wire into the `/admin/clients` route from `admin-area-shell`
-- [ ] 2.4 Apply Figma-matched styling (blocked until file is shared, see
-      `admin-area-shell/design.md`)
+- [x] 2.4 Apply Figma-matched styling
 
 ## 3. Verification
 

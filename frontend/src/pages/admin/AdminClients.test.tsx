@@ -58,7 +58,7 @@ describe('AdminClients', () => {
     renderWithQueryClient()
 
     await user.click(await screen.findByRole('button', { name: 'לקוח חדש' }))
-    await user.type(screen.getByLabelText('Name'), 'Acme')
+    await user.type(screen.getByLabelText('שם הלקוח'), 'Acme')
     await user.click(screen.getByRole('button', { name: 'יצירה' }))
 
     await waitFor(() => {
