@@ -300,3 +300,118 @@ describe('PATCH /admin/users/:id/role', () => {
     expect(response.status).toBe(400);
   });
 });
+
+describe('PATCH /admin/users/:id/status', () => {
+  afterEach(async () => {
+    await resetDatabase();
+  });
+
+  it('deactivates an active user', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+    const target = await createUser({ isActive: true });
+
+    const response = await request(app)
+      .patch(`/admin/users/${target.id}/status`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ isActive: false });
+
+    expect(response.status).toBe(200);
+    expect(response.body.user).toMatchObject({ id: target.id, isActive: false });
+    expect(response.body.user.passwordHash).toBeUndefined();
+  });
+
+  it('reactivates a deactivated user', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+    const target = await createUser({ isActive: false });
+
+    const response = await request(app)
+      .patch(`/admin/users/${target.id}/status`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ isActive: true });
+
+    expect(response.status).toBe(200);
+    expect(response.body.user).toMatchObject({ id: target.id, isActive: true });
+  });
+
+  it('setting isActive to the value the account already holds succeeds with 200', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+    const target = await createUser({ isActive: true });
+
+    const response = await request(app)
+      .patch(`/admin/users/${target.id}/status`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ isActive: true });
+
+    expect(response.status).toBe(200);
+    expect(response.body.user).toMatchObject({ id: target.id, isActive: true });
+  });
+
+  it('rejects a non-admin caller with 403 and leaves the target unchanged', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    const target = await createUser({ isActive: true });
+
+    const response = await request(app)
+      .patch(`/admin/users/${target.id}/status`)
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({ isActive: false });
+
+    expect(response.status).toBe(403);
+
+    const found = await prisma.user.findUniqueOrThrow({ where: { id: target.id } });
+    expect(found.isActive).toBe(true);
+  });
+
+  it('rejects an unauthenticated caller with 401', async () => {
+    const target = await createUser();
+
+    const response = await request(app).patch(`/admin/users/${target.id}/status`).send({ isActive: false });
+
+    expect(response.status).toBe(401);
+  });
+
+  it('rejects a missing isActive with 400', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+    const target = await createUser();
+
+    const response = await request(app)
+      .patch(`/admin/users/${target.id}/status`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({});
+
+    expect(response.status).toBe(400);
+  });
+
+  it('rejects a non-boolean isActive with 400', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+    const target = await createUser();
+
+    const response = await request(app)
+      .patch(`/admin/users/${target.id}/status`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ isActive: 'false' });
+
+    expect(response.status).toBe(400);
+  });
+
+  it('rejects a malformed id with 400', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+
+    const response = await request(app)
+      .patch('/admin/users/not-a-uuid/status')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ isActive: false });
+
+    expect(response.status).toBe(400);
+  });
+
+  it('returns 404 for an unknown user id', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+
+    const response = await request(app)
+      .patch(`/admin/users/${crypto.randomUUID()}/status`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ isActive: false });
+
+    expect(response.status).toBe(404);
+  });
+});
