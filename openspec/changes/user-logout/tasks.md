@@ -21,8 +21,8 @@
 
 - [x] 4.1 Add `logout(userId)` to `backend/src/services/auth.service.ts`, setting `sessionsValidFrom` to `new Date()` via `prisma.user.update`
 - [x] 4.2 Add `postLogout` to `backend/src/controllers/auth.controller.ts` — take the id from `req.user.sub` only, never the body, and respond `204` with no content
-- [x] 4.3 Register `authRouter.post('/logout', authenticate, postLogout)` in `backend/src/routes/auth.routes.ts` — unprefixed to match `/login` and `/me/password`, and with no rate limiter (D5)
-- [x] 4.4 Write the OpenAPI block for the route: `204`, `401` for missing/expired/revoked token, bearer security
+- [x] 4.3 Register `POST /logout` in `backend/src/routes/auth.routes.ts` — unprefixed to match `/login` and `/me/password`, with `logoutRateLimit` mounted *ahead* of `authenticate` so the token verify and user-row read sit behind the limiter (D5)
+- [x] 4.4 Write the OpenAPI block for the route: `204`, `401` for missing/expired/revoked token, `429` with `Retry-After`, bearer security
 
 ## 5. Backend tests (SCRUM-201)
 
@@ -33,6 +33,7 @@
 - [x] 5.5 Add a test that a body-supplied user id is ignored — another account's token still works after a caller logs out naming it
 - [x] 5.6 Add a test that logging in again after logout yields a working token while the pre-logout token stays refused
 - [x] 5.7 Run the backend suite and confirm no pre-existing test regressed from the `iat` requirement
+- [x] 5.8 Add tests for `logoutRateLimit`: the quota is spent by *tokenless* calls (proving the limiter precedes `authenticate`), passing it answers `429` with `Retry-After`, a valid-token caller is throttled too, and a logout inside the quota still returns `204`
 
 ## 6. Frontend logout call and teardown (SCRUM-195, SCRUM-196, SCRUM-198)
 
@@ -77,4 +78,4 @@
 - [x] 11.2 Manually verify end to end: log in, log out, confirm the login page and that the back button reveals no authenticated content
 - [x] 11.3 Manually verify two tabs with a remembered session: logging out in one ends the other
 - [ ] 11.4 Manually verify the captured-token case — copy a token, log out, confirm it is refused with `SESSION_REVOKED`
-- [x] 11.5 Confirm the Swagger page documents the new route and its `401` codes
+- [x] 11.5 Confirm the Swagger page documents the new route and its `401`/`429` codes

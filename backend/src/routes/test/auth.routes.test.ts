@@ -5,6 +5,7 @@ import { app } from '../../app.js';
 import { env } from '../../config/env.js';
 import { prisma } from '../../config/prisma.js';
 import { rateLimitStore } from '../../middleware/rateLimit.middleware.js';
+import { logoutRateLimitStore } from '../../middleware/writeRateLimit.middleware.js';
 import { createUser } from '../../test/factories.js';
 import { resetDatabase } from '../../test/resetDatabase.js';
 
@@ -189,7 +190,15 @@ describe('POST /login', () => {
 });
 
 describe('POST /logout', () => {
+  // The route's limiter is address-keyed and every case here calls it from the
+  // same test address, so the quota has to be cleared between cases or the
+  // later ones would start seeing 429s instead of what they assert.
+  beforeEach(async () => {
+    await logoutRateLimitStore.resetAll();
+  });
+
   afterEach(async () => {
+    await logoutRateLimitStore.resetAll();
     await flushAttemptWrites();
     await resetDatabase();
   });
@@ -302,6 +311,66 @@ describe('POST /logout', () => {
       .set('Authorization', `Bearer ${preLogoutToken}`);
     expect(preLogoutStillRefused.status).toBe(401);
     expect(preLogoutStillRefused.body.error.code).toBe('SESSION_REVOKED');
+  });
+});
+
+describe('logout rate limiting', () => {
+  const MAX = env.RATE_LIMIT_LOGOUT_MAX_REQUESTS;
+
+  beforeEach(async () => {
+    await logoutRateLimitStore.resetAll();
+  });
+
+  afterEach(async () => {
+    await logoutRateLimitStore.resetAll();
+    await flushAttemptWrites();
+    await resetDatabase();
+  });
+
+  /**
+   * Spends the whole quota with tokenless calls. That those count at all is
+   * the property under test as much as the quota itself: the limiter is
+   * mounted ahead of `authenticate` so the token verify and user-row read it
+   * performs sit *behind* the limiter, which is what stops an unauthenticated
+   * caller making the server do that work for free.
+   */
+  function exhaustQuota(): Promise<unknown[]> {
+    return Promise.all(
+      Array.from({ length: MAX }, () => request(app).post('/logout').expect(401)),
+    );
+  }
+
+  it('answers 429 with Retry-After once an address passes the logout quota', async () => {
+    await exhaustQuota();
+
+    const throttled = await request(app).post('/logout');
+
+    expect(throttled.status).toBe(429);
+    expect(Number(throttled.headers['retry-after'])).toBeGreaterThan(0);
+    expect(throttled.body).toEqual({
+      error: { code: 'TOO_MANY_REQUESTS', message: expect.any(String) },
+    });
+  });
+
+  it('throttles a caller holding a valid token too, not only tokenless ones', async () => {
+    const user = await createUser({ email: 'logout-quota@example.test' });
+    await exhaustQuota();
+
+    const throttled = await request(app)
+      .post('/logout')
+      .set('Authorization', `Bearer ${tokenFor(user)}`);
+
+    expect(throttled.status).toBe(429);
+  });
+
+  it('leaves a logout inside the quota working normally', async () => {
+    const user = await createUser({ email: 'logout-within-quota@example.test' });
+
+    const response = await request(app)
+      .post('/logout')
+      .set('Authorization', `Bearer ${tokenFor(user)}`);
+
+    expect(response.status).toBe(204);
   });
 });
 

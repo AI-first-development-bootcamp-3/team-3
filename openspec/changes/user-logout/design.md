@@ -153,8 +153,28 @@ handler never runs. The user id comes from `req.user.sub` and nothing else — a
 would be a way to log out other people. `204` with no body: there is nothing to report, and the client's
 teardown does not depend on the response content.
 
-No rate limiting. The endpoint requires a valid token, is idempotent, and writes one row — the
-`rateLimit` middleware exists to protect credential endpoints from guessing, which does not apply.
+**Rate limited, ahead of `authenticate`.** This reverses an earlier decision here that the route needed no
+limiter, on the reasoning that it requires a valid token, is idempotent, and writes one row, so the
+credential-guessing threat `rateLimit` exists for does not apply. That reasoning only covered the *handler*.
+It ignored `authenticate` itself, which runs a token verify and a user-row read before any token is known to
+be good — work an unauthenticated caller could make the server repeat for free. CodeQL's
+`js/missing-rate-limiting` flagged exactly this, on both handlers, and it was right.
+
+So `logoutRateLimit` (see `writeRateLimit.middleware.ts`) is mounted **first**, ahead of `authenticate`.
+Position is the whole point: that query flags each authorization-performing handler not *preceded* by a
+limiter it recognises, and a limiter placed after `authenticate` leaves `authenticate` unprotected both in
+the query's eyes and in fact. Running first makes it necessarily address-keyed — any identity read from a
+not-yet-verified token is as attacker-controlled as a spoofed `X-Forwarded-For`, the same trade-off
+`/me/password` already records. It gets its own store so logging out cannot consume a caller's report-write
+budget.
+
+A throttled logout is not a lockout: the client tears its session down in a `finally` regardless of the
+response (D8), so the caller still ends up logged out locally and only server-side revocation defers to the
+token's own expiry.
+
+*Alternative considered:* reusing `writeRateLimit` — rejected on two counts: it is subject-keyed and so
+documented as having to sit *after* `authenticate`, which is the position that fails here, and it would share
+one quota between logging out and saving reports.
 
 *Alternative considered:* **`DELETE /session`** — arguably more RESTful, but there is no session resource in
 this API to delete, and `POST /logout` is what the rest of the codebase's verb-ish auth routes look like.

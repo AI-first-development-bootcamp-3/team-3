@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { patchMyPassword, postLogin, postLogout } from '../controllers/auth.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { rateLimit } from '../middleware/rateLimit.middleware.js';
+import { logoutRateLimit } from '../middleware/writeRateLimit.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
 import { changePasswordBodySchema, loginBodySchema, type LoginBody } from '../types/auth.schema.js';
 
@@ -130,9 +131,32 @@ authRouter.post(
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
+ *       429:
+ *         description: Too many logout requests from this client address. Retry after the duration given in the `Retry-After` header.
+ *         headers:
+ *           Retry-After:
+ *             schema: { type: integer }
+ *             description: Seconds to wait before retrying.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
  */
-authRouter.use('/logout', rateLimit({}));
-authRouter.post('/logout', authenticate, postLogout);
+authRouter.post(
+  '/logout',
+  // Ahead of `authenticate` on purpose, so the token verify and user-row read
+  // that middleware performs are themselves behind the limiter rather than in
+  // front of it. Address-keyed as a consequence - see the middleware's own
+  // comment, and the same trade-off recorded on /me/password below.
+  //
+  // Deliberately NOT the `rateLimit` used by the credential routes below,
+  // which an earlier autofix attempt wired onto this route: that one counts
+  // only *failed* attempts, so a valid token collecting 204s would never be
+  // counted, and its store is shared across credential routes by design - so
+  // logging out would draw down the same budget as logging in.
+  logoutRateLimit,
+  authenticate,
+  postLogout,
+);
 
 authRouter.patch(
   '/me/password',
