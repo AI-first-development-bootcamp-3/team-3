@@ -45,6 +45,34 @@ const envSchema = z.object({
   RATE_LIMIT_EMAIL_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
   RATE_LIMIT_IP_MAX_ATTEMPTS: z.coerce.number().int().positive().default(50),
   RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(900),
+  // Requests one authenticated caller may make to the report write routes
+  // within that same window — every request counts, not just failures. A
+  // person saves a day of work a handful of times; 60 per 15 minutes leaves
+  // room for retries and an impatient reload while still bounding how fast one
+  // token can drive multi-row inserts.
+  RATE_LIMIT_WRITE_MAX_REQUESTS: z.coerce.number().int().positive().default(60),
+  // Requests to the report read routes (the monthly list) one *address* may
+  // make within that same window. Address-keyed, not subject-keyed, because
+  // this limiter runs ahead of `authenticate` (see writeRateLimit.middleware.ts)
+  // so there is no verified identity yet. Sized as a generous per-person read
+  // budget — a page load plus heavy month navigation is well under 60 — times
+  // the same ~10-people-per-office-NAT assumption as RATE_LIMIT_IP_MAX_ATTEMPTS.
+  RATE_LIMIT_READ_MAX_REQUESTS: z.coerce.number().int().positive().default(600),
+  // Requests to POST /logout one *address* may make within that same window.
+  // Address-keyed, not subject-keyed, because this limiter deliberately runs
+  // ahead of `authenticate` (see writeRateLimit.middleware.ts), so there is no
+  // verified identity yet. Sized on the same ~10-people-per-office-NAT
+  // assumption as RATE_LIMIT_IP_MAX_ATTEMPTS: logging out is a handful of
+  // requests per person per window, so 60 leaves ample headroom.
+  RATE_LIMIT_LOGOUT_MAX_REQUESTS: z.coerce.number().int().positive().default(60),
+  // Durable lockout tier above the in-memory throttle: derived from
+  // login_attempts rows rather than a stored flag, so it survives restart
+  // and is shared across replicas. Threshold and window must sit above the
+  // throttle's so ordinary mistyping never reaches this tier - see
+  // openspec/changes/login-account-lockout/design.md.
+  LOCKOUT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(10),
+  LOCKOUT_WINDOW_HOURS: z.coerce.number().int().positive().default(24),
+  LOCKOUT_DURATION_MINUTES: z.coerce.number().int().positive().default(30),
   // How many reverse-proxy hops in front of this service to trust when
   // resolving a client's address from X-Forwarded-For. Passed straight to
   // Express's `trust proxy` setting. Disabled by default: trusting a proxy
@@ -59,6 +87,12 @@ const envSchema = z.object({
 }).refine((data) => data.RATE_LIMIT_IP_MAX_ATTEMPTS >= data.RATE_LIMIT_EMAIL_MAX_ATTEMPTS, {
   message: 'RATE_LIMIT_IP_MAX_ATTEMPTS must be >= RATE_LIMIT_EMAIL_MAX_ATTEMPTS',
   path: ['RATE_LIMIT_IP_MAX_ATTEMPTS'],
+}).refine((data) => data.LOCKOUT_MAX_ATTEMPTS > data.RATE_LIMIT_EMAIL_MAX_ATTEMPTS, {
+  message: 'LOCKOUT_MAX_ATTEMPTS must be > RATE_LIMIT_EMAIL_MAX_ATTEMPTS, so the throttle catches ordinary mistyping before the lock does',
+  path: ['LOCKOUT_MAX_ATTEMPTS'],
+}).refine((data) => data.LOCKOUT_WINDOW_HOURS * 3600 > data.RATE_LIMIT_WINDOW_SECONDS, {
+  message: 'LOCKOUT_WINDOW_HOURS must be longer than RATE_LIMIT_WINDOW_SECONDS',
+  path: ['LOCKOUT_WINDOW_HOURS'],
 });
 
 export type Env = z.infer<typeof envSchema>;

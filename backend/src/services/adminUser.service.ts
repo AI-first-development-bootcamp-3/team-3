@@ -116,6 +116,16 @@ export async function changeUserRole(id: string, role: Role): Promise<CreatedUse
   return updateUserOrNotFound(id, { role });
 }
 
+/**
+ * Deactivates or reactivates a user. No self-deactivation or last-admin
+ * restriction (see design.md D6 - consistent with changeUserRole above).
+ * `update` is not intercepted by the soft-delete extension, so this reaches
+ * and reactivates an already-deactivated row with no opt-out needed.
+ */
+export async function setUserActive(id: string, isActive: boolean): Promise<CreatedUser> {
+  return updateUserOrNotFound(id, { isActive });
+}
+
 async function updateUserOrNotFound(id: string, data: Prisma.UserUpdateInput): Promise<CreatedUser> {
   try {
     return await prisma.user.update({

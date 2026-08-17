@@ -26,3 +26,43 @@ export const createTimeReportBodySchema = z
   });
 
 export type CreateTimeReportBody = z.infer<typeof createTimeReportBodySchema>;
+
+/**
+ * One project row of a day. Unlike the single-report body the description is
+ * optional: the דיווח ידני screen offers it as an extra line, so demanding it
+ * would block a flow the design allows.
+ */
+const timeReportRowSchema = z
+  .object({
+    workLocation: z.enum(WorkLocation),
+    startTime: hhmmSchema,
+    endTime: hhmmSchema,
+    clientId: z.string().uuid(),
+    projectId: z.string().uuid(),
+    taskId: z.string().uuid(),
+    description: z.string().trim().max(2000).default(''),
+  })
+  .refine((data) => data.endTime >= data.startTime, {
+    message: 'End time must not be before start time',
+    path: ['endTime'],
+  });
+
+export const MAX_ROWS_PER_DAY = 20;
+
+export const createTimeReportBatchBodySchema = z.object({
+  date: calendarDateSchema,
+  rows: z
+    .array(timeReportRowSchema)
+    .min(1, 'At least one project row is required')
+    .max(MAX_ROWS_PER_DAY, `A day cannot hold more than ${MAX_ROWS_PER_DAY} rows`),
+});
+
+export type CreateTimeReportBatchBody = z.infer<typeof createTimeReportBatchBodySchema>;
+export type TimeReportRow = z.infer<typeof timeReportRowSchema>;
+
+export const listTimeReportsQuerySchema = z.object({
+  month: z.coerce.number().int().min(1, 'Month must be 1–12').max(12, 'Month must be 1–12'),
+  year: z.coerce.number().int().min(2000, 'Year out of range').max(2100, 'Year out of range'),
+});
+
+export type ListTimeReportsQuery = z.infer<typeof listTimeReportsQuerySchema>;

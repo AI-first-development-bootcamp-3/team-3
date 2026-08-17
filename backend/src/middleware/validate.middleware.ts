@@ -21,6 +21,21 @@ function issuesToDetails(error: ZodError): ErrorDetail[] {
  * trusted, typed data. All schema violations across all three are collected
  * into a single 400 response rather than failing on the first.
  */
+function assignParsed(req: Request, key: keyof ValidationSchemas, data: unknown): void {
+  if (key === 'query') {
+    // Express 5 exposes `query` as a read-only getter — replace it wholesale.
+    Object.defineProperty(req, 'query', {
+      value: data,
+      writable: true,
+      configurable: true,
+      enumerable: true,
+    });
+    return;
+  }
+
+  req[key] = data;
+}
+
 export function validate(schemas: ValidationSchemas) {
   return (req: Request, _res: Response, next: NextFunction): void => {
     const details: ErrorDetail[] = [];
@@ -30,7 +45,7 @@ export function validate(schemas: ValidationSchemas) {
 
       const result = schema.safeParse(req[key]);
       if (result.success) {
-        req[key] = result.data;
+        assignParsed(req, key, result.data);
       } else {
         details.push(...issuesToDetails(result.error));
       }

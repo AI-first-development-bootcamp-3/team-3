@@ -15,6 +15,29 @@ export interface Report {
   description: string
 }
 
+/** One project row of a day, as sent to `POST /reports/batch`. */
+export type ReportRowInput = Omit<Report, 'id' | 'userId' | 'date'>
+
+export interface CreateReportBatchInput {
+  date: ISODateString
+  rows: ReportRowInput[]
+}
+
+export interface CreateReportBatchResult {
+  reports: Report[]
+}
+
+export interface TimeReportListItem extends Report {
+  clientName: string
+  projectName: string
+  taskName: string
+  durationHours: number
+}
+
+export interface ListReportsResult {
+  reports: TimeReportListItem[]
+}
+
 export interface ReportingTaskOption {
   id: Id
   name: string

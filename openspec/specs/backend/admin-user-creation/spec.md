@@ -1,11 +1,8 @@
 # backend/admin-user-creation Specification
 
 ## Purpose
-
 Lets an administrator create a new user account with a temporary password, since self-registration doesn't exist by design (only the admin registers users).
-
 ## Requirements
-
 ### Requirement: Administrator-only user creation
 
 The service SHALL let an authenticated administrator create a user account by supplying an email, display name, and role. The created user SHALL have `mustChangePassword` set to true. A caller who is authenticated but not an administrator SHALL be rejected with `403`; an unauthenticated caller SHALL be rejected with `401`.
@@ -53,3 +50,4 @@ The service SHALL reject a request missing a required field, with an invalid ema
 
 - **WHEN** a request supplies a `temporaryPassword` under 8 characters
 - **THEN** the service responds `400`
+

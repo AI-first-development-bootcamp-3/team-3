@@ -18,12 +18,18 @@ export interface RequestOptions {
 export class ApiError extends Error {
   status: number
   body: unknown
+  /** Seconds the client should wait before retrying, from the `Retry-After`
+   * header - present on 429 (throttled) and 423 (locked) responses. */
+  retryAfterSeconds?: number
 
-  constructor(status: number, body: unknown) {
+  constructor(status: number, body: unknown, retryAfterSeconds?: number) {
     super(`API request failed with status ${status}`)
     this.name = 'ApiError'
     this.status = status
     this.body = body
+    if (retryAfterSeconds !== undefined) {
+      this.retryAfterSeconds = retryAfterSeconds
+    }
   }
 }
 
@@ -61,14 +67,35 @@ export async function request<T>(
 
   if (!response.ok) {
     if (response.status === 401 && handleUnauthorizedGlobally) {
-      sessionStore.getState().clearSession()
-      notification.warning({
-        message: 'Session Expired',
-        description: 'Session expired, please log in again',
-      })
-      redirectToLogin()
+      // sessionStore's proactive expiry timer may have already torn this
+      // session down for the same underlying expiry - skip the redundant
+      // toast/redirect rather than showing it twice.
+      if (sessionStore.getState().token) {
+        sessionStore.getState().clearSession()
+        // The body may be undefined for a non-JSON response, and its shape
+        // isn't guaranteed even when present - read the code defensively.
+        // SESSION_REVOKED (backend/src/middleware/auth.middleware.ts) means
+        // the server deliberately ended the session (e.g. revoked from another
+        // tab); every other 401 code (TOKEN_EXPIRED, ACCOUNT_DEACTIVATED,
+        // plain UNAUTHORIZED, ...) keeps the generic expiry copy.
+        const code = (responseBody as { error?: { code?: string } } | undefined)?.error?.code
+        if (code === 'SESSION_REVOKED') {
+          notification.warning({
+            message: 'החיבור נותק',
+            description: 'התנתקת מהמערכת',
+          })
+        } else {
+          notification.warning({
+            message: 'החיבור פג ונותק',
+            description: 'יש להתחבר שוב',
+          })
+        }
+        redirectToLogin()
+      }
     }
-    throw new ApiError(response.status, responseBody)
+    const retryAfterHeader = response.headers.get('retry-after')
+    const retryAfterSeconds = retryAfterHeader ? Number(retryAfterHeader) : undefined
+    throw new ApiError(response.status, responseBody, retryAfterSeconds)
   }
 
   return responseBody as T

@@ -1,7 +1,7 @@
 :root {
   --text: #6b6375;
   --text-h: #08060d;
-  --bg: #fff;
+  --bg: #f6f6f6;
   --border: #e5e4e7;
   --code-bg: #f4f3ec;
   --accent: #aa3bff;
@@ -17,7 +17,7 @@
   /* mobile-first: base is the small-screen size, desktop scales up below */
   font: 16px/145% var(--sans);
   letter-spacing: 0.18px;
-  color-scheme: light dark;
+  color-scheme: light;
   color: var(--text);
   background: var(--bg);
   font-synthesis: none;
@@ -30,25 +30,15 @@
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
+html,
+body,
+#root {
+  min-height: 100svh;
+  background: #f6f6f6;
 }
 
 #root {
-  max-width: 1126px;
-  margin: 0 auto;
-  min-height: 100svh;
+  width: 100%;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -109,7 +99,7 @@ main {
 
 .app-shell {
   min-height: 100svh;
-  background: #f4f5f7;
+  background: #f6f6f6;
 }
 
 .admin-shell {
