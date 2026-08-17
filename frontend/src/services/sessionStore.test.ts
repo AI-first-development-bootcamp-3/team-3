@@ -21,10 +21,10 @@ describe('sessionStore', () => {
     sessionStore.getState().clearSession()
   })
 
-  it('persists to sessionStorage when not remembered', () => {
+  it('persists to localStorage regardless of rememberMe, so any open tab can see it', () => {
     sessionStore.getState().setSession(user, 'token-a', future, false)
-    expect(window.sessionStorage.getItem('abra.session')).not.toBeNull()
-    expect(window.localStorage.getItem('abra.session')).toBeNull()
+    expect(window.localStorage.getItem('abra.session')).not.toBeNull()
+    expect(window.sessionStorage.getItem('abra.session')).toBeNull()
   })
 
   it('persists to localStorage when remembered', () => {
@@ -52,7 +52,7 @@ describe('sessionStore', () => {
   })
 
   it('rehydrateSession discards an expired session', () => {
-    window.sessionStorage.setItem('abra.session', JSON.stringify({ user, token: 'token-a', expiresAt: past }))
+    window.localStorage.setItem('abra.session', JSON.stringify({ user, token: 'token-a', expiresAt: past }))
 
     sessionStore.getState().rehydrateSession()
 
@@ -60,20 +60,11 @@ describe('sessionStore', () => {
   })
 
   it('rehydrateSession discards a malformed session', () => {
-    window.sessionStorage.setItem('abra.session', JSON.stringify({ user, expiresAt: future }))
+    window.localStorage.setItem('abra.session', JSON.stringify({ user, expiresAt: future }))
 
     sessionStore.getState().rehydrateSession()
 
     expect(sessionStore.getState().token).toBeNull()
-  })
-
-  it('rehydrateSession prefers sessionStorage when both hold an entry', () => {
-    window.sessionStorage.setItem('abra.session', JSON.stringify({ user, token: 'from-session', expiresAt: future }))
-    window.localStorage.setItem('abra.session', JSON.stringify({ user, token: 'from-local', expiresAt: future }))
-
-    sessionStore.getState().rehydrateSession()
-
-    expect(sessionStore.getState().token).toBe('from-session')
   })
 
   it('clearSession leaves no persisted copy in either storage for a remembered session', () => {

@@ -74,7 +74,7 @@
 ## 11. Verification
 
 - [x] 11.1 Run `openspec validate --strict user-logout` and resolve any findings
-- [ ] 11.2 Manually verify end to end: log in, log out, confirm the login page and that the back button reveals no authenticated content
-- [ ] 11.3 Manually verify two tabs with a remembered session: logging out in one ends the other
+- [x] 11.2 Manually verify end to end: log in, log out, confirm the login page and that the back button reveals no authenticated content
+- [x] 11.3 Manually verify two tabs with a remembered session: logging out in one ends the other
 - [ ] 11.4 Manually verify the captured-token case — copy a token, log out, confirm it is refused with `SESSION_REVOKED`
 - [x] 11.5 Confirm the Swagger page documents the new route and its `401` codes

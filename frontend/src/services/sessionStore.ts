@@ -29,8 +29,11 @@ function isValidStoredSession(stored: StoredSession | null): stored is StoredSes
 export const sessionStore = create<SessionState>((set, get) => ({
   user: null,
   token: null,
-  setSession: (user, token, expiresAt, rememberMe) => {
-    writeSession(rememberMe ? window.localStorage : window.sessionStorage, { user, token, expiresAt })
+  // rememberMe no longer selects the storage area (D-cross-tab: every
+  // session lives in localStorage so any open tab can see it); the backend
+  // still uses it to set a longer `expiresAt` for a remembered session.
+  setSession: (user, token, expiresAt, _rememberMe) => {
+    writeSession(window.localStorage, { user, token, expiresAt })
     set({ user, token })
     armExpiryTimer(expiresAt)
   },
@@ -38,10 +41,9 @@ export const sessionStore = create<SessionState>((set, get) => ({
     set({ user })
     const { token } = get()
     if (!token) return
-    const storage = readSession(window.localStorage) ? window.localStorage : window.sessionStorage
-    const stored = readSession(storage)
+    const stored = readSession(window.localStorage)
     if (stored) {
-      writeSession(storage, { ...stored, user })
+      writeSession(window.localStorage, { ...stored, user })
     }
   },
   clearSession: () => {
@@ -51,7 +53,7 @@ export const sessionStore = create<SessionState>((set, get) => ({
     clearExpiryTimer()
   },
   rehydrateSession: () => {
-    const stored = readSession(window.sessionStorage) ?? readSession(window.localStorage)
+    const stored = readSession(window.localStorage)
     if (!isValidStoredSession(stored)) return
     set({ user: stored.user as User, token: stored.token })
     armExpiryTimer(stored.expiresAt)

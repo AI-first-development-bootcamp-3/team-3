@@ -249,7 +249,7 @@ describe('Login page', () => {
     expect(sessionStore.getState().token).toBeNull()
   })
 
-  it('sends rememberMe: false and stores the session in sessionStorage when left unchecked', async () => {
+  it('sends rememberMe: false and still stores the session in localStorage when left unchecked', async () => {
     const fetchMock = mockFetchOnce({
       ok: true,
       status: 200,
@@ -276,8 +276,8 @@ describe('Login page', () => {
     })
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(JSON.parse(requestInit.body as string)).toMatchObject({ rememberMe: false })
-    expect(window.sessionStorage.getItem('abra.session')).not.toBeNull()
-    expect(window.localStorage.getItem('abra.session')).toBeNull()
+    expect(window.localStorage.getItem('abra.session')).not.toBeNull()
+    expect(window.sessionStorage.getItem('abra.session')).toBeNull()
   })
 
   it('sends rememberMe: true and stores the session in localStorage when checked', async () => {
