@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Tag } from 'antd'
+import { Button, Tag, notification } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import AdminEntityTable from '../../components/AdminEntityTable'
 import AdminClientForm from '../../components/AdminClientForm'
@@ -53,7 +53,6 @@ function AdminClients() {
     },
   ]
 
-function AdminClients() {
   return (
     <div dir="rtl">
       <h1>לקוחות</h1>
@@ -63,9 +62,17 @@ function AdminClients() {
           key={editingClient.id}
           initialValues={{ name: editingClient.name, contactDetails: editingClient.contactDetails ?? '' }}
           active={editingClient.isActive}
-          onActiveChange={(nextActive) => {
-            updateMutation.mutate({ id: editingClient.id, isActive: nextActive })
+          onActiveChange={async (nextActive) => {
+            // Optimistic, but rolled back on failure - the toggle must not
+            // stay flipped when the server rejected the change.
+            const previous = editingClient
             setEditingClient({ ...editingClient, isActive: nextActive })
+            try {
+              await updateMutation.mutateAsync({ id: editingClient.id, isActive: nextActive })
+            } catch {
+              setEditingClient(previous)
+              notification.error({ message: 'שגיאה', description: 'לא ניתן היה לעדכן את סטטוס הלקוח' })
+            }
           }}
           submitLabel="שמירה"
           onSubmit={async (values) => {

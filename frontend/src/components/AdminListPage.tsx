@@ -1,8 +1,9 @@
-import { Button, Input, Table } from 'antd'
+import { Button, Input } from 'antd'
 import type { TableProps } from 'antd'
 import { SearchOutlined } from '@ant-design/icons'
 import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import AdminEntityTable from './AdminEntityTable'
 
 interface AdminListPageProps<T> {
   title: string
@@ -55,7 +56,7 @@ function AdminListPage<T extends object>({
 
       {children}
 
-      <Table
+      <AdminEntityTable
         columns={columns}
         dataSource={filteredData}
         pagination={{ pageSize: 10, align: 'center' }}
