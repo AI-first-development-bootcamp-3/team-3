@@ -202,4 +202,12 @@ timeReportRouter.post(
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
  */
-timeReportRouter.get('/me/reporting-options', authenticate, getMyReportingOptions);
+timeReportRouter.get(
+  '/me/reporting-options',
+  // Ahead of `authenticate` on purpose, so the token verify and user-row read
+  // that middleware performs sit behind the limiter rather than in front of it.
+  // Address-keyed as a consequence — see the middleware's own comment.
+  readRateLimit,
+  authenticate,
+  getMyReportingOptions,
+);
