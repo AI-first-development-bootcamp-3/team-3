@@ -1,7 +1,14 @@
 import type { RequestHandler } from 'express';
-import { createTimeReport, listReportingOptions } from '../services/timeReport.service.js';
+import {
+  createTimeReport,
+  createTimeReportBatch,
+  listReportingOptions,
+} from '../services/timeReport.service.js';
 import { AppError } from '../types/errors.js';
-import type { CreateTimeReportBody } from '../types/timeReport.schema.js';
+import type {
+  CreateTimeReportBatchBody,
+  CreateTimeReportBody,
+} from '../types/timeReport.schema.js';
 
 export const postTimeReport: RequestHandler = async (req, res, next) => {
   try {
@@ -12,6 +19,20 @@ export const postTimeReport: RequestHandler = async (req, res, next) => {
     const body = req.body as CreateTimeReportBody;
     const report = await createTimeReport(req.user.sub, body);
     res.status(201).json(report);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const postTimeReportBatch: RequestHandler = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      next(AppError.unauthorized());
+      return;
+    }
+    const body = req.body as CreateTimeReportBatchBody;
+    const reports = await createTimeReportBatch(req.user.sub, body);
+    res.status(201).json({ reports });
   } catch (error) {
     next(error);
   }

@@ -103,20 +103,19 @@ describe('Reports home shell', () => {
     expect(label).toHaveTextContent(before ?? '')
   })
 
-  it('reveals the entry form on דיווח ידני and hides it on חזרה', async () => {
+  it('opens the manual report on דיווח ידני and returns home on סגירה', async () => {
     signIn()
     mockReportingOptions()
     const user = userEvent.setup()
     renderHome()
 
-    expect(screen.queryByLabelText('פירוט')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'דיווח ידני' }))
-    expect(await screen.findByLabelText('פירוט')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'דיווח שעות' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'דיווח ידני' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'דיווח שעות' })).not.toBeInTheDocument()
     expect(screen.queryByText('אין דיווחים להצגה')).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'חזרה' }))
-    expect(screen.queryByLabelText('פירוט')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'סגירה' }))
+    expect(screen.getByRole('heading', { name: 'דיווח שעות' })).toBeInTheDocument()
     expect(screen.getByText('אין דיווחים להצגה')).toBeInTheDocument()
     expect(screen.getAllByText('אין נתונים עדיין')).toHaveLength(5)
   })

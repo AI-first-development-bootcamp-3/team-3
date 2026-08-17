@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Dayjs } from 'dayjs'
-import ReportEntryForm from '../components/ReportEntryForm'
+import ManualReport from '../components/ManualReport'
 import dayjs from '../services/dayjs'
 import './Reports.css'
 
@@ -15,6 +15,10 @@ const KPI_LABELS = [
 function Reports() {
   const [month, setMonth] = useState<Dayjs>(() => dayjs())
   const [showEntry, setShowEntry] = useState(false)
+
+  if (showEntry) {
+    return <ManualReport onClose={() => setShowEntry(false)} />
+  }
 
   return (
     <div className="home-shell">
@@ -55,29 +59,18 @@ function Reports() {
         </button>
       </div>
 
-      {showEntry ? (
-        <>
-          <button type="button" className="home-shell__back" onClick={() => setShowEntry(false)}>
-            חזרה
-          </button>
-          <ReportEntryForm />
-        </>
-      ) : (
-        <>
-          <section className="home-shell__kpis" aria-label="סיכום חודשי">
-            {KPI_LABELS.map((label) => (
-              <article key={label} className="home-shell__kpi">
-                <h2>{label}</h2>
-                <p>אין נתונים עדיין</p>
-              </article>
-            ))}
-          </section>
-          <section className="home-shell__daily">
-            <h2>פירוט יומי</h2>
-            <p>אין דיווחים להצגה</p>
-          </section>
-        </>
-      )}
+      <section className="home-shell__kpis" aria-label="סיכום חודשי">
+        {KPI_LABELS.map((label) => (
+          <article key={label} className="home-shell__kpi">
+            <h2>{label}</h2>
+            <p>אין נתונים עדיין</p>
+          </article>
+        ))}
+      </section>
+      <section className="home-shell__daily">
+        <h2>פירוט יומי</h2>
+        <p>אין דיווחים להצגה</p>
+      </section>
     </div>
   )
 }

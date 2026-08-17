@@ -169,10 +169,152 @@ describe('POST /reports', () => {
   });
 });
 
+describe('POST /reports/batch', () => {
+  afterEach(async () => {
+    await resetDatabase();
+  });
+
+  async function aHierarchy() {
+    const client = await createClient({ name: 'Acme' });
+    const project = await createProject({ name: 'Website', clientId: client.id });
+    const task = await createTask({ name: 'Design', projectId: project.id });
+    return { client, project, task };
+  }
+
+  function rowFor(
+    { client, project, task }: Awaited<ReturnType<typeof aHierarchy>>,
+    overrides: Record<string, unknown> = {},
+  ) {
+    return {
+      workLocation: 'OFFICE',
+      startTime: '09:00',
+      endTime: '13:00',
+      clientId: client.id,
+      projectId: project.id,
+      taskId: task.id,
+      description: 'Morning',
+      ...overrides,
+    };
+  }
+
+  it('creates every row of the day and stamps them with the caller and date', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    const first = await aHierarchy();
+    const secondClient = await createClient({ name: 'Globaly' });
+    const secondProject = await createProject({ name: 'App', clientId: secondClient.id });
+    const secondTask = await createTask({ name: 'Build', projectId: secondProject.id });
+
+    const response = await request(app)
+      .post('/reports/batch')
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({
+        date: '2026-08-17',
+        rows: [
+          rowFor(first),
+          {
+            workLocation: 'HOME',
+            startTime: '13:00',
+            endTime: '18:00',
+            clientId: secondClient.id,
+            projectId: secondProject.id,
+            taskId: secondTask.id,
+            description: 'Afternoon',
+          },
+        ],
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.reports).toHaveLength(2);
+    expect(response.body.reports[0]).toMatchObject({
+      userId: employee.id,
+      taskId: first.task.id,
+      date: '2026-08-17',
+      startTime: '09:00',
+      endTime: '13:00',
+    });
+    expect(response.body.reports[1]).toMatchObject({ taskId: secondTask.id, workLocation: 'HOME' });
+    expect(await prisma.timeReport.count()).toBe(2);
+  });
+
+  it('stores a row without a description', async () => {
+    const employee = await createUser();
+    const hierarchy = await aHierarchy();
+
+    const response = await request(app)
+      .post('/reports/batch')
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({ date: '2026-08-17', rows: [rowFor(hierarchy, { description: undefined })] });
+
+    expect(response.status).toBe(201);
+    expect(response.body.reports[0].description).toBe('');
+  });
+
+  it('rejects an unauthenticated caller with 401 and creates no row', async () => {
+    const response = await request(app)
+      .post('/reports/batch')
+      .send({ date: '2026-08-17', rows: [] });
+
+    expect(response.status).toBe(401);
+    expect(await prisma.timeReport.count()).toBe(0);
+  });
+
+  it('rejects a day with no rows', async () => {
+    const employee = await createUser();
+
+    const response = await request(app)
+      .post('/reports/batch')
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({ date: '2026-08-17', rows: [] });
+
+    expect(response.status).toBe(400);
+    expect(await prisma.timeReport.count()).toBe(0);
+  });
+
+  it('rolls back the whole day when one row has a broken hierarchy', async () => {
+    const employee = await createUser();
+    const hierarchy = await aHierarchy();
+    const otherProject = await createProject({ name: 'Other' });
+
+    const response = await request(app)
+      .post('/reports/batch')
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({
+        date: '2026-08-17',
+        rows: [rowFor(hierarchy), rowFor(hierarchy, { projectId: otherProject.id })],
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.details).toContainEqual(
+      expect.objectContaining({ field: 'rows.1.taskId' }),
+    );
+    expect(await prisma.timeReport.count()).toBe(0);
+  });
+
+  it('names the row whose end time precedes its start time', async () => {
+    const employee = await createUser();
+    const hierarchy = await aHierarchy();
+
+    const response = await request(app)
+      .post('/reports/batch')
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({
+        date: '2026-08-17',
+        rows: [rowFor(hierarchy), rowFor(hierarchy, { startTime: '18:00', endTime: '09:00' })],
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.details).toContainEqual(
+      expect.objectContaining({ field: 'rows.1.endTime' }),
+    );
+    expect(await prisma.timeReport.count()).toBe(0);
+  });
+});
+
 describe('OpenAPI for time reports', () => {
-  it('documents POST /reports and GET /me/reporting-options', () => {
+  it('documents POST /reports, POST /reports/batch and GET /me/reporting-options', () => {
     const spec = openApiSpec as { paths?: Record<string, { post?: unknown; get?: unknown }> };
     expect(spec.paths?.['/reports']).toHaveProperty('post');
+    expect(spec.paths?.['/reports/batch']).toHaveProperty('post');
     expect(spec.paths?.['/me/reporting-options']).toHaveProperty('get');
   });
 });
