@@ -1,6 +1,6 @@
 ## Purpose
 
-The Hebrew RTL, mobile-first form an employee uses to report an absence: choosing a type, a single date or a date range, seeing the resulting working-day count, and seeing conflict or validation errors against the specific date(s) involved.
+The Hebrew RTL, mobile-first form an employee uses to report an absence: choosing a type, a single date or a date range, seeing the resulting working-day count, and seeing conflict or validation errors against the specific date(s) involved. Reachable both as the "דיווח היעדרות" tab of the existing daily-report entry modal and as its own `/absences` route.
 
 ## ADDED Requirements
 
@@ -12,6 +12,20 @@ The form SHALL present a dropdown of exactly the four defined absence types with
 
 - **WHEN** the form is submitted without a type chosen
 - **THEN** submission is blocked and an inline error is shown against the type field
+
+### Requirement: Half-day is selectable only for Vacation
+
+The type dropdown SHALL offer a half-day and a full-day row for Vacation specifically (חופשה - חצי יום / חופשה - יום מלא). Sick, Reserve duty, and Other SHALL NOT offer a half-day choice and SHALL always submit as full-day.
+
+#### Scenario: Vacation half-day selected
+
+- **WHEN** the employee selects the Vacation half-day row
+- **THEN** the submitted request has `type: VACATION` and `halfDay: true`
+
+#### Scenario: Non-Vacation type has no half-day choice
+
+- **WHEN** the employee selects Sick, Reserve duty, or Other
+- **THEN** the submitted request has `halfDay: false`, with no half-day control shown for that type
 
 ### Requirement: Single date or date-range input
 

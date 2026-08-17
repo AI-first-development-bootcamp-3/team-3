@@ -29,6 +29,18 @@ describe('AppError', () => {
     });
   });
 
+  it('carries details on conflict too, e.g. per-date clashes', () => {
+    const error = AppError.conflict('dates clash', [{ field: '2026-08-16', message: 'overlaps an existing absence' }]);
+
+    expect(error.toResponseBody()).toEqual({
+      error: {
+        code: 'CONFLICT',
+        message: 'dates clash',
+        details: [{ field: '2026-08-16', message: 'overlaps an existing absence' }],
+      },
+    });
+  });
+
   const cases: Array<[AppError, number, string]> = [
     [AppError.badRequest('x'), 400, 'BAD_REQUEST'],
     [AppError.unauthorized(), 401, 'UNAUTHORIZED'],

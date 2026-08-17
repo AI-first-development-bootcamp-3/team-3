@@ -66,6 +66,8 @@ interface Props {
   onSaved?: () => void
   initialDate?: string
   headerMeta?: ManualReportHeaderMeta
+  /** Omitted on any route with no sibling Absence tab to switch to. */
+  onSwitchToAbsence?: () => void
 }
 
 const STATUS_ICONS: Record<ManualReportHeaderTone, string> = {
@@ -164,7 +166,7 @@ function deriveHeader(
 /**
  * Desktop דיווח ידני side panel — Figma frame 1:17385 beside the hours home.
  */
-function ManualReport({ onClose, onSaved, initialDate, headerMeta }: Props) {
+function ManualReport({ onClose, onSaved, initialDate, headerMeta, onSwitchToAbsence }: Props) {
   const { message } = App.useApp()
   const [options, setOptions] = useState<ReportingOptions | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -397,8 +399,15 @@ function ManualReport({ onClose, onSaved, initialDate, headerMeta }: Props) {
           <button type="button" role="tab" className="manual-report__tab manual-report__tab--active" aria-selected="true">
             דיווח ידני
           </button>
-          <button type="button" role="tab" className="manual-report__tab" aria-selected="false" disabled>
-            דיווח העדרות
+          <button
+            type="button"
+            role="tab"
+            className="manual-report__tab"
+            aria-selected="false"
+            disabled={!onSwitchToAbsence}
+            onClick={onSwitchToAbsence}
+          >
+            דיווח היעדרות
           </button>
         </div>
 

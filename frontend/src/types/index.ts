@@ -16,4 +16,4 @@ export type {
   ReportingProjectOption,
   ReportingTaskOption,
 } from './report'
-export type { Absence, AbsenceType } from './absence'
+export type { Absence, AbsenceType, CreateAbsenceInput } from './absence'

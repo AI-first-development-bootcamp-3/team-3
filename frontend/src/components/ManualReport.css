@@ -206,7 +206,7 @@
 
 .manual-report__tabs {
   display: flex;
-  justify-content: flex-start;
+  flex-direction: row-reverse;
   gap: 0;
   margin-bottom: 24px;
   border-bottom: 1px solid var(--mr-divider);
@@ -221,7 +221,13 @@
   font-weight: 500;
   line-height: 21px;
   letter-spacing: 0.35px;
-  cursor: not-allowed;
+  cursor: pointer;
+}
+
+.manual-report__tab:disabled {
+  opacity: 0.5;
+  cursor: default;
+  pointer-events: none;
 }
 
 .manual-report__tab--active {

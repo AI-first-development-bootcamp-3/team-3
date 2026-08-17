@@ -1,30 +1,35 @@
-## 0. Prerequisites (blocking, outside this change's scope — see design.md Context)
+## 0. Prerequisites (outside this change's scope — see design.md Context)
 
-- [ ] 0.1 Sync this branch onto `origin/development` (98 commits behind) — brings in the `Absence`/`AbsenceType` schema (SCRUM-151) and `workingDays.service.ts` (SCRUM-155/156) that section 1 depends on
-- [ ] 0.2 Resolve the conflict-validation dependency (SCRUM-145) — merge `Absences/conflict-validation/SCRUM-145` into `development` first, or cherry-pick `absenceConflict.service.ts` onto this branch; see design.md Open Questions. Section 1.2 has nothing to call until this is decided
+- [x] 0.1 Sync this branch onto `origin/development` — done (`f823a05`): brings in the `Absence`/`AbsenceType` schema (SCRUM-151) and `workingDays.service.ts` (SCRUM-155/156) that section 1 depends on
+- [x] 0.2 Conflict-validation dependency (SCRUM-145) — resolved: `absenceConflict.service.ts` merged into `origin/development` at `a365561` ("feat(SCRUM-157/158)") ahead of this branch's sync, so it arrived with 0.1. No cherry-pick needed. Section 1.2 can call `checkAbsenceConflicts` directly
 
 ## 1. Backend — SCRUM-162
 
-- [ ] 1.1 `types/absence.schema.ts` — zod: `type` (`z.enum(AbsenceType)`, uppercase wire format), `startDate` (ISO date), `endDate` (optional ISO date), `halfDay` (optional, default `false`)
-- [ ] 1.2 `services/absence.service.ts` — `createAbsence(userId, input)`: default `endDate` to `startDate` when omitted, call `expandWorkingDays` for the count (its own `badRequest` on an inverted range covers that validation), call `checkAbsenceConflicts`; on a conflict, throw `AppError.conflict(...)` with `details` mapped from `{date, reason}` per design.md Decisions; otherwise `prisma.absence.create` scoped to `userId`, return the created absence plus `workingDaysCount`
-- [ ] 1.3 `controllers/absence.controller.ts` + `routes/absence.routes.ts` — `POST /absences`, `authenticate` + `validate({ body: createAbsenceBodySchema })`, `userId` from `req.user.sub`, `@openapi` doc (400/401/409 responses), mount in `app.ts`
-- [ ] 1.4 `createAbsence` test factory in `backend/src/test/factories.ts`
+- [x] 1.1 `types/absence.schema.ts` — zod: `type` (`z.enum(AbsenceType)`, uppercase wire format), `startDate` (ISO date), `endDate` (optional ISO date), `halfDay` (optional, default `false`)
+- [x] 1.2 `services/absence.service.ts` — `createAbsence(userId, input)`: default `endDate` to `startDate` when omitted, call `expandWorkingDays` for the count (its own `badRequest` on an inverted range covers that validation), call `checkAbsenceConflicts`; on a conflict, throw `AppError.conflict(...)` with `details` mapped from `{date, reason}` per design.md Decisions; otherwise `prisma.absence.create` scoped to `userId`, return the created absence plus `workingDaysCount`. Required extending `AppError.conflict` to accept optional `details`, matching `badRequest`'s existing shape (was message-only before)
+- [x] 1.3 `controllers/absence.controller.ts` + `routes/absence.routes.ts` — `POST /absences`, `authenticate` + `validate({ body: createAbsenceBodySchema })`, `userId` from `req.user.sub`, `@openapi` doc (400/401/409 responses), mounted in `app.ts`
+- [x] 1.4 `createAbsence` test factory in `backend/src/test/factories.ts` — already present, arrived with the `absence-conflict-validation` merge; no changes needed
+
+Verified with a throwaway supertest smoke run (not committed — real coverage is task 3): single-day defaulting, weekend-exclusion count (5 working days for a full Sun–Sat week), 409 with clashing date named, 401, 400. `npm run typecheck` and `npm run lint` both clean.
 
 ## 2. Frontend — SCRUM-163
 
-- [ ] 2.1 Reconcile `frontend/src/types/absence.ts` with the real contract: drop `missingDocument`, replace `cancelled` with `isActive` (or map it at the service boundary), uppercase `AbsenceType` values — see design.md Decisions
-- [ ] 2.2 `frontend/src/services/absences.ts` — `createAbsence()` calling `POST /absences` via `apiClient.request`
-- [ ] 2.3 `AbsenceReportForm.tsx` + `AbsenceReportForm.schema.ts`: type `Select` with the four Hebrew labels (חופשה / מחלה / מילואים / אחר) mapped to uppercase enum values, `DatePicker`/`RangePicker` for single date or range, client-side working-day count preview (design.md Decisions), RTL/mobile-first layout, map `400`/`409` `details` to inline errors against the specific date field(s)
-- [ ] 2.4 Render `AbsenceReportForm` from `pages/Absences.tsx`, replacing the placeholder `<h1>`
+- [x] 2.1 Reconciled `frontend/src/types/absence.ts` to match the real `AbsenceDto` contract exactly (`id, userId, type, startDate, endDate, halfDay, workingDaysCount`) — dropped `missingDocument` (no backend equivalent) and `cancelled` (the response has no `isActive`/cancelled field at all, so nothing to map); uppercased `AbsenceType`; added `CreateAbsenceInput`, exported from `types/index.ts`
+- [x] 2.2 `frontend/src/services/absences.ts` — `createAbsence()` calling `POST /absences` via `apiClient.request`
+- [x] 2.3 `ManualAbsence.tsx` + `ManualAbsence.schema.ts` + `ManualAbsence.css` — built as a sibling of `ManualReport.tsx` (not the originally-planned standalone `AbsenceReportForm`, see design.md Decisions: "Discovered while implementing" + the `ManualAbsence` decisions). Type picker as an `mr-sheet` (5 rows: Vacation half/full, Sick, Reserve, Other), antd `DatePicker` for single/range date, client-side working-day preview shown in both modes, `400`/`409` `error.details` mapped to `setError` for form-field names and to a per-date conflict list otherwise, RTL/mobile-first via `ManualReport.css`'s shared classes
+- [x] 2.4 `pages/Absences.tsx` now renders `ManualAbsence` (replacing the placeholder `<h1>`); `pages/Reports.tsx` reworked from a boolean `showEntry` to a lifted `entryTab: 'work'|'absence'|null` state so `ManualReport`'s newly-enabled `onSwitchToAbsence` and `ManualAbsence`'s `onSwitchToWork` can flip between them; `ManualReport.tsx` gained the optional `onSwitchToAbsence` prop and its previously-hardcoded-`disabled` "דיווח היעדרות" tab now enables when that prop is passed
+
+Verified: `npx tsc -b --force` and `npm run lint` clean. Full suite 76/78 passing — the 2 failures (`Login.test.tsx`, `ChangePassword.test.tsx`, both timeout-based) are pre-existing flakiness unrelated to this change, confirmed passing in isolation. A throwaway component test (not committed — real coverage is task 3) verified: Vacation half-day sends `{type: VACATION, halfDay: true}` with no `endDate`; a `409` renders its conflict against the named date; the Work tab is `disabled` with no `onSwitchToWork` and calls it when provided.
 
 ## 3. Tests — SCRUM-164
 
-- [ ] 3.1 Backend route tests: each of the four types succeeds; single date (`startDate === endDate`); a date range; a range spanning a weekend yields the correct working-day count; overlapping/conflicting dates rejected `409` naming the clashing dates; unauthenticated `401`; malformed body `400`
-- [ ] 3.2 Frontend: schema unit tests for the four types and single/range input; component test asserting a successful submit shows confirmation, and a conflict response renders an error against the specific date(s)
+- [x] 3.1 `backend/src/routes/test/absence.routes.test.ts` (14 tests): each of the four types succeeds; single date (`startDate === endDate`); a date range persisted as one record; a Sun-Sat range yields `workingDaysCount: 5`; inverted range → `400`, no row; overlapping absence → `409` naming the exact clashing date(s), no row; a non-overlapping absence doesn't block a new one; unauthenticated → `401`, no row; type outside the fixed list → `400`; missing `startDate` → `400`; a `userId` in the body is ignored, caller is always the owner
+- [x] 3.2 `frontend/src/components/ManualAbsence.schema.test.ts` (9 tests) + `ManualAbsence.test.tsx` (9 tests): all four types accepted, empty/invalid type rejected; single date accepted; range requires `endDate`, rejects `endDate < startDate`; component tests cover blocked submission with no type chosen, Vacation half-day sending `{type: VACATION, halfDay: true}` with no `endDate` and showing confirmation, Sick always sending `halfDay: false`, a `409` rendering its conflict against the named date, a `400` mapping to the right form field, Work-tab disabled/enabled by `onSwitchToWork`, `onClose`, and `startDate` resetting a now-invalid `endDate`
 
-## 4. Verify
+**Bug found and fixed while writing 3.2**: `errors.startDate` was set on a `400` (via `setError`) but nothing in the JSX ever rendered it — only `errors.type` and `errors.endDate` had a `<p className="mr-cell__error">`. A `startDate`-keyed validation error would have silently vanished. Added the missing `{errors.startDate && ...}` line next to the existing two.
 
-- [ ] 4.1 Backend `npm test` + `npm run lint` green
-- [ ] 4.2 Frontend `npm test` + `npm run lint` green
-- [ ] 4.3 `openspec validate --strict` passes for this change
-- [ ] 4.4 Open PR
+**Second bug, found via manual testing after this task was first marked done**: picking a valid start/end pair, then moving `startDate` past the existing `endDate`, left the stale invalid `endDate` on screen with no live error (react-hook-form's per-field `trigger` doesn't surface the schema's cross-field refine, keyed to `['endDate']`, when only `startDate` is triggered). Fixed by clearing `endDate` whenever `startDate` changes in range mode — see design.md Decisions. Covered by a new regression test.
+
+Verified: backend `npm test` 239/240 (the one failure, the pre-existing account-lockout timing test, passes in isolation — same flakiness noted in task 1, unrelated to this change). Frontend `npm test` is flaky under full parallelism on this machine — different unrelated files (`Login.test.tsx`, `ChangePassword.test.tsx`, `CreateUserForm.test.tsx`) fail on different runs, never the same set twice, all timer/timeout-based; `npx vitest run --no-file-parallelism` gives a clean 98/98 including both new files, confirming this is pre-existing environment flakiness, not a regression. Both `npx tsc -b --force`/`npm run typecheck` and `npm run lint` clean on both sides.
+
+

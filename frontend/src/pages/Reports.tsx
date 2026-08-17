@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Dayjs } from 'dayjs'
+import ManualAbsence from '../components/ManualAbsence'
 import ManualReport, { type ManualReportHeaderMeta } from '../components/ManualReport'
 import ManualReportModal from '../components/ManualReportModal'
 import dayjs from '../services/dayjs'
@@ -37,9 +38,12 @@ const KPI_CARDS = [
   { label: 'פרויקטים מדווחים', icon: kpiBriefcase },
 ] as const
 
+type ModalView = 'work' | 'absence'
+
 type ModalState = {
   isoDate: string
   headerMeta: ManualReportHeaderMeta
+  view: ModalView
 }
 
 function headerFromDay(day: DemoDay): ManualReportHeaderMeta {
@@ -101,11 +105,14 @@ function Reports() {
     setMonth((current) => current.add(delta, 'month'))
   }
 
+  const switchModalView = (view: ModalView) => setModal((current) => (current ? { ...current, view } : current))
+
   const openManualReport = (isoDate?: string, headerMeta?: ManualReportHeaderMeta) => {
     const date = isoDate ?? dayjs().format('YYYY-MM-DD')
     setModal({
       isoDate: date,
       headerMeta: headerMeta ?? { status: 'חסר', tone: 'missing', tags: [] },
+      view: 'work',
     })
   }
 
@@ -258,14 +265,17 @@ function Reports() {
       </div>
 
       <ManualReportModal open={modal !== null} onClose={closeManualReport} labelId="manual-report-day-title">
-        {modal ? (
+        {modal?.view === 'work' ? (
           <ManualReport
             key={modal.isoDate}
             initialDate={modal.isoDate}
             headerMeta={modal.headerMeta}
             onClose={closeManualReport}
             onSaved={refreshSavedDays}
+            onSwitchToAbsence={() => switchModalView('absence')}
           />
+        ) : modal?.view === 'absence' ? (
+          <ManualAbsence onClose={closeManualReport} onSwitchToWork={() => switchModalView('work')} />
         ) : null}
       </ManualReportModal>
     </div>
