@@ -1,10 +1,11 @@
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { app } from '../../app.js';
 import { env } from '../../config/env.js';
 import { openApiSpec } from '../../config/swagger.js';
 import { prisma } from '../../config/prisma.js';
+import { reportWriteRateLimitStore } from '../../middleware/writeRateLimit.middleware.js';
 import { Role } from '../../generated/prisma/enums.js';
 import { createClient, createProject, createTask, createUser } from '../../test/factories.js';
 import { resetDatabase } from '../../test/resetDatabase.js';
@@ -307,6 +308,92 @@ describe('POST /reports/batch', () => {
       expect.objectContaining({ field: 'rows.1.endTime' }),
     );
     expect(await prisma.timeReport.count()).toBe(0);
+  });
+});
+
+describe('report write rate limiting', () => {
+  const MAX = env.RATE_LIMIT_WRITE_MAX_REQUESTS;
+
+  beforeEach(async () => {
+    await reportWriteRateLimitStore.resetAll();
+  });
+
+  afterEach(async () => {
+    await reportWriteRateLimitStore.resetAll();
+    await resetDatabase();
+  });
+
+  function exhaustQuota(token: string): Promise<unknown[]> {
+    // A malformed body is enough to spend quota: the limiter sits ahead of
+    // validation precisely so a caller cannot hammer the route for free.
+    return Promise.all(
+      Array.from({ length: MAX }, () =>
+        request(app)
+          .post('/reports/batch')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ date: '2026-08-17', rows: [] })
+          .expect(400),
+      ),
+    );
+  }
+
+  it('answers 429 with Retry-After once a caller passes the write quota', async () => {
+    const employee = await createUser();
+    const token = tokenFor(employee);
+    await exhaustQuota(token);
+
+    const throttled = await request(app)
+      .post('/reports/batch')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ date: '2026-08-17', rows: [] });
+
+    expect(throttled.status).toBe(429);
+    expect(Number(throttled.headers['retry-after'])).toBeGreaterThan(0);
+    expect(throttled.body).toEqual({
+      error: { code: 'TOO_MANY_REQUESTS', message: expect.any(String) },
+    });
+  });
+
+  it('counts one caller at a time, so a throttled employee does not block a colleague', async () => {
+    const throttledEmployee = await createUser({ email: 'quota-spender@example.test' });
+    const colleague = await createUser({ email: 'quota-bystander@example.test' });
+    const client = await createClient({ name: 'Acme' });
+    const project = await createProject({ name: 'Website', clientId: client.id });
+    const task = await createTask({ name: 'Design', projectId: project.id });
+    await exhaustQuota(tokenFor(throttledEmployee));
+
+    const response = await request(app)
+      .post('/reports/batch')
+      .set('Authorization', `Bearer ${tokenFor(colleague)}`)
+      .send({
+        date: '2026-08-17',
+        rows: [
+          {
+            workLocation: 'OFFICE',
+            startTime: '09:00',
+            endTime: '13:00',
+            clientId: client.id,
+            projectId: project.id,
+            taskId: task.id,
+            description: 'Morning',
+          },
+        ],
+      });
+
+    expect(response.status).toBe(201);
+  });
+
+  it('throttles the single-row route on the same quota', async () => {
+    const employee = await createUser();
+    const token = tokenFor(employee);
+    await exhaustQuota(token);
+
+    const throttled = await request(app)
+      .post('/reports')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ date: '2026-08-17' });
+
+    expect(throttled.status).toBe(429);
   });
 });
 

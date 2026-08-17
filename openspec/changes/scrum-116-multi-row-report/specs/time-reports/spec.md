@@ -33,6 +33,20 @@ The service SHALL let an authenticated caller create every row of one calendar d
 - **WHEN** a row omits `description`
 - **THEN** the row is stored with an empty description and the request still responds `201`
 
+### Requirement: Throttle report writes per caller
+
+The service SHALL cap how many requests one authenticated caller may make to the report write routes (`POST /reports`, `POST /reports/batch`) within the configured window, counting every request rather than only the failed ones. A caller over the cap SHALL be rejected with `429` and a `Retry-After` header, and SHALL store nothing. The cap SHALL be keyed by the caller's identity, not by client address.
+
+#### Scenario: A caller past the quota is throttled
+
+- **WHEN** an authenticated caller exceeds the configured number of report writes within the window
+- **THEN** the service responds `429` with `Retry-After` and persists no row from that request
+
+#### Scenario: One caller's quota does not spend another's
+
+- **WHEN** one caller is throttled
+- **THEN** another authenticated caller's report write still succeeds, even from the same client address
+
 ## MODIFIED Requirements
 
 ### Requirement: Hebrew single-report entry form

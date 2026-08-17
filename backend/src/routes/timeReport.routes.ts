@@ -6,6 +6,7 @@ import {
 } from '../controllers/timeReport.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
+import { writeRateLimit } from '../middleware/writeRateLimit.middleware.js';
 import {
   createTimeReportBatchBodySchema,
   createTimeReportBodySchema,
@@ -49,10 +50,20 @@ export const timeReportRouter = Router();
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
+ *       429:
+ *         description: Too many report writes from this caller. Retry after the duration given in the `Retry-After` header.
+ *         headers:
+ *           Retry-After:
+ *             schema: { type: integer }
+ *             description: Seconds to wait before retrying.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
  */
 timeReportRouter.post(
   '/reports',
   authenticate,
+  writeRateLimit,
   validate({ body: createTimeReportBodySchema }),
   postTimeReport,
 );
@@ -104,10 +115,20 @@ timeReportRouter.post(
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
+ *       429:
+ *         description: Too many report writes from this caller. Retry after the duration given in the `Retry-After` header.
+ *         headers:
+ *           Retry-After:
+ *             schema: { type: integer }
+ *             description: Seconds to wait before retrying.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
  */
 timeReportRouter.post(
   '/reports/batch',
   authenticate,
+  writeRateLimit,
   validate({ body: createTimeReportBatchBodySchema }),
   postTimeReportBatch,
 );

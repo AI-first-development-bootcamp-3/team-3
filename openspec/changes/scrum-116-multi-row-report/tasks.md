@@ -36,3 +36,9 @@ One PR into `development`. Tests ship with the code, not after it.
 
 - [x] 6.1 Compare the running screen against Figma `1:1621` and `1:4352` and close the gaps
 - [x] 6.2 Headless-Chrome capture of every state measured against the frame geometry (header, segmented, cards, pills, footer, sheets, alert)
+
+## 7. Review follow-up — rate limiting
+
+- [x] 7.1 `writeRateLimit` middleware on `POST /reports` and `POST /reports/batch`, keyed by JWT subject, with `RATE_LIMIT_WRITE_MAX_REQUESTS`
+- [x] 7.2 Route tests: 429 with `Retry-After`, per-caller quota, shared across both write routes
+- [x] 7.3 Hebrew banner for a throttled save, plus env docs (`.env.example`, compose, backend README) and the spec delta

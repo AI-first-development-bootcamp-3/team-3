@@ -18,6 +18,8 @@
 
 **Plain CSS files with custom properties, like `Reports.css`.** The home shell already matches Figma this way, so the two screens share one styling idiom.
 
+**Report writes are throttled per caller, on `express-rate-limit`.** CodeQL flags an authenticated route that writes without a limiter, and this one turns a single request into up to twenty inserts. Our own `rateLimit` middleware counts failures — right for password guessing, useless against a valid token replaying a write — so this counts every request instead, keyed by JWT subject so an office behind one NAT address is not throttled collectively. It rides on a known library rather than our store because `js/missing-rate-limiting` only models those; the alerts still open against `auth.routes.ts` show what a hand-rolled limiter buys with that query.
+
 ## Figma source
 
 File `⏰ Time report files ⏰`, canvas `📱 | Mobile web app`. Desktop has three undecided options (`אופציה א׳/ב׳/ג׳`), so the mobile frame is the source and desktop centres it at 393px.

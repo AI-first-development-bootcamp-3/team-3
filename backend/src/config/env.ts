@@ -45,6 +45,12 @@ const envSchema = z.object({
   RATE_LIMIT_EMAIL_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
   RATE_LIMIT_IP_MAX_ATTEMPTS: z.coerce.number().int().positive().default(50),
   RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(900),
+  // Requests one authenticated caller may make to the report write routes
+  // within that same window — every request counts, not just failures. A
+  // person saves a day of work a handful of times; 60 per 15 minutes leaves
+  // room for retries and an impatient reload while still bounding how fast one
+  // token can drive multi-row inserts.
+  RATE_LIMIT_WRITE_MAX_REQUESTS: z.coerce.number().int().positive().default(60),
   // How many reverse-proxy hops in front of this service to trust when
   // resolving a client's address from X-Forwarded-For. Passed straight to
   // Express's `trust proxy` setting. Disabled by default: trusting a proxy

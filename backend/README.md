@@ -52,6 +52,7 @@ first. See `.env.example` for the full annotated list; `DATABASE_URL`,
 | `RATE_LIMIT_EMAIL_MAX_ATTEMPTS` | no (`5`) | See [Login rate limiting](#login-rate-limiting) |
 | `RATE_LIMIT_IP_MAX_ATTEMPTS` | no (`50`) | See [Login rate limiting](#login-rate-limiting) |
 | `RATE_LIMIT_WINDOW_SECONDS` | no (`900`) | See [Login rate limiting](#login-rate-limiting) |
+| `RATE_LIMIT_WRITE_MAX_REQUESTS` | no (`60`) | See [Write rate limiting](#write-rate-limiting) |
 | `TRUST_PROXY` | no (`false`) | See [Login rate limiting](#login-rate-limiting) |
 
 ## Conventions later epics should follow
@@ -193,6 +194,27 @@ disabled — safe for this project's `docker-compose` setup, where there's no
 proxy in front of the backend. Set it only when deploying behind one you
 actually trust; enabling it without a real proxy in front lets any client
 pick its own rate-limit bucket by forging the header.
+
+## Write rate limiting
+
+`POST /reports` and `POST /reports/batch`
+(`src/middleware/writeRateLimit.middleware.ts`) cap how many writes one
+authenticated caller can drive within the same window — every request counts,
+not just the failures, because what needs bounding is a valid token replaying
+a multi-row transactional insert. `RATE_LIMIT_WRITE_MAX_REQUESTS` (default 60)
+sets the ceiling; a caller over it gets the same `429` and `Retry-After` the
+credential routes produce.
+
+The key is the JWT subject, not the address, so a whole office behind one NAT
+address is never throttled collectively — which is why the limiter is wired
+*after* `authenticate`. Counters are in-process here too, with the same
+restart and multi-replica caveats as above.
+
+This one is built on `express-rate-limit` rather than our own store. Beyond
+not having to hand-roll request counting, CodeQL's `js/missing-rate-limiting`
+only models the known limiter libraries, so a route guarded by a home-grown
+middleware stays flagged — the alerts still open against `auth.routes.ts` are
+exactly that. Prefer this middleware for any new route that writes.
 
 ## File storage
 

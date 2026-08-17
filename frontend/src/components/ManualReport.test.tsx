@@ -188,4 +188,31 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('חסר לנו פרט או שניים')
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/reports/batch'))).toBe(false)
   })
+
+  it('tells the user to wait when the server throttles the save', async () => {
+    signIn()
+    mockFetch((url) =>
+      url.includes('/reports/batch')
+        ? {
+            ok: false,
+            status: 429,
+            json: { error: { code: 'TOO_MANY_REQUESTS', message: 'Too many attempts.' } },
+          }
+        : { ok: true, status: 200, json: options },
+    )
+    const user = userEvent.setup()
+
+    renderScreen()
+    await screen.findByRole('button', { name: 'הוספת פרויקט' })
+
+    fireEvent.change(screen.getByLabelText('כניסה'), { target: { value: '09:00' } })
+    fireEvent.change(screen.getByLabelText('יציאה'), { target: { value: '18:00' } })
+    await addProject(user, 'Cargo', 'Marketing')
+    fireEvent.change(screen.getByLabelText('שעת התחלה 1'), { target: { value: '09:00' } })
+    fireEvent.change(screen.getByLabelText('שעת סיום 1'), { target: { value: '13:00' } })
+
+    await user.click(screen.getByRole('button', { name: 'שמירה' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('שמרתם יותר מדי פעמים ברצף')
+  })
 })

@@ -25,6 +25,19 @@ const NEXT_STEP: Record<PickerStep, PickerStep | null> = {
   location: null,
 }
 
+const MISSING_DETAILS = {
+  title: 'חסר לנו פרט או שניים',
+  detail: 'מלא את כל הנתונים הדרושים כדי שנוכל לשמור את הדיווח בהצלחה.',
+}
+const TOO_MANY_SAVES = {
+  title: 'שמרתם יותר מדי פעמים ברצף',
+  detail: 'המתינו כמה דקות ונסו לשמור את הדיווח שוב.',
+}
+const SAVE_FAILED = {
+  title: 'משהו השתבש. נסו שוב.',
+  detail: 'לא הצלחנו לשמור את הדיווח. בדקו את החיבור ונסו שוב.',
+}
+
 interface Props {
   onClose: () => void
 }
@@ -77,7 +90,7 @@ function ManualReport({ onClose }: Props) {
   const { message } = App.useApp()
   const [options, setOptions] = useState<ReportingOptions | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [banner, setBanner] = useState<string | null>(null)
+  const [banner, setBanner] = useState<{ title: string; detail: string } | null>(null)
   const [picker, setPicker] = useState<{ row: number; step: PickerStep } | null>(null)
   const [pendingRemoval, setPendingRemoval] = useState<number | null>(null)
 
@@ -192,14 +205,14 @@ function ManualReport({ onClose }: Props) {
         for (const detail of details) {
           setError(detail.field as keyof ManualReportValues, { message: detail.message })
         }
-        setBanner('חסר לנו פרט או שניים')
+        setBanner(MISSING_DETAILS)
         return
       }
-      setBanner('משהו השתבש. נסו שוב.')
+      setBanner(error instanceof ApiError && error.status === 429 ? TOO_MANY_SAVES : SAVE_FAILED)
     }
   }
 
-  const onInvalid = () => setBanner('חסר לנו פרט או שניים')
+  const onInvalid = () => setBanner(MISSING_DETAILS)
 
   if (loadError) {
     return (
@@ -248,8 +261,8 @@ function ManualReport({ onClose }: Props) {
               <WarningTriangle />
             </span>
             <div className="manual-report__banner-text">
-              <h2>{banner}</h2>
-              <p>מלא את כל הנתונים הדרושים כדי שנוכל לשמור את הדיווח בהצלחה.</p>
+              <h2>{banner.title}</h2>
+              <p>{banner.detail}</p>
             </div>
             <button type="button" onClick={() => setBanner(null)} aria-label="סגירת ההודעה">
               <CloseMark />
