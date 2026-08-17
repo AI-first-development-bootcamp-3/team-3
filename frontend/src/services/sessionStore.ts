@@ -31,8 +31,10 @@ export const sessionStore = create<SessionState>((set, get) => ({
   token: null,
   // rememberMe no longer selects the storage area (D-cross-tab: every
   // session lives in localStorage so any open tab can see it); the backend
-  // still uses it to set a longer `expiresAt` for a remembered session.
-  setSession: (user, token, expiresAt, _rememberMe) => {
+  // still uses it to set a longer `expiresAt` for a remembered session. A
+  // function implementing a wider type may drop trailing parameters it
+  // doesn't need, so it's simply omitted here rather than left unused.
+  setSession: (user, token, expiresAt) => {
     writeSession(window.localStorage, { user, token, expiresAt })
     set({ user, token })
     armExpiryTimer(expiresAt)
