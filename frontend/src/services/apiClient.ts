@@ -18,12 +18,18 @@ export interface RequestOptions {
 export class ApiError extends Error {
   status: number
   body: unknown
+  /** Seconds the client should wait before retrying, from the `Retry-After`
+   * header - present on 429 (throttled) and 423 (locked) responses. */
+  retryAfterSeconds?: number
 
-  constructor(status: number, body: unknown) {
+  constructor(status: number, body: unknown, retryAfterSeconds?: number) {
     super(`API request failed with status ${status}`)
     this.name = 'ApiError'
     this.status = status
     this.body = body
+    if (retryAfterSeconds !== undefined) {
+      this.retryAfterSeconds = retryAfterSeconds
+    }
   }
 }
 
@@ -68,7 +74,9 @@ export async function request<T>(
       })
       redirectToLogin()
     }
-    throw new ApiError(response.status, responseBody)
+    const retryAfterHeader = response.headers.get('retry-after')
+    const retryAfterSeconds = retryAfterHeader ? Number(retryAfterHeader) : undefined
+    throw new ApiError(response.status, responseBody, retryAfterSeconds)
   }
 
   return responseBody as T
