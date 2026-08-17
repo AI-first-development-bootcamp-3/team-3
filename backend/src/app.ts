@@ -6,6 +6,7 @@ import { env, parseTrustProxy } from './config/env.js';
 import { openApiSpec } from './config/swagger.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { notFoundHandler } from './middleware/notFound.middleware.js';
+import { readRateLimit } from './middleware/writeRateLimit.middleware.js';
 import { requestLogger } from './middleware/requestLogger.middleware.js';
 import { absenceRouter } from './routes/absence.routes.js';
 import { adminClientRouter } from './routes/adminClient.routes.js';
@@ -53,10 +54,10 @@ app.use(absenceRouter);
 // Interactive docs leak endpoint shapes and are dev/QA tooling, not a
 // production surface — disabled there by configuration.
 if (env.NODE_ENV !== 'production') {
-  app.get('/api-docs.json', (_req, res) => {
+  app.get('/api-docs.json', readRateLimit, (_req, res) => {
     res.json(openApiSpec);
   });
-  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openApiSpec));
+  app.use('/api-docs', readRateLimit, swaggerUi.serve, swaggerUi.setup(openApiSpec));
 }
 
 // Feature routes are inserted here by later tasks, above notFoundHandler.
