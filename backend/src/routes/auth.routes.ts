@@ -131,7 +131,7 @@ authRouter.post(
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
  */
-authRouter.post('/logout', authenticate, postLogout);
+authRouter.post('/logout', rateLimit({}), authenticate, postLogout);
 
 authRouter.patch(
   '/me/password',
