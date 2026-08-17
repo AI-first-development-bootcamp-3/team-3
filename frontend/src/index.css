@@ -111,3 +111,7 @@ main {
   min-height: 100svh;
   background: #f4f5f7;
 }
+
+.admin-shell__content {
+  padding: 16px;
+}
