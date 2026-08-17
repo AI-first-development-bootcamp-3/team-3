@@ -25,6 +25,11 @@ enum AbsenceType {
   OTHER
 }
 
+enum TaskStatus {
+  OPEN
+  CLOSED
+}
+
 enum LoginAttemptOutcome {
   CREDENTIAL_REJECTED
   THROTTLED
@@ -54,6 +59,7 @@ model User {
   timeReports        TimeReport[]
   absences           Absence[]
   loginAttempts      LoginAttempt[]
+  taskAssignments    TaskAssignment[]
 
   @@map("users")
 }
