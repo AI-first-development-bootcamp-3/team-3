@@ -1,6 +1,6 @@
 import { Button, Input, Space, Table, Tooltip } from 'antd'
 import { DeleteOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
 interface TaskRecord {
   key: string
@@ -66,9 +66,13 @@ function AdminTasks() {
       title: 'Task Name',
       dataIndex: 'name',
       key: 'name',
-      flex: 1,
     },
   ]
+
+  const filteredData = useMemo(
+    () => mockData.filter((task) => task.name.toLowerCase().includes(searchText.toLowerCase())),
+    [searchText],
+  )
 
   return (
     <div dir="rtl">
@@ -93,7 +97,7 @@ function AdminTasks() {
 
       <Table
         columns={columns}
-        dataSource={mockData}
+        dataSource={filteredData}
         pagination={{ pageSize: 10, align: 'center' }}
         style={{ direction: 'rtl' }}
         size="middle"

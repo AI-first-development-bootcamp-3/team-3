@@ -1,6 +1,6 @@
 import { Button, Input, Space, Table, Tooltip } from 'antd'
 import { DeleteOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import CreateUserForm from '../../components/CreateUserForm'
 
 interface UserRecord {
@@ -61,9 +61,13 @@ function AdminUsers() {
       title: 'Email',
       dataIndex: 'email',
       key: 'email',
-      flex: 1,
     },
   ]
+
+  const filteredData = useMemo(
+    () => mockData.filter((user) => user.displayName.toLowerCase().includes(searchText.toLowerCase())),
+    [searchText],
+  )
 
   return (
     <div dir="rtl">
@@ -90,7 +94,7 @@ function AdminUsers() {
 
       <Table
         columns={columns}
-        dataSource={mockData}
+        dataSource={filteredData}
         pagination={{ pageSize: 10, align: 'center' }}
         style={{ direction: 'rtl' }}
         size="middle"

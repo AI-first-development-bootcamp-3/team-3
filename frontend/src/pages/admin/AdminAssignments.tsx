@@ -1,6 +1,6 @@
 import { Button, Input, Space, Table, Tag, Tooltip } from 'antd'
 import { DeleteOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
 interface AssignmentRecord {
   key: string
@@ -72,7 +72,6 @@ function AdminAssignments() {
       title: 'שמות העובדים המשוייכים',
       dataIndex: 'workers',
       key: 'workers',
-      flex: 1,
       render: (workers: string[]) => (
         <Space wrap size={[4, 8]}>
           {workers.map((worker) => (
@@ -103,6 +102,14 @@ function AdminAssignments() {
     },
   ]
 
+  const filteredData = useMemo(
+    () =>
+      mockData.filter((assignment) =>
+        assignment.workers.some((worker) => worker.toLowerCase().includes(searchText.toLowerCase())),
+      ),
+    [searchText],
+  )
+
   return (
     <div dir="rtl">
       <div style={{ marginBottom: 24, display: 'flex', gap: 16, alignItems: 'flex-start' }}>
@@ -126,7 +133,7 @@ function AdminAssignments() {
 
       <Table
         columns={columns}
-        dataSource={mockData}
+        dataSource={filteredData}
         pagination={{ pageSize: 10, align: 'center' }}
         style={{ direction: 'rtl' }}
         size="middle"

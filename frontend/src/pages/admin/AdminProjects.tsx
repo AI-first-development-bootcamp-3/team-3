@@ -1,6 +1,6 @@
 import { Button, Input, Space, Table, Tooltip } from 'antd'
 import { DeleteOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
 interface ProjectRecord {
   key: string
@@ -58,9 +58,13 @@ function AdminProjects() {
       title: 'Project Name',
       dataIndex: 'name',
       key: 'name',
-      flex: 1,
     },
   ]
+
+  const filteredData = useMemo(
+    () => mockData.filter((project) => project.name.toLowerCase().includes(searchText.toLowerCase())),
+    [searchText],
+  )
 
   return (
     <div dir="rtl">
@@ -85,7 +89,7 @@ function AdminProjects() {
 
       <Table
         columns={columns}
-        dataSource={mockData}
+        dataSource={filteredData}
         pagination={{ pageSize: 10, align: 'center' }}
         style={{ direction: 'rtl' }}
         size="middle"
