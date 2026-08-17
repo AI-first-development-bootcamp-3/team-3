@@ -1,7 +1,7 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
-import { prisma } from '../config/prisma.js';
+import { prisma, type Prisma } from '../config/prisma.js';
 import { AppError } from '../types/errors.js';
 import type { JwtPayload } from '../types/auth.js';
 
@@ -49,7 +49,15 @@ export const authenticate: RequestHandler = async (
     return;
   }
 
-  const user = await prisma.user.findUnique({ where: { id: payload.sub, isActive: undefined } });
+  // The soft-delete extension (config/prisma.ts) treats an explicit `isActive`
+  // key in `where` — even `undefined` — as an opt-out of its default
+  // `isActive: true` filter, so a deactivated row is returned instead of
+  // hidden. Prisma's generated `UserWhereInput` doesn't itself admit
+  // `isActive: undefined` under `exactOptionalPropertyTypes`, so the cast
+  // below is required purely to satisfy that; it changes no runtime behavior.
+  const user = await prisma.user.findFirst({
+    where: { id: payload.sub, isActive: undefined } as unknown as Prisma.UserWhereInput,
+  });
 
   if (!user) {
     next(AppError.unauthorized('Invalid authentication token'));
