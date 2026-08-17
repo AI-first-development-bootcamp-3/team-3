@@ -7,7 +7,7 @@ See `proposal.md` — Why. `/` currently renders only `ReportEntryForm`. Layout 
 **Goals:**
 
 - One `Reports` composition: Figma header + empty KPI/list + existing form behind **דיווח ידני**
-- CSS tokens close to the mock (light gray page, white cards, orange CTA) without a new CSS framework
+- CSS tokens and exported Figma SVGs close to the mock (header row, gradients, KPI icons) without a new CSS framework. Empty copy stays honest.
 - Tests that lock empty states and the manual-report reveal
 
 **Non-Goals:**
@@ -47,11 +47,11 @@ Matches Figma density. `disabled` + `aria-disabled` so tests assert it does not 
 
 `0` sick days is a real claim. An em dash / **אין נתונים עדיין** is not. Do not show “מתוך 180” (that assumes 20×9h).
 
-### D6: Figma header only on `/`; other pages keep the existing Menu
+### D6: Hide the Ant Design Menu on `/`
 
-Absences/admin have no mock in this slice. `Layout` can render a compact Menu still, or the hours header plus a text link to היעדרויות/ניהול so admins are not trapped. **Decision:** keep the existing horizontal Menu above the Figma home so absences/admin remain reachable. Visual match is the home *body*, not ripping out global nav in this PR.
+Figma employee home has no `דיווח שעות` / `היעדרויות` / `ניהול` bar — only the abra header. **Decision:** do not render `Layout` Menu when `pathname === '/'`. Keep the Menu on `/absences` and `/admin` so those pages stay reachable.
 
-*Alternative:* replace Menu with Figma-only header — blocks admin/absences unless we invent a hamburger. Deferred.
+*Alternative:* keep the Menu on home for navigation — rejected; it is not in the mock.
 
 ### D7: Month names from existing Hebrew `dayjs` locale (browser local)
 
@@ -69,7 +69,7 @@ Absences/admin have no mock in this slice. `Layout` can render a compact Menu st
 
 - **Users may think KPIs are broken because they are empty** → Copy **אין נתונים עדיין** on cards and list; SCRUM-216/141 replace this.
 - **Disabled שעון looks like a bug** → **בקרוב** on the control; timer epic removes disabled.
-- **Menu + Figma header is busier than the mock** → Accepted for this slice so we do not strand admin (D6).
+- **No global nav on Figma home** → Hide Layout Menu on `/` (D6). Absences/admin still show it.
 
 ## Migration Plan
 
