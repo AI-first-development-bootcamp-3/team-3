@@ -25,6 +25,11 @@ enum AbsenceType {
   OTHER
 }
 
+enum TaskStatus {
+  OPEN
+  CLOSED
+}
+
 enum LoginAttemptOutcome {
   CREDENTIAL_REJECTED
   THROTTLED
@@ -54,6 +59,7 @@ model User {
   timeReports        TimeReport[]
   absences           Absence[]
   loginAttempts      LoginAttempt[]
+  taskAssignments    TaskAssignment[]
 
   @@map("users")
 }
@@ -83,11 +89,12 @@ model LoginAttempt {
 }
 
 model Client {
-  id        String    @id @default(uuid())
-  name      String
-  isActive  Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id             String    @id @default(uuid())
+  name           String
+  contactDetails String?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
   projects    Project[]
   timeReports TimeReport[]
 
@@ -109,16 +116,33 @@ model Project {
 }
 
 model Task {
-  id        String   @id @default(uuid())
+  id        String     @id @default(uuid())
   name      String
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isActive  Boolean    @default(true)
+  status    TaskStatus @default(OPEN)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
   projectId String
-  project     Project      @relation(fields: [projectId], references: [id])
+  project     Project          @relation(fields: [projectId], references: [id])
   timeReports TimeReport[]
+  assignments TaskAssignment[]
 
   @@map("tasks")
+}
+
+/// Current-state assignment only — no soft-delete flag, no history row.
+/// Presence of the row means assigned; removal means not assigned. See
+/// openspec/changes/admin-data-model/design.md for why this differs from
+/// every other model's isActive soft-delete convention.
+model TaskAssignment {
+  userId    String
+  taskId    String
+  user      User     @relation(fields: [userId], references: [id])
+  task      Task     @relation(fields: [taskId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@id([userId, taskId])
+  @@map("task_assignments")
 }
 
 /// One row per absence, spanning startDate..endDate (never one row per day —
