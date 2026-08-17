@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { readRateLimit } from '../middleware/writeRateLimit.middleware.js';
 import { getHealth } from '../controllers/health.controller.js';
 
 export const healthRouter = Router();
@@ -42,4 +43,4 @@ export const healthRouter = Router();
  *                   type: string
  *                   example: unreachable
  */
-healthRouter.get('/health', getHealth);
+healthRouter.get('/health', readRateLimit, getHealth);
