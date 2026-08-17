@@ -100,7 +100,7 @@ model TaskAssignment {
   task      Task     @relation(fields: [taskId], references: [id])
   createdAt DateTime @default(now())
 
-  @@unique([userId, taskId])
+  @@id([userId, taskId])
   @@map("task_assignments")
 }
 
