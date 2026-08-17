@@ -59,6 +59,7 @@ function AdminClients() {
 
       {editingClient && (
         <AdminClientForm
+          key={editingClient.id}
           initialValues={{ name: editingClient.name, contactDetails: editingClient.contactDetails ?? '' }}
           active={editingClient.isActive}
           onActiveChange={(nextActive) => {

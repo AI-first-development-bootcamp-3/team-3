@@ -49,10 +49,12 @@ function AdminClientForm({ initialValues, active, onActiveChange, onSubmit, subm
           </button>
           <div className="admin-client-form__title-section">
             <div className="admin-client-form__title">
-              יצירת לקוח
+              {isEditMode ? 'עריכת לקוח' : 'יצירת לקוח'}
               {isEditMode && <Tag className="admin-client-form__edit-tag">עריכה</Tag>}
             </div>
-            <div className="admin-client-form__subtitle">כאן תיצור את הלקוח החדש שיופיע במערכת</div>
+            <div className="admin-client-form__subtitle">
+              {isEditMode ? 'כאן תעדכן את פרטי הלקוח' : 'כאן תיצור את הלקוח החדש שיופיע במערכת'}
+            </div>
           </div>
         </div>
 
