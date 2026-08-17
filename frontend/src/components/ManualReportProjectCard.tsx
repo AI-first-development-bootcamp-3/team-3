@@ -1,13 +1,14 @@
 import type { UseFormRegister } from 'react-hook-form'
 import type { ReportingOptions } from '../types'
 import type { ManualReportValues, ProjectRowValues } from './ManualReport.schema'
-import { ChipArrow, DisclosureChevron, SelectChevrons } from './ManualReportIcons'
 import { LOCATION_OPTIONS, type PickerStep } from './ManualReport.constants'
+import trashIcon from '../assets/manual-report/desktop/trash.svg'
 
 export type RowErrors = Partial<Record<keyof ProjectRowValues, string>>
 
 interface Props {
   index: number
+  variant?: 'mobile' | 'desktop'
   values: ProjectRowValues
   options: ReportingOptions
   errors: RowErrors
@@ -24,116 +25,110 @@ function nameOf(options: ReportingOptions, values: ProjectRowValues) {
   return { client: client?.name, project: project?.name, task: task?.name, location: location?.label }
 }
 
-function ManualReportProjectCard({ index, values, options, errors, register, onPick, onRemove }: Props) {
+function ManualReportProjectCard({
+  index,
+  variant = 'desktop',
+  values,
+  options,
+  errors,
+  register,
+  onPick,
+  onRemove,
+}: Props) {
   const names = nameOf(options, values)
 
-  return (
-    <div className="mr-card">
-      <button
-        type="button"
-        className="mr-cell"
-        onClick={() => onPick('project')}
-        aria-label={`פרויקט ${index + 1}`}
-      >
-        <span className="mr-cell__label">
-          פרויקט
-          {errors.projectId && <span className="mr-cell__required"> *</span>}
-        </span>
-        <span className="mr-cell__value">
-          {names.project ? (
-            <>
-              <span className="mr-chip">{names.client}</span>
-              <ChipArrow />
-              <span className="mr-chip mr-chip--value">{names.project}</span>
-            </>
-          ) : (
-            <span className="mr-cell__placeholder">בחירה</span>
-          )}
-        </span>
-        <DisclosureChevron />
-      </button>
+  if (variant === 'desktop') {
+    return (
+      <article className="mr-project--desktop">
+        <div className="mr-project--desktop__head">
+          <button type="button" className="mr-project--desktop__delete" onClick={onRemove}>
+            <img src={trashIcon} alt="" width={20} height={20} />
+            מחיקת פרויקט
+          </button>
+          <h3 className="mr-project--desktop__title">{`פרויקט מס׳ ${index + 1}`}</h3>
+        </div>
 
-      <button
-        type="button"
-        className="mr-cell"
-        onClick={() => onPick('task')}
-        aria-label={`משימה ${index + 1}`}
-      >
-        <span className="mr-cell__label">
-          משימה
-          {errors.taskId && <span className="mr-cell__required"> *</span>}
-        </span>
-        <span className="mr-cell__value">
-          {names.task ? (
-            <span className="mr-chip mr-chip--value">{names.task}</span>
-          ) : (
-            <span className="mr-cell__placeholder">בחירה</span>
-          )}
-        </span>
-        <DisclosureChevron />
-      </button>
+        <div className="mr-project--desktop__pickers">
+          <div className="mr-project--desktop__pick-col">
+            <button type="button" className="mr-project--desktop__pick" onClick={() => onPick('project')}>
+              <span className="mr-project--desktop__pick-label">בחרו פרויקט</span>
+              <span
+                className={`mr-project--desktop__pick-value${names.project ? ' mr-project--desktop__pick-value--filled' : ''}`}
+              >
+                {names.project ? `${names.client} › ${names.project}` : 'בחרו פרויקט'}
+              </span>
+            </button>
+            {errors.projectId ? <p className="mr-project--desktop__error">{errors.projectId}</p> : null}
+          </div>
 
-      <button
-        type="button"
-        className="mr-cell"
-        onClick={() => onPick('location')}
-        aria-label={`מיקום ${index + 1}`}
-      >
-        <span className="mr-cell__label">
-          מיקום
-          {errors.workLocation && <span className="mr-cell__required"> *</span>}
-        </span>
-        <span className="mr-cell__value">
-          {names.location ? (
-            <span className="mr-chip mr-chip--value">{names.location}</span>
-          ) : (
-            <span className="mr-cell__placeholder">בחירה</span>
-          )}
-        </span>
-        <SelectChevrons />
-      </button>
+          <div className="mr-project--desktop__pick-col">
+            <button type="button" className="mr-project--desktop__pick" onClick={() => onPick('task')}>
+              <span className="mr-project--desktop__pick-label">בחרו משימה</span>
+              <span
+                className={`mr-project--desktop__pick-value${names.task ? ' mr-project--desktop__pick-value--filled' : ''}`}
+              >
+                {names.task ?? 'בחרו משימה'}
+              </span>
+            </button>
+            {errors.taskId ? <p className="mr-project--desktop__error">{errors.taskId}</p> : null}
+          </div>
 
-      <label className="mr-cell">
-        <span className="mr-cell__label">שעת התחלה</span>
-        <span className="mr-cell__value">
-          <input
-            type="time"
-            className="mr-cell__time"
-            aria-label={`שעת התחלה ${index + 1}`}
-            {...register(`rows.${index}.startTime`)}
+          <div className="mr-project--desktop__pick-col">
+            <button type="button" className="mr-project--desktop__pick" onClick={() => onPick('location')}>
+              <span className="mr-project--desktop__pick-label">בחרו מיקום</span>
+              <span
+                className={`mr-project--desktop__pick-value${names.location ? ' mr-project--desktop__pick-value--filled' : ''}`}
+              >
+                {names.location ?? 'בחרו מיקום'}
+              </span>
+            </button>
+            {errors.workLocation ? <p className="mr-project--desktop__error">{errors.workLocation}</p> : null}
+          </div>
+        </div>
+
+        <div className="mr-project--desktop__times">
+          <div className="mr-project--desktop__time-col">
+            <label className="manual-report__field">
+              <span className="manual-report__field-label">שעת התחלה</span>
+              <input
+                type="time"
+                className="manual-report__field-input"
+                aria-label={`שעת התחלה ${index + 1}`}
+                {...register(`rows.${index}.startTime`)}
+              />
+            </label>
+            {errors.startTime ? <p className="mr-project--desktop__error">{errors.startTime}</p> : null}
+          </div>
+
+          <div className="mr-project--desktop__time-col">
+            <label className="manual-report__field">
+              <span className="manual-report__field-label">שעת סיום</span>
+              <input
+                type="time"
+                className="manual-report__field-input"
+                aria-label={`שעת סיום ${index + 1}`}
+                {...register(`rows.${index}.endTime`)}
+              />
+            </label>
+            {errors.endTime ? <p className="mr-project--desktop__error">{errors.endTime}</p> : null}
+          </div>
+        </div>
+
+        <label className="mr-project--desktop__detail-wrap">
+          <span className="mr-project--desktop__detail-label">פירוט הדיווח</span>
+          <textarea
+            className="mr-project--desktop__detail"
+            placeholder="הוספת פירוט..."
+            aria-label={`פירוט ${index + 1}`}
+            {...register(`rows.${index}.description`)}
           />
-        </span>
-      </label>
-      {errors.startTime && <p className="mr-cell__error">{errors.startTime}</p>}
+        </label>
+        {errors.description ? <p className="mr-project--desktop__error">{errors.description}</p> : null}
+      </article>
+    )
+  }
 
-      <label className="mr-cell">
-        <span className="mr-cell__label">שעת סיום</span>
-        <span className="mr-cell__value">
-          <input
-            type="time"
-            className="mr-cell__time"
-            aria-label={`שעת סיום ${index + 1}`}
-            {...register(`rows.${index}.endTime`)}
-          />
-        </span>
-      </label>
-      {errors.endTime && <p className="mr-cell__error">{errors.endTime}</p>}
-
-      <label className="mr-cell">
-        <input
-          type="text"
-          className="mr-cell__detail"
-          placeholder="הוספת פירוט..."
-          aria-label={`פירוט ${index + 1}`}
-          {...register(`rows.${index}.description`)}
-        />
-      </label>
-
-      <button type="button" className="mr-project__footer" onClick={onRemove}>
-        מחיקת פרויקט
-      </button>
-    </div>
-  )
+  return null
 }
 
 export default ManualReportProjectCard

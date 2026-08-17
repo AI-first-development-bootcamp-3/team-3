@@ -77,4 +77,14 @@ describe('validate middleware', () => {
     const error = (next as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0] as AppError;
     expect(error.details?.map((d) => d.field)).toEqual(expect.arrayContaining(['id']));
   });
+
+  it('coerces validated query params onto the request', () => {
+    const req = { query: { page: '2' } } as unknown as Request;
+    const next = vi.fn() as unknown as NextFunction;
+
+    validate({ query: z.object({ page: z.coerce.number() }) })(req, makeRes(), next);
+
+    expect(next).toHaveBeenCalledWith();
+    expect(req.query).toEqual({ page: 2 });
+  });
 });

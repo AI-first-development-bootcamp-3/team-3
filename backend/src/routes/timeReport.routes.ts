@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   getMyReportingOptions,
+  getMyTimeReports,
   postTimeReport,
   postTimeReportBatch,
 } from '../controllers/timeReport.controller.js';
@@ -10,6 +11,7 @@ import { writeRateLimit } from '../middleware/writeRateLimit.middleware.js';
 import {
   createTimeReportBatchBodySchema,
   createTimeReportBodySchema,
+  listTimeReportsQuerySchema,
 } from '../types/timeReport.schema.js';
 
 export const timeReportRouter = Router();
@@ -60,6 +62,43 @@ export const timeReportRouter = Router();
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
  */
+/**
+ * @openapi
+ * /reports:
+ *   get:
+ *     summary: List the authenticated caller's time reports for one calendar month
+ *     tags: [Time reports]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: query
+ *         name: month
+ *         required: true
+ *         schema: { type: integer, minimum: 1, maximum: 12 }
+ *       - in: query
+ *         name: year
+ *         required: true
+ *         schema: { type: integer, minimum: 2000, maximum: 2100 }
+ *     responses:
+ *       200:
+ *         description: Every saved row in the month, with hierarchy names and duration.
+ *       400:
+ *         description: Invalid month or year.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ *       401:
+ *         description: Authentication required.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ */
+timeReportRouter.get(
+  '/reports',
+  authenticate,
+  validate({ query: listTimeReportsQuerySchema }),
+  getMyTimeReports,
+);
+
 timeReportRouter.post(
   '/reports',
   authenticate,

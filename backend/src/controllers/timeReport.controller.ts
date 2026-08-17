@@ -3,11 +3,13 @@ import {
   createTimeReport,
   createTimeReportBatch,
   listReportingOptions,
+  listTimeReportsForMonth,
 } from '../services/timeReport.service.js';
 import { AppError } from '../types/errors.js';
 import type {
   CreateTimeReportBatchBody,
   CreateTimeReportBody,
+  ListTimeReportsQuery,
 } from '../types/timeReport.schema.js';
 
 export const postTimeReport: RequestHandler = async (req, res, next) => {
@@ -33,6 +35,20 @@ export const postTimeReportBatch: RequestHandler = async (req, res, next) => {
     const body = req.body as CreateTimeReportBatchBody;
     const reports = await createTimeReportBatch(req.user.sub, body);
     res.status(201).json({ reports });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getMyTimeReports: RequestHandler = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      next(AppError.unauthorized());
+      return;
+    }
+    const { month, year } = req.query as ListTimeReportsQuery;
+    const reports = await listTimeReportsForMonth(req.user.sub, month, year);
+    res.status(200).json({ reports });
   } catch (error) {
     next(error);
   }

@@ -83,17 +83,17 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     window.localStorage.clear()
   })
 
-  it('shows the day chrome with no project rows yet', async () => {
+  it('shows the desktop day chrome with no project rows yet', async () => {
     signIn()
     mockFetch(() => ({ ok: true, status: 200, json: options }))
 
     renderScreen()
 
-    expect(await screen.findByRole('heading', { name: 'דיווח ידני' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'דיווח עבודה' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByLabelText('כניסה')).toBeInTheDocument()
-    expect(screen.getByLabelText('יציאה')).toBeInTheDocument()
-    expect(screen.queryByText('דיווח פרויקטים')).not.toBeInTheDocument()
+    expect(await screen.findByRole('tab', { name: 'דיווח ידני' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByLabelText('שעת כניסה')).toBeInTheDocument()
+    expect(screen.getByLabelText('שעת יציאה')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'פרויקטים' })).toBeInTheDocument()
+    expect(screen.getByText('עדיין אין פרויקטים מדווחים')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'הוספת פרויקט' })).toBeInTheDocument()
   })
 
@@ -106,15 +106,16 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     await screen.findByRole('button', { name: 'הוספת פרויקט' })
     await addProject(user, 'Cargo', 'Marketing')
 
-    expect(screen.getByText('דיווח פרויקטים')).toBeInTheDocument()
-    expect(screen.getByText('אל-על')).toBeInTheDocument()
-    expect(screen.getByText('Cargo')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'פרויקט מס׳ 1' })).toBeInTheDocument()
+    expect(screen.getByText(/אל-על/)).toBeInTheDocument()
+    expect(screen.getByText(/Cargo/)).toBeInTheDocument()
     expect(screen.getByText('Marketing')).toBeInTheDocument()
     expect(screen.getByText('משרד')).toBeInTheDocument()
   })
 
   it('saves every project of the day in one request', async () => {
     signIn()
+    const onClose = vi.fn()
     const fetchMock = mockFetch((url) =>
       url.includes('/reports/batch')
         ? { ok: true, status: 201, json: { reports: [] } }
@@ -122,11 +123,11 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     )
     const user = userEvent.setup()
 
-    renderScreen()
+    renderScreen(onClose)
     await screen.findByRole('button', { name: 'הוספת פרויקט' })
 
-    fireEvent.change(screen.getByLabelText('כניסה'), { target: { value: '09:00' } })
-    fireEvent.change(screen.getByLabelText('יציאה'), { target: { value: '18:00' } })
+    fireEvent.change(screen.getByLabelText('שעת כניסה'), { target: { value: '09:00' } })
+    fireEvent.change(screen.getByLabelText('שעת יציאה'), { target: { value: '18:00' } })
 
     await addProject(user, 'Cargo', 'Marketing')
     fireEvent.change(screen.getByLabelText('שעת התחלה 1'), { target: { value: '09:00' } })
@@ -150,6 +151,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     expect(body.rows).toHaveLength(2)
     expect(body.rows[0]).toMatchObject({ projectId: 'project-1', taskId: 'task-2', startTime: '09:00' })
     expect(body.rows[1]).toMatchObject({ projectId: 'project-2', taskId: 'task-3', endTime: '18:00' })
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
   })
 
   it('asks before removing a project and keeps the others', async () => {
@@ -189,6 +191,39 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/reports/batch'))).toBe(false)
   })
 
+  it('sends the chosen report date in the batch request', async () => {
+    signIn()
+    const fetchMock = mockFetch((url) =>
+      url.includes('/reports/batch')
+        ? { ok: true, status: 201, json: { reports: [] } }
+        : { ok: true, status: 200, json: options },
+    )
+    const user = userEvent.setup()
+
+    renderScreen()
+    await screen.findByRole('button', { name: 'הוספת פרויקט' })
+
+    fireEvent.change(screen.getByLabelText('תאריך הדיווח'), { target: { value: '2026-08-20' } })
+    fireEvent.change(screen.getByLabelText('שעת כניסה'), { target: { value: '09:00' } })
+    fireEvent.change(screen.getByLabelText('שעת יציאה'), { target: { value: '18:00' } })
+    await addProject(user, 'Cargo', 'Marketing')
+    fireEvent.change(screen.getByLabelText('שעת התחלה 1'), { target: { value: '09:00' } })
+    fireEvent.change(screen.getByLabelText('שעת סיום 1'), { target: { value: '13:00' } })
+
+    await user.click(screen.getByRole('button', { name: 'שמירה' }))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/reports/batch'),
+        expect.objectContaining({ method: 'POST' }),
+      )
+    })
+
+    const call = fetchMock.mock.calls.find(([url]) => String(url).includes('/reports/batch'))
+    const body = JSON.parse(String((call?.[1] as RequestInit).body))
+    expect(body.date).toBe('2026-08-20')
+  })
+
   it('tells the user to wait when the server throttles the save', async () => {
     signIn()
     mockFetch((url) =>
@@ -205,8 +240,8 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     renderScreen()
     await screen.findByRole('button', { name: 'הוספת פרויקט' })
 
-    fireEvent.change(screen.getByLabelText('כניסה'), { target: { value: '09:00' } })
-    fireEvent.change(screen.getByLabelText('יציאה'), { target: { value: '18:00' } })
+    fireEvent.change(screen.getByLabelText('שעת כניסה'), { target: { value: '09:00' } })
+    fireEvent.change(screen.getByLabelText('שעת יציאה'), { target: { value: '18:00' } })
     await addProject(user, 'Cargo', 'Marketing')
     fireEvent.change(screen.getByLabelText('שעת התחלה 1'), { target: { value: '09:00' } })
     fireEvent.change(screen.getByLabelText('שעת סיום 1'), { target: { value: '13:00' } })
