@@ -7,7 +7,7 @@ import {
 } from '../controllers/timeReport.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
-import { writeRateLimit } from '../middleware/writeRateLimit.middleware.js';
+import { readRateLimit, writeRateLimit } from '../middleware/writeRateLimit.middleware.js';
 import {
   createTimeReportBatchBodySchema,
   createTimeReportBodySchema,
@@ -91,10 +91,20 @@ export const timeReportRouter = Router();
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
+ *       429:
+ *         description: Too many read requests from this caller. Retry after the duration given in the `Retry-After` header.
+ *         headers:
+ *           Retry-After:
+ *             schema: { type: integer }
+ *             description: Seconds to wait before retrying.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
  */
 timeReportRouter.get(
   '/reports',
   authenticate,
+  readRateLimit,
   validate({ query: listTimeReportsQuerySchema }),
   getMyTimeReports,
 );

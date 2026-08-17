@@ -51,6 +51,9 @@ const envSchema = z.object({
   // room for retries and an impatient reload while still bounding how fast one
   // token can drive multi-row inserts.
   RATE_LIMIT_WRITE_MAX_REQUESTS: z.coerce.number().int().positive().default(60),
+  // Authenticated report reads (monthly list). Higher than writes — one page
+  // load plus month navigation should not trip the cap during normal use.
+  RATE_LIMIT_READ_MAX_REQUESTS: z.coerce.number().int().positive().default(120),
   // Durable lockout tier above the in-memory throttle: derived from
   // login_attempts rows rather than a stored flag, so it survives restart
   // and is shared across replicas. Threshold and window must sit above the

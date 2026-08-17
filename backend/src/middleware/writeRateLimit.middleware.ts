@@ -50,3 +50,20 @@ export const writeRateLimit = rateLimit({
     next(AppError.tooManyRequests(retryAfterSeconds(info?.resetTime)));
   },
 });
+
+/** Exported so tests can clear the counters between cases. */
+export const reportReadRateLimitStore = new MemoryStore();
+
+/** Same shape as writeRateLimit — satisfies CodeQL on authenticated GET routes. */
+export const readRateLimit = rateLimit({
+  windowMs: env.RATE_LIMIT_WINDOW_SECONDS * 1000,
+  limit: env.RATE_LIMIT_READ_MAX_REQUESTS,
+  store: reportReadRateLimitStore,
+  standardHeaders: false,
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => req.user?.sub ?? ipKeyGenerator(req.ip ?? ''),
+  handler: (req, _res, next) => {
+    const info = (req as Request & { rateLimit?: RateLimitInfo }).rateLimit;
+    next(AppError.tooManyRequests(retryAfterSeconds(info?.resetTime)));
+  },
+});

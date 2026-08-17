@@ -55,28 +55,51 @@ function Reports() {
   const [month, setMonth] = useState<Dayjs>(() => (demo ? dayjs(DEMO_MONTH) : dayjs()))
   const [modal, setModal] = useState<ModalState | null>(null)
   const [savedDays, setSavedDays] = useState<DemoDay[]>([])
-  const [listLoading, setListLoading] = useState(false)
+  const [listLoading, setListLoading] = useState(
+    () => !isHomeDemo() && Boolean(sessionStore.getState().token),
+  )
+
+  const fetchSavedDays = useCallback(
+    async (targetMonth: Dayjs) => {
+      if (demo || !sessionStore.getState().token) return [] as DemoDay[]
+      const { reports } = await listReports(targetMonth.month() + 1, targetMonth.year())
+      return mapReportsToHomeDays(reports)
+    },
+    [demo],
+  )
 
   const refreshSavedDays = useCallback(async () => {
-    if (demo || !sessionStore.getState().token) {
-      setSavedDays([])
-      return
-    }
-
-    setListLoading(true)
     try {
-      const { reports } = await listReports(month.month() + 1, month.year())
-      setSavedDays(mapReportsToHomeDays(reports))
+      setSavedDays(await fetchSavedDays(month))
     } catch {
       setSavedDays([])
-    } finally {
-      setListLoading(false)
     }
-  }, [demo, month])
+  }, [fetchSavedDays, month])
 
   useEffect(() => {
-    void refreshSavedDays()
-  }, [refreshSavedDays])
+    if (demo || !sessionStore.getState().token) return
+
+    let cancelled = false
+    void fetchSavedDays(month)
+      .then((days) => {
+        if (!cancelled) setSavedDays(days)
+      })
+      .catch(() => {
+        if (!cancelled) setSavedDays([])
+      })
+      .finally(() => {
+        if (!cancelled) setListLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [demo, month, fetchSavedDays])
+
+  const shiftMonth = (delta: number) => {
+    if (!demo && sessionStore.getState().token) setListLoading(true)
+    setMonth((current) => current.add(delta, 'month'))
+  }
 
   const openManualReport = (isoDate?: string, headerMeta?: ManualReportHeaderMeta) => {
     const date = isoDate ?? dayjs().format('YYYY-MM-DD')
@@ -142,7 +165,7 @@ function Reports() {
               type="button"
               className="home-shell__month-btn"
               aria-label="חודש קודם"
-              onClick={() => setMonth((current) => current.subtract(1, 'month'))}
+              onClick={() => shiftMonth(-1)}
             >
               <img src={arrowRight} alt="" className="home-shell__month-icon" width={20} height={20} />
             </button>
@@ -153,7 +176,7 @@ function Reports() {
               type="button"
               className="home-shell__month-btn"
               aria-label="חודש הבא"
-              onClick={() => setMonth((current) => current.add(1, 'month'))}
+              onClick={() => shiftMonth(1)}
             >
               <img src={arrowLeft} alt="" className="home-shell__month-icon" width={20} height={20} />
             </button>

@@ -144,6 +144,23 @@ function tagIcon(tag: ManualReportHeaderTag): string {
   return buildingIcon
 }
 
+function deriveHeader(
+  headerMeta: ManualReportHeaderMeta | undefined,
+  projectCount: number,
+  reportedHours: number,
+): ManualReportHeaderMeta {
+  if (headerMeta?.tone === 'weekend') {
+    return { status: headerMeta.status, tone: 'weekend', tags: [] }
+  }
+  if (projectCount > 0 && reportedHours >= STANDARD_HOURS) {
+    return { status: 'מלא', tone: 'full', tags: [] }
+  }
+  if (reportedHours > 0) {
+    return { status: 'חלקי', tone: 'partial', tags: [] }
+  }
+  return { status: 'חסר', tone: 'missing', tags: [] }
+}
+
 /**
  * Desktop דיווח ידני side panel — Figma frame 1:17385 beside the hours home.
  */
@@ -202,20 +219,7 @@ function ManualReport({ onClose, onSaved, initialDate, headerMeta }: Props) {
   )
   const remaining = Math.max(STANDARD_HOURS - reported, 0)
   const hasHierarchy = (options?.clients.length ?? 0) > 0
-
-  // Status reflects what is in the form, not the home-list row we opened from.
-  const header = useMemo((): ManualReportHeaderMeta => {
-    if (headerMeta?.tone === 'weekend') {
-      return { status: headerMeta.status, tone: 'weekend', tags: [] }
-    }
-    if (fields.length > 0 && reported >= STANDARD_HOURS) {
-      return { status: 'מלא', tone: 'full', tags: [] }
-    }
-    if (reported > 0) {
-      return { status: 'חלקי', tone: 'partial', tags: [] }
-    }
-    return { status: 'חסר', tone: 'missing', tags: [] }
-  }, [fields.length, headerMeta?.status, headerMeta?.tone, reported])
+  const header = deriveHeader(headerMeta, fields.length, reported)
 
   const progressHint =
     fields.length === 0

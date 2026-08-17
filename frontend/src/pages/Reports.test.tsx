@@ -189,7 +189,7 @@ describe('Reports home shell', () => {
     expect(screen.getByText('9 שעות')).toBeInTheDocument()
   })
 
-  it('opens the side panel from a demo day row with that day header badges', async () => {
+  it('opens the side panel from a demo day row with form-derived status', async () => {
     signIn()
     mockReportingOptions()
     window.history.replaceState({}, '', '/?demo=1')
@@ -200,6 +200,6 @@ describe('Reports home shell', () => {
     const dialog = await screen.findByRole('dialog')
     expect(dialog).toBeInTheDocument()
     expect(within(dialog).getByText('חסר')).toBeInTheDocument()
-    expect(within(dialog).getByText('3 מקומות עבודה')).toBeInTheDocument()
+    expect(within(dialog).queryByText('3 מקומות עבודה')).not.toBeInTheDocument()
   })
 })
