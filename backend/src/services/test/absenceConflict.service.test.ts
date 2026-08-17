@@ -215,7 +215,13 @@ describe('checkAbsenceConflicts', () => {
         excludeAbsenceId: beingEdited.id,
       });
 
-      expect(result).toEqual({ hasConflict: true, conflicts: [{ date: '2026-08-04', reason: 'OVERLAPPING_ABSENCE' }] });
+      expect(result).toEqual({
+        hasConflict: true,
+        conflicts: [
+          { date: '2026-08-04', reason: 'OVERLAPPING_ABSENCE' },
+          { date: '2026-08-05', reason: 'OVERLAPPING_ABSENCE' },
+        ],
+      });
       void other;
     });
   });
