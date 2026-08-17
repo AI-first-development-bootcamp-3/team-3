@@ -12,8 +12,26 @@ function tokenFor(user: { id: string; role: string }): string {
   return jwt.sign({ sub: user.id, role: user.role }, env.JWT_SECRET, { expiresIn: '1h' });
 }
 
+/**
+ * The attempt-recording write in rateLimit.middleware.ts is deliberately
+ * fire-and-forget (never awaited by the response) so a slow or failing
+ * write cannot delay or break the client's response - see
+ * openspec/changes/login-account-lockout/design.md, "Hook into the
+ * existing res.on('finish') seam". Every test in this file hits a
+ * credential-handling route, so every `afterEach` here calls this before
+ * `resetDatabase()`: without it, a write from the test that just finished
+ * can still be committing an INSERT into login_attempts when the next
+ * test's TRUNCATE starts, which Postgres can resolve as a deadlock -
+ * resetDatabase's own retry is a backstop for the rare remaining case, not
+ * a substitute for settling here first.
+ */
+async function flushAttemptWrites(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 50));
+}
+
 describe('POST /login', () => {
   afterEach(async () => {
+    await flushAttemptWrites();
     await resetDatabase();
   });
 
@@ -172,6 +190,7 @@ describe('POST /login', () => {
 
 describe('PATCH /me/password', () => {
   afterEach(async () => {
+    await flushAttemptWrites();
     await resetDatabase();
   });
 
@@ -219,6 +238,7 @@ describe('login rate limiting', () => {
   });
 
   afterEach(async () => {
+    await flushAttemptWrites();
     await resetDatabase();
   });
 
@@ -364,6 +384,7 @@ describe('login account lockout', () => {
   });
 
   afterEach(async () => {
+    await flushAttemptWrites();
     await resetDatabase();
   });
 
@@ -374,6 +395,11 @@ describe('login account lockout', () => {
    * the lock are independent tiers with independent storage - see
    * design.md - so this is a legitimate way to accumulate durable
    * CREDENTIAL_REJECTED rows for a lock test.
+   *
+   * Flushes attempt writes before returning: every caller immediately
+   * checks a lock decision (or a row count) that depends on every one of
+   * these attempts having actually landed in `login_attempts`, not just
+   * having been responded to - see flushAttemptWrites above.
    */
   async function failCredentialsBypassingThrottle(email: string, count: number, password = 'wrong-password'): Promise<void> {
     let remaining = count;
@@ -386,18 +412,7 @@ describe('login account lockout', () => {
       }
       remaining -= burst;
     }
-  }
-
-  /**
-   * The attempt-recording write in rateLimit.middleware.ts is deliberately
-   * fire-and-forget (never awaited by the response) so a slow or failing
-   * write cannot delay or break the client's response - see design.md,
-   * "Hook into the existing res.on('finish') seam". A test that queries
-   * `login_attempts` immediately after a request can therefore race that
-   * write; call this first to let it settle.
-   */
-  async function flushAttemptWrites(): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await flushAttemptWrites();
   }
 
   /** Seeds `count` durable CREDENTIAL_REJECTED rows directly, spaced `stepMs`
