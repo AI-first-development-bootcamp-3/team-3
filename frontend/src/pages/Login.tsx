@@ -33,12 +33,11 @@ function Login() {
 
   // Ticks the locked countdown down to zero without reloading or
   // resubmitting - see specs/frontend-auth-routing, "counts down the wait".
+  // Only schedules the next tick; whether the locked message is still shown
+  // at zero is derived at render time below, not set from here, so this
+  // never calls setState synchronously within the effect body.
   useEffect(() => {
-    if (lockedRemainingSeconds === null) return
-    if (lockedRemainingSeconds <= 0) {
-      setFormError(null)
-      return
-    }
+    if (lockedRemainingSeconds === null || lockedRemainingSeconds <= 0) return
     const timer = setTimeout(() => setLockedRemainingSeconds((seconds) => (seconds ?? 0) - 1), 1000)
     return () => clearTimeout(timer)
   }, [lockedRemainingSeconds])
@@ -70,16 +69,21 @@ function Login() {
     }
   }
 
-  const lockedMessage =
-    lockedRemainingSeconds !== null && lockedRemainingSeconds > 0
-      ? `${formError} ניתן לנסות שוב בעוד ${formatRemaining(lockedRemainingSeconds)}.`
-      : formError
+  const isLocked = lockedRemainingSeconds !== null && lockedRemainingSeconds > 0
+  // Once the countdown reaches zero, the lock has lifted - the message is
+  // dropped here rather than by clearing formError from the effect above.
+  const alertMessage =
+    lockedRemainingSeconds === 0
+      ? null
+      : isLocked
+        ? `${formError} ניתן לנסות שוב בעוד ${formatRemaining(lockedRemainingSeconds)}.`
+        : formError
 
   return (
     <Form className="login" layout="vertical" onFinish={handleSubmit(onSubmit)}>
       <h1>התחברות</h1>
 
-      {formError && <Alert type="error" message={lockedMessage} showIcon style={{ marginBottom: 16 }} />}
+      {alertMessage && <Alert type="error" message={alertMessage} showIcon style={{ marginBottom: 16 }} />}
 
       <Form.Item label="אימייל" htmlFor="email" validateStatus={errors.email ? 'error' : ''} help={errors.email?.message}>
         <Controller
@@ -113,7 +117,7 @@ function Login() {
         type="primary"
         htmlType="submit"
         loading={isSubmitting}
-        disabled={lockedRemainingSeconds !== null && lockedRemainingSeconds > 0}
+        disabled={isLocked}
       >
         התחבר
       </Button>
