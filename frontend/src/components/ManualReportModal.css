@@ -10,7 +10,7 @@
   height: 100svh;
   border-inline-start: 1px solid #ececec;
   background: #fff;
-  box-shadow: -8px 0 24px rgb(20 30 62 / 6%);
+  box-shadow: 8px 0 24px rgb(20 30 62 / 6%);
   animation: mr-side-panel-in 220ms ease;
 }
 
@@ -37,7 +37,7 @@
 @keyframes mr-side-panel-in {
   from {
     opacity: 0;
-    transform: translateX(-16px);
+    transform: translateX(16px);
   }
 
   to {
