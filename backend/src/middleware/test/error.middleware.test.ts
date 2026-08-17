@@ -24,6 +24,10 @@ function buildTestApp() {
     throw AppError.tooManyRequests(120);
   });
 
+  testApp.get('/locked', () => {
+    throw AppError.locked(1800);
+  });
+
   testApp.use(errorHandler);
 
   return testApp;
@@ -73,6 +77,19 @@ describe('errorHandler', () => {
     expect(response.headers['retry-after']).toBe('120');
     expect(response.body).toEqual({
       error: { code: 'TOO_MANY_REQUESTS', message: 'Too many attempts. Please try again later.' },
+    });
+  });
+
+  it('attaches Retry-After for a locked error, without adding it to the body', async () => {
+    const response = await request(buildTestApp()).get('/locked');
+
+    expect(response.status).toBe(423);
+    expect(response.headers['retry-after']).toBe('1800');
+    expect(response.body).toEqual({
+      error: {
+        code: 'LOCKED',
+        message: 'This account is temporarily locked due to too many failed attempts. Please try again later.',
+      },
     });
   });
 

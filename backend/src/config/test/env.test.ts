@@ -32,11 +32,14 @@ describe('parseEnv', () => {
       RATE_LIMIT_IP_MAX_ATTEMPTS: 50,
       RATE_LIMIT_WINDOW_SECONDS: 900,
       RATE_LIMIT_WRITE_MAX_REQUESTS: 60,
+      LOCKOUT_MAX_ATTEMPTS: 10,
+      LOCKOUT_WINDOW_HOURS: 24,
+      LOCKOUT_DURATION_MINUTES: 30,
       TRUST_PROXY: 'false',
     });
   });
 
-  it('applies defaults for NODE_ENV, PORT, LOG_LEVEL, STORAGE_DIR, SMTP_PORT, EMAIL_FROM, rate-limit, and trust-proxy settings when omitted', () => {
+  it('applies defaults for NODE_ENV, PORT, LOG_LEVEL, STORAGE_DIR, SMTP_PORT, EMAIL_FROM, rate-limit, lockout, and trust-proxy settings when omitted', () => {
     const env = parseEnv(minimalRequired);
 
     expect(env.NODE_ENV).toBe('development');
@@ -50,6 +53,9 @@ describe('parseEnv', () => {
     expect(env.RATE_LIMIT_IP_MAX_ATTEMPTS).toBe(50);
     expect(env.RATE_LIMIT_WINDOW_SECONDS).toBe(900);
     expect(env.RATE_LIMIT_WRITE_MAX_REQUESTS).toBe(60);
+    expect(env.LOCKOUT_MAX_ATTEMPTS).toBe(10);
+    expect(env.LOCKOUT_WINDOW_HOURS).toBe(24);
+    expect(env.LOCKOUT_DURATION_MINUTES).toBe(30);
     expect(env.TRUST_PROXY).toBe('false');
   });
 
@@ -101,6 +107,41 @@ describe('parseEnv', () => {
     });
 
     expect(env.RATE_LIMIT_IP_MAX_ATTEMPTS).toBe(5);
+  });
+
+  it('accepts explicit lockout values above the rate-limit values', () => {
+    const env = parseEnv({
+      ...minimalRequired,
+      RATE_LIMIT_EMAIL_MAX_ATTEMPTS: '5',
+      RATE_LIMIT_WINDOW_SECONDS: '900',
+      LOCKOUT_MAX_ATTEMPTS: '20',
+      LOCKOUT_WINDOW_HOURS: '48',
+      LOCKOUT_DURATION_MINUTES: '60',
+    });
+
+    expect(env.LOCKOUT_MAX_ATTEMPTS).toBe(20);
+    expect(env.LOCKOUT_WINDOW_HOURS).toBe(48);
+    expect(env.LOCKOUT_DURATION_MINUTES).toBe(60);
+  });
+
+  it('rejects a lockout threshold not greater than the email rate-limit threshold', () => {
+    expect(() =>
+      parseEnv({
+        ...minimalRequired,
+        RATE_LIMIT_EMAIL_MAX_ATTEMPTS: '10',
+        LOCKOUT_MAX_ATTEMPTS: '10',
+      }),
+    ).toThrow(EnvValidationError);
+  });
+
+  it('rejects a lockout window not longer than the rate-limit window', () => {
+    expect(() =>
+      parseEnv({
+        ...minimalRequired,
+        RATE_LIMIT_WINDOW_SECONDS: '86400',
+        LOCKOUT_WINDOW_HOURS: '24',
+      }),
+    ).toThrow(EnvValidationError);
   });
 
   it('applies defaults for JWT_EXPIRES_IN_SECONDS and JWT_REMEMBER_ME_EXPIRES_IN_SECONDS when omitted', () => {

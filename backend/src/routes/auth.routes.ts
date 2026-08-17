@@ -54,6 +54,15 @@ export const authRouter = Router();
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
+ *       423:
+ *         description: This email is locked for sustained failed attempts. Identical whether or not the email is registered. Retry after the duration given in the `Retry-After` header.
+ *         headers:
+ *           Retry-After:
+ *             schema: { type: integer }
+ *             description: Seconds to wait before retrying.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
  */
 authRouter.post(
   '/login',
