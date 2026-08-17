@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Dayjs } from 'dayjs'
-import ReportEntryForm from '../components/ReportEntryForm'
+import ManualReport from '../components/ManualReport'
 import dayjs from '../services/dayjs'
 import abraLogo from '../assets/home/abra-logo.svg'
 import addCircle from '../assets/home/add-circle.svg'
@@ -36,6 +36,10 @@ function Reports() {
   const demo = isHomeDemo()
   const [month, setMonth] = useState<Dayjs>(() => (demo ? dayjs(DEMO_MONTH) : dayjs()))
   const [showEntry, setShowEntry] = useState(false)
+
+  if (showEntry) {
+    return <ManualReport onClose={() => setShowEntry(false)} />
+  }
 
   return (
     <div className="home-shell">
@@ -92,15 +96,6 @@ function Reports() {
       </header>
 
       <div className="home-shell__body">
-        {showEntry ? (
-          <>
-            <button type="button" className="home-shell__back" onClick={() => setShowEntry(false)}>
-              חזרה
-            </button>
-            <ReportEntryForm />
-          </>
-        ) : (
-          <>
             <section className="home-shell__kpis" aria-label="סיכום חודשי">
               {KPI_CARDS.map((card) => {
                 const value = demo ? DEMO_KPIS[card.label] : undefined
@@ -179,8 +174,6 @@ function Reports() {
                 <p className="home-shell__daily-empty">אין דיווחים להצגה</p>
               )}
             </section>
-          </>
-        )}
       </div>
     </div>
   )
