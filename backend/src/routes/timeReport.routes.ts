@@ -1,0 +1,70 @@
+import { Router } from 'express';
+import { getMyReportingOptions, postTimeReport } from '../controllers/timeReport.controller.js';
+import { authenticate } from '../middleware/auth.middleware.js';
+import { validate } from '../middleware/validate.middleware.js';
+import { createTimeReportBodySchema } from '../types/timeReport.schema.js';
+
+export const timeReportRouter = Router();
+
+/**
+ * @openapi
+ * /reports:
+ *   post:
+ *     summary: Create a daily time report for the authenticated caller
+ *     tags: [Time reports]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [date, workLocation, startTime, endTime, clientId, projectId, taskId, description]
+ *             properties:
+ *               date: { type: string, format: date, example: '2026-08-16' }
+ *               workLocation: { type: string, enum: [OFFICE, CLIENT, HOME] }
+ *               startTime: { type: string, example: '09:00', description: 'HH:mm' }
+ *               endTime: { type: string, example: '18:00', description: 'HH:mm' }
+ *               clientId: { type: string, format: uuid }
+ *               projectId: { type: string, format: uuid }
+ *               taskId: { type: string, format: uuid }
+ *               description: { type: string }
+ *     responses:
+ *       201:
+ *         description: The persisted time report.
+ *       400:
+ *         description: Malformed body, invalid interval, or hierarchy mismatch.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ *       401:
+ *         description: Authentication required.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ */
+timeReportRouter.post(
+  '/reports',
+  authenticate,
+  validate({ body: createTimeReportBodySchema }),
+  postTimeReport,
+);
+
+/**
+ * @openapi
+ * /me/reporting-options:
+ *   get:
+ *     summary: Active client → project → task tree for the report form
+ *     description: Not assignment-filtered yet (SCRUM-71). Returns all active entities with at least one task.
+ *     tags: [Time reports]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Nested clients with projects and tasks, sorted by name.
+ *       401:
+ *         description: Authentication required.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ */
+timeReportRouter.get('/me/reporting-options', authenticate, getMyReportingOptions);
