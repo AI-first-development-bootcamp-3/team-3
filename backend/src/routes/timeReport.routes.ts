@@ -1,8 +1,16 @@
 import { Router } from 'express';
-import { getMyReportingOptions, postTimeReport } from '../controllers/timeReport.controller.js';
+import {
+  getMyReportingOptions,
+  postTimeReport,
+  postTimeReportBatch,
+} from '../controllers/timeReport.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
-import { createTimeReportBodySchema } from '../types/timeReport.schema.js';
+import { writeRateLimit } from '../middleware/writeRateLimit.middleware.js';
+import {
+  createTimeReportBatchBodySchema,
+  createTimeReportBodySchema,
+} from '../types/timeReport.schema.js';
 
 export const timeReportRouter = Router();
 
@@ -42,12 +50,87 @@ export const timeReportRouter = Router();
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
+ *       429:
+ *         description: Too many report writes from this caller. Retry after the duration given in the `Retry-After` header.
+ *         headers:
+ *           Retry-After:
+ *             schema: { type: integer }
+ *             description: Seconds to wait before retrying.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
  */
 timeReportRouter.post(
   '/reports',
   authenticate,
+  writeRateLimit,
   validate({ body: createTimeReportBodySchema }),
   postTimeReport,
+);
+
+/**
+ * @openapi
+ * /reports/batch:
+ *   post:
+ *     summary: Create every project row of one day in a single transaction
+ *     description: >
+ *       All rows persist or none do. Row-level problems are reported as
+ *       `rows.<index>.<field>` so the client can mark the failing card.
+ *     tags: [Time reports]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [date, rows]
+ *             properties:
+ *               date: { type: string, format: date, example: '2026-08-16' }
+ *               rows:
+ *                 type: array
+ *                 minItems: 1
+ *                 maxItems: 20
+ *                 items:
+ *                   type: object
+ *                   required: [workLocation, startTime, endTime, clientId, projectId, taskId]
+ *                   properties:
+ *                     workLocation: { type: string, enum: [OFFICE, CLIENT, HOME] }
+ *                     startTime: { type: string, example: '09:00', description: 'HH:mm' }
+ *                     endTime: { type: string, example: '13:00', description: 'HH:mm' }
+ *                     clientId: { type: string, format: uuid }
+ *                     projectId: { type: string, format: uuid }
+ *                     taskId: { type: string, format: uuid }
+ *                     description: { type: string, description: 'Optional' }
+ *     responses:
+ *       201:
+ *         description: The persisted rows, in submitted order.
+ *       400:
+ *         description: Malformed body, invalid interval, or hierarchy mismatch on any row.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ *       401:
+ *         description: Authentication required.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ *       429:
+ *         description: Too many report writes from this caller. Retry after the duration given in the `Retry-After` header.
+ *         headers:
+ *           Retry-After:
+ *             schema: { type: integer }
+ *             description: Seconds to wait before retrying.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ */
+timeReportRouter.post(
+  '/reports/batch',
+  authenticate,
+  writeRateLimit,
+  validate({ body: createTimeReportBatchBodySchema }),
+  postTimeReportBatch,
 );
 
 /**

@@ -1,0 +1,673 @@
+/*
+ * דיווח ידני — Figma mobile frames 1:1621 (empty) and 1:4352 (with a project).
+ * Desktop centres the 393px frame: the desktop treatment is still undecided in
+ * the design file, so we do not invent one.
+ */
+.manual-report,
+.manual-report *,
+.mr-sheet-overlay *,
+.mr-dialog-overlay * {
+  box-sizing: border-box;
+}
+
+.manual-report {
+  --mr-bg: #f2f2f7;
+  --mr-card: #fff;
+  --mr-text: #181818;
+  --mr-muted: rgb(24 24 24 / 64%);
+  --mr-navy: #141e3e;
+  --mr-blue: #0c69ff;
+  --mr-value: #0f77f0;
+  --mr-selected: #0065d4;
+  --mr-disabled: #9fa3b1;
+  --mr-chip: #f0f4fa;
+  --mr-separator: #e1e7f3;
+  --mr-danger: #ff0000;
+  --mr-divider: #d5d5d9;
+  --mr-radius: 10px;
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  max-width: 393px;
+  min-height: 100svh;
+  /* Full-bleed inside `main`, which pads its children by 16px. */
+  margin: -16px;
+  background: var(--mr-bg);
+  color: var(--mr-text);
+  font-family: 'Assistant', system-ui, sans-serif;
+}
+
+/* Wide enough to hold the 393px frame: centre it instead of hugging the edge. */
+@media (min-width: 425px) {
+  .manual-report {
+    width: 393px;
+    margin-block: -16px;
+    margin-inline: auto;
+  }
+}
+
+.manual-report__header {
+  position: relative;
+  flex-shrink: 0;
+  height: 64px;
+  padding: 8px 0 12px;
+  background: var(--mr-bg);
+}
+
+.manual-report__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 44px;
+  text-align: center;
+  color: #000;
+}
+
+.manual-report__close {
+  position: absolute;
+  top: 15px;
+  left: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 100px;
+  background: var(--mr-card);
+  cursor: pointer;
+}
+
+.manual-report__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+  padding: 16px;
+  padding-bottom: 160px;
+}
+
+/* Segmented control */
+.manual-report__segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 32px;
+  padding: 2px;
+  border-radius: 8px;
+  background: rgb(118 118 128 / 12%);
+}
+
+.manual-report__segment {
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #000;
+  font: 400 13px/20px inherit;
+  letter-spacing: -0.0062em;
+  cursor: pointer;
+}
+
+.manual-report__segment[aria-selected='true'] {
+  background: var(--mr-card);
+  font-weight: 500;
+  box-shadow:
+    0 3px 1px rgb(0 0 0 / 4%),
+    0 3px 8px rgb(0 0 0 / 12%);
+  outline: 0.5px solid rgb(0 0 0 / 4%);
+}
+
+.manual-report__segment[disabled] {
+  cursor: not-allowed;
+}
+
+/* Day header: date on the reading side, standard-hours tag opposite it */
+.manual-report__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.manual-report__day-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 18px;
+  padding-inline-start: 16px;
+}
+
+.manual-report__date {
+  margin: 0;
+  font-size: 14px;
+  line-height: 18px;
+  letter-spacing: -0.0057em;
+  color: var(--mr-muted);
+}
+
+.manual-report__quota {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-block: 0 4px;
+  padding-inline: 4px 8px;
+  border-radius: 100px;
+  background: #e3f9ca;
+  color: #106103;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.manual-report__section-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 20px;
+  color: #212525;
+}
+
+/* Card + cells */
+.mr-card {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--mr-radius);
+  background: var(--mr-card);
+}
+
+.mr-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  padding-inline: 16px 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+}
+
+button.mr-cell {
+  cursor: pointer;
+}
+
+.mr-cell + .mr-cell::before,
+.mr-cell + .mr-project__footer::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 16px 0;
+  height: 0.75px;
+  background: var(--mr-separator);
+}
+
+.mr-cell__label {
+  flex-shrink: 0;
+  font-size: 17px;
+  line-height: 22px;
+  color: var(--mr-text);
+}
+
+.mr-cell__required {
+  color: var(--mr-danger);
+}
+
+.mr-cell__value {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mr-cell__placeholder {
+  color: var(--mr-value);
+  font-size: 17px;
+  line-height: 22px;
+}
+
+.mr-cell__chevron {
+  flex-shrink: 0;
+  color: #c7c7cc;
+}
+
+.mr-cell__time {
+  width: 56px;
+  height: 28px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: rgb(118 118 128 / 12%);
+  color: var(--mr-text);
+  font: 17px/22px inherit;
+  text-align: center;
+}
+
+/* Chrome pads the time field for a picker button the mock does not have. */
+.mr-cell__time::-webkit-calendar-picker-indicator {
+  display: none;
+}
+
+.mr-cell__time::-webkit-datetime-edit,
+.mr-cell__time::-webkit-datetime-edit-fields-wrapper,
+.mr-cell__time::-webkit-datetime-edit-hour-field,
+.mr-cell__time::-webkit-datetime-edit-minute-field,
+.mr-cell__time::-webkit-datetime-edit-text {
+  padding: 0;
+}
+
+.mr-cell__detail {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 0;
+  border: 0;
+  background: transparent;
+  color: var(--mr-text);
+  font: 17px/22px inherit;
+  text-align: start;
+}
+
+.mr-cell__detail::placeholder {
+  color: rgb(60 60 67 / 30%);
+}
+
+.mr-cell__error {
+  margin: 0;
+  padding-block: 0 8px;
+  padding-inline: 16px 12px;
+  color: var(--mr-danger);
+  font-size: 13px;
+  line-height: 16px;
+}
+
+/* Value chips: client → project breadcrumb, task, location */
+.mr-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px 6px;
+  border-radius: 100px;
+  background: var(--mr-chip);
+  font-size: 15px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.mr-chip--value {
+  color: var(--mr-value);
+}
+
+.mr-chip-arrow {
+  flex-shrink: 0;
+  color: #9aa1ad;
+}
+
+/* Project card */
+.mr-project__footer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--mr-danger);
+  font: 17px/22px inherit;
+  cursor: pointer;
+}
+
+.manual-report__add {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--mr-blue);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Footer: day progress + save, pinned like the mock's blurred bar */
+.manual-report__footer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-top: 1px solid var(--mr-divider);
+  background: var(--mr-card);
+}
+
+.manual-report__progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-inline: 16px;
+}
+
+.manual-report__progress-labels {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--mr-muted);
+}
+
+.manual-report__progress-track {
+  height: 5px;
+  border-radius: 100px;
+  background: #dde1f2;
+}
+
+.manual-report__progress-fill {
+  height: 100%;
+  min-width: 10px;
+  border-radius: 100px;
+  background: linear-gradient(90deg, #ff8900, #ff9100);
+  transition: width 150ms ease;
+}
+
+.manual-report__save {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 48px;
+  padding: 12px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--mr-navy);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.manual-report__save[disabled] {
+  background: var(--mr-disabled);
+  cursor: not-allowed;
+}
+
+/* Error banner — Figma 1:5931 */
+.manual-report__banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 12px;
+  background: #eb2f44;
+  color: #fff;
+}
+
+.manual-report__banner-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 12%);
+}
+
+.manual-report__banner-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.manual-report__banner h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.manual-report__banner p {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.manual-report__banner button {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.manual-report__empty {
+  margin: 0;
+  padding: 24px 16px;
+  border-radius: var(--mr-radius);
+  background: var(--mr-card);
+  color: var(--mr-muted);
+  text-align: center;
+}
+
+/* Stepped picker sheet — Figma 1:7225 / 1:7926 / 1:8238 */
+.mr-sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgb(0 0 0 / 40%);
+}
+
+.mr-sheet {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 393px;
+  /* The mock's sheet clears about a quarter of the screen and grows with content. */
+  min-height: 74svh;
+  max-height: 100svh;
+  border-radius: var(--mr-radius) var(--mr-radius) 0 0;
+  background: var(--mr-bg);
+  font-family: 'Assistant', system-ui, sans-serif;
+}
+
+.mr-sheet__header {
+  position: relative;
+  flex-shrink: 0;
+  height: 64px;
+  padding: 8px 0 12px;
+}
+
+.mr-sheet__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 44px;
+  text-align: center;
+  color: #000;
+}
+
+.mr-sheet__back {
+  position: absolute;
+  top: 15px;
+  right: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 100px;
+  background: var(--mr-card);
+  cursor: pointer;
+}
+
+.mr-sheet__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.mr-sheet__group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mr-sheet__group-label {
+  margin: 0;
+  padding-inline-start: 16px;
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--mr-muted);
+}
+
+.mr-sheet__option {
+  justify-content: space-between;
+}
+
+/* iOS insets the separator once a row carries a leading mark. */
+.mr-sheet__option + .mr-sheet__option::before {
+  inset-inline: 25px;
+}
+
+.mr-sheet__option[aria-selected='true'] .mr-cell__label {
+  color: var(--mr-selected);
+}
+
+.mr-sheet__footer {
+  flex-shrink: 0;
+  padding: 16px;
+  border-top: 1px solid var(--mr-divider);
+  background: var(--mr-card);
+}
+
+.mr-sheet__cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 48px;
+  padding: 12px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--mr-navy);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.mr-sheet__cta[disabled] {
+  background: var(--mr-disabled);
+  cursor: not-allowed;
+}
+
+/* Delete confirmation — Figma alert component 1:6792 */
+.mr-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: min(361px, 100%);
+  padding: 32px 20px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow:
+    0 6px 12px rgb(0 0 0 / 10%),
+    0 22px 22px rgb(0 0 0 / 9%),
+    0 50px 30px rgb(0 0 0 / 5%);
+  font-family: 'Assistant', system-ui, sans-serif;
+}
+
+.mr-dialog__head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.mr-dialog__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: #fef5cc;
+}
+
+.mr-dialog__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 22px;
+  text-align: center;
+  color: #212525;
+}
+
+.mr-dialog__body {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 22px;
+  text-align: center;
+  color: #848891;
+}
+
+.mr-dialog__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mr-dialog__cancel,
+.mr-dialog__confirm {
+  padding: 16px 8px;
+  border: 0;
+  border-radius: 4px;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mr-dialog__cancel {
+  background: transparent;
+  color: #212525;
+  text-decoration: underline;
+}
+
+.mr-dialog__confirm {
+  background: var(--mr-navy);
+  color: #fff;
+}
+
+.mr-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 40%);
+}

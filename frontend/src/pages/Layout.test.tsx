@@ -1,7 +1,7 @@
-import { render, screen, cleanup } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, afterEach, vi } from 'vitest'
-import { MemoryRouter, Routes, Route } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import Layout from './Layout'
 
 const logoutAndRedirectMock = vi.fn()
@@ -15,28 +15,48 @@ afterEach(() => {
   logoutAndRedirectMock.mockClear()
 })
 
-function renderLayout(initialEntry = '/') {
+function renderAt(path: string) {
   return render(
-    <MemoryRouter initialEntries={[initialEntry]}>
+    <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/" element={<Layout />}>
-          <Route index element={<div>Home content</div>} />
+          <Route index element={<div>home</div>} />
+          <Route path="absences" element={<div>absences</div>} />
+          <Route path="admin" element={<div>admin</div>} />
         </Route>
       </Routes>
     </MemoryRouter>,
   )
 }
 
+describe('Layout', () => {
+  it('hides דיווח שעות / היעדרויות / ניהול on the hours home', () => {
+    renderAt('/')
+
+    expect(screen.queryByRole('link', { name: 'דיווח שעות' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'היעדרויות' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'ניהול' })).not.toBeInTheDocument()
+  })
+
+  it('shows the app menu on absences', () => {
+    renderAt('/absences')
+
+    expect(screen.getByRole('link', { name: 'דיווח שעות' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'היעדרויות' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'ניהול' })).toBeInTheDocument()
+  })
+})
+
 describe('Layout logout control', () => {
   it('renders a logout control in the navigation', () => {
-    renderLayout()
+    renderAt('/absences')
 
     expect(screen.getByText('התנתקות')).toBeInTheDocument()
   })
 
   it('invokes the logout flow when clicked', async () => {
     const user = userEvent.setup()
-    renderLayout()
+    renderAt('/absences')
 
     await user.click(screen.getByText('התנתקות'))
 
@@ -44,7 +64,7 @@ describe('Layout logout control', () => {
   })
 
   it('does not render the logout control as the selected/active menu item', () => {
-    renderLayout()
+    renderAt('/absences')
 
     const logoutItem = screen.getByText('התנתקות').closest('li')
     expect(logoutItem?.className).not.toMatch(/-item-selected/)

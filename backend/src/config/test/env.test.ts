@@ -31,6 +31,7 @@ describe('parseEnv', () => {
       RATE_LIMIT_EMAIL_MAX_ATTEMPTS: 5,
       RATE_LIMIT_IP_MAX_ATTEMPTS: 50,
       RATE_LIMIT_WINDOW_SECONDS: 900,
+      RATE_LIMIT_WRITE_MAX_REQUESTS: 60,
       LOCKOUT_MAX_ATTEMPTS: 10,
       LOCKOUT_WINDOW_HOURS: 24,
       LOCKOUT_DURATION_MINUTES: 30,
@@ -51,6 +52,7 @@ describe('parseEnv', () => {
     expect(env.RATE_LIMIT_EMAIL_MAX_ATTEMPTS).toBe(5);
     expect(env.RATE_LIMIT_IP_MAX_ATTEMPTS).toBe(50);
     expect(env.RATE_LIMIT_WINDOW_SECONDS).toBe(900);
+    expect(env.RATE_LIMIT_WRITE_MAX_REQUESTS).toBe(60);
     expect(env.LOCKOUT_MAX_ATTEMPTS).toBe(10);
     expect(env.LOCKOUT_WINDOW_HOURS).toBe(24);
     expect(env.LOCKOUT_DURATION_MINUTES).toBe(30);

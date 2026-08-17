@@ -11,10 +11,13 @@ const items = [
 
 function Layout() {
   const { pathname } = useLocation();
+  const showAppMenu = pathname !== "/";
 
   return (
     <div className="app-shell">
-      <Menu mode="horizontal" selectedKeys={[pathname]} items={items} />
+      {showAppMenu ? (
+        <Menu mode="horizontal" selectedKeys={[pathname]} items={items} />
+      ) : null}
       <main>
         <Outlet />
       </main>
