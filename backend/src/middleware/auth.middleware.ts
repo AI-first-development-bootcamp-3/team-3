@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { AppError } from '../types/errors.js';
 import type { JwtPayload } from '../types/auth.js';
+import { Role } from '../generated/prisma/enums.js';
 
 function extractBearerToken(req: Request): string | undefined {
   const header = req.headers.authorization;
@@ -70,6 +71,8 @@ export function requireRole(role: JwtPayload['role']): RequestHandler {
     next();
   };
 
-  handler.__isAdminRoleGuard = true;
+  if (role === Role.ADMIN) {
+    handler.__isAdminRoleGuard = true;
+  }
   return handler;
 }
