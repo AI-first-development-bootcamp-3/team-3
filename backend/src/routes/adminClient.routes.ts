@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getAdminClients, patchAdminClient, postAdminClient } from '../controllers/adminClient.controller.js';
 import { authenticate, requireRole } from '../middleware/auth.middleware.js';
+import { readRateLimit, writeRateLimit } from '../middleware/writeRateLimit.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
 import { Role } from '../generated/prisma/enums.js';
 import { clientIdParamSchema, createClientBodySchema, updateClientBodySchema } from '../types/adminClient.schema.js';
@@ -60,10 +61,15 @@ export const adminClientRouter = Router();
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
  */
-adminClientRouter.get('/admin/clients', authenticate, requireRole(Role.ADMIN), getAdminClients);
+// readRateLimit/writeRateLimit run *ahead* of authenticate on purpose - see
+// their doc comments in writeRateLimit.middleware.ts. A limiter placed after
+// authenticate leaves that token-verify/user-row-read work itself
+// unprotected, both to CodeQL's js/missing-rate-limiting and in fact.
+adminClientRouter.get('/admin/clients', readRateLimit, authenticate, requireRole(Role.ADMIN), getAdminClients);
 
 adminClientRouter.post(
   '/admin/clients',
+  writeRateLimit,
   authenticate,
   requireRole(Role.ADMIN),
   validate({ body: createClientBodySchema }),
@@ -118,6 +124,7 @@ adminClientRouter.post(
  */
 adminClientRouter.patch(
   '/admin/clients/:id',
+  writeRateLimit,
   authenticate,
   requireRole(Role.ADMIN),
   validate({ params: clientIdParamSchema, body: updateClientBodySchema }),
