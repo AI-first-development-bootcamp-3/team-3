@@ -1,7 +1,26 @@
 import { render, screen, cleanup } from '@testing-library/react'
 import { describe, expect, it, afterEach } from 'vitest'
+import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import RequireRole from './RequireRole'
 import { sessionStore } from '../services/sessionStore'
+
+function renderWithRoutes() {
+  return render(
+    <MemoryRouter initialEntries={['/admin']}>
+      <Routes>
+        <Route
+          path="/admin"
+          element={
+            <RequireRole role="admin">
+              <div>Admin content</div>
+            </RequireRole>
+          }
+        />
+        <Route path="/" element={<div>Home page</div>} />
+      </Routes>
+    </MemoryRouter>,
+  )
+}
 
 describe('RequireRole', () => {
   afterEach(() => {
@@ -9,18 +28,14 @@ describe('RequireRole', () => {
     sessionStore.getState().clearSession()
   })
 
-  it('renders a forbidden message when no user is signed in', () => {
-    render(
-      <RequireRole role="admin">
-        <div>Admin content</div>
-      </RequireRole>,
-    )
+  it('redirects to / and does not render the children when no user is signed in', () => {
+    renderWithRoutes()
 
-    expect(screen.getByText(/forbidden - admin role required/i)).toBeInTheDocument()
+    expect(screen.getByText('Home page')).toBeInTheDocument()
     expect(screen.queryByText('Admin content')).not.toBeInTheDocument()
   })
 
-  it('renders a forbidden message when the signed-in user has a different role', () => {
+  it('redirects to / and does not render the children when the signed-in user has a different role', () => {
     sessionStore
       .getState()
       .setSession(
@@ -30,13 +45,9 @@ describe('RequireRole', () => {
         false,
       )
 
-    render(
-      <RequireRole role="admin">
-        <div>Admin content</div>
-      </RequireRole>,
-    )
+    renderWithRoutes()
 
-    expect(screen.getByText(/forbidden - admin role required/i)).toBeInTheDocument()
+    expect(screen.getByText('Home page')).toBeInTheDocument()
     expect(screen.queryByText('Admin content')).not.toBeInTheDocument()
   })
 
@@ -50,13 +61,9 @@ describe('RequireRole', () => {
         false,
       )
 
-    render(
-      <RequireRole role="admin">
-        <div>Admin content</div>
-      </RequireRole>,
-    )
+    renderWithRoutes()
 
     expect(screen.getByText('Admin content')).toBeInTheDocument()
-    expect(screen.queryByText(/forbidden/i)).not.toBeInTheDocument()
+    expect(screen.queryByText('Home page')).not.toBeInTheDocument()
   })
 })

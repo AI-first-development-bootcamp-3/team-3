@@ -8,6 +8,7 @@ import { errorHandler } from './middleware/error.middleware.js';
 import { notFoundHandler } from './middleware/notFound.middleware.js';
 import { requestLogger } from './middleware/requestLogger.middleware.js';
 import { absenceRouter } from './routes/absence.routes.js';
+import { adminClientRouter } from './routes/adminClient.routes.js';
 import { adminUserRouter } from './routes/adminUser.routes.js';
 import { attachmentRouter } from './routes/attachment.routes.js';
 import { authRouter } from './routes/auth.routes.js';
@@ -45,6 +46,7 @@ app.use(sampleRouter);
 app.use(attachmentRouter);
 app.use(authRouter);
 app.use(adminUserRouter);
+app.use(adminClientRouter);
 app.use(timeReportRouter);
 app.use(absenceRouter);
 
