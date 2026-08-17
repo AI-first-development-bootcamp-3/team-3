@@ -1,0 +1,90 @@
+## MODIFIED Requirements
+
+### Requirement: Token verification
+
+Protected endpoints SHALL require a signed bearer token. The service SHALL verify the token's signature and expiry, SHALL confirm that the account the token identifies still exists and is active, and SHALL confirm that the token was issued no earlier than the account's current session-validity boundary, before any business logic runs. It SHALL make the caller's identity and role available to the endpoint. Requests without a valid token, or whose account no longer exists or is no longer active, or whose token predates that boundary, SHALL be rejected with status `401`.
+
+Each account SHALL carry a session-validity boundary that moves forward when the account ends its session, so that every token issued before that moment stops being accepted. The boundary SHALL NOT move when the account authenticates, so logging in does not disturb the account's other sessions.
+
+A token that does not state when it was issued SHALL be treated as failing this check rather than passing it, so that an unattributable token cannot outlive a revocation.
+
+The account check and the boundary check SHALL apply to every protected endpoint without per-endpoint opt-in, and SHALL reflect the account's state at the time of the request rather than at the time the token was issued.
+
+#### Scenario: Valid token establishes identity
+
+- **WHEN** a request to a protected endpoint carries a validly signed, unexpired token for an active account, issued after that account's session-validity boundary
+- **THEN** the request proceeds
+- **AND** the caller's user identifier and role are available to the endpoint
+
+#### Scenario: Missing token
+
+- **WHEN** a request to a protected endpoint carries no bearer token
+- **THEN** the service responds `401` using the standard error contract
+
+#### Scenario: Malformed or wrongly signed token
+
+- **WHEN** a request carries a token that is malformed or not signed by the service's key
+- **THEN** the service responds `401`
+- **AND** the response does not disclose why verification failed
+
+#### Scenario: Expired token
+
+- **WHEN** a request carries a correctly signed token whose expiry has passed
+- **THEN** the service responds `401`
+- **AND** the response distinguishes expiry from other failures, so clients can prompt re-authentication
+
+#### Scenario: Deactivated account is refused
+
+- **WHEN** a request carries a validly signed, unexpired token whose account has since been deactivated
+- **THEN** the service responds `401`
+- **AND** the response carries a code distinguishing a revoked account from an expired token, so clients need not present it as an ordinary session timeout
+- **AND** no business logic for the endpoint runs
+
+#### Scenario: Deactivated administrator loses administrative access
+
+- **WHEN** a deactivated administrator uses their still-unexpired token against any admin-only endpoint
+- **THEN** the service responds `401`
+- **AND** no account is created, no password is reset, and no role is changed
+
+#### Scenario: Token for an account that no longer exists
+
+- **WHEN** a request carries a validly signed, unexpired token whose subject matches no stored account
+- **THEN** the service responds `401`
+
+#### Scenario: Reactivated account regains access with the same token
+
+- **WHEN** an account is deactivated and later reactivated, and a token issued before the deactivation has not yet expired
+- **THEN** a request carrying that token proceeds normally
+
+#### Scenario: Token issued before the session-validity boundary is refused
+
+- **WHEN** a request carries a validly signed, unexpired token for an active account that was issued before that account's current session-validity boundary
+- **THEN** the service responds `401`
+- **AND** the response carries a code distinguishing an ended session from an expired token and from a deactivated account
+- **AND** no business logic for the endpoint runs
+
+#### Scenario: Token issued after the boundary is accepted
+
+- **WHEN** an account's session-validity boundary moves forward and the account then obtains a new token
+- **THEN** requests carrying the new token proceed normally
+
+#### Scenario: Token without an issued-at claim is refused
+
+- **WHEN** a request carries a correctly signed, unexpired token that does not state when it was issued
+- **THEN** the service responds `401`
+
+#### Scenario: Authenticating does not move the boundary
+
+- **WHEN** an account with an existing unexpired token authenticates again
+- **THEN** the earlier token continues to be accepted
+
+#### Scenario: Public endpoints remain reachable
+
+- **WHEN** an unauthenticated request is made to an endpoint not marked protected
+- **THEN** the request proceeds normally
+- **AND** no account lookup is performed
+
+#### Scenario: The boundary check costs no additional storage lookup
+
+- **WHEN** a request to a protected endpoint is verified
+- **THEN** the account state needed for both the active-account check and the boundary check is obtained together, without a second lookup per request
