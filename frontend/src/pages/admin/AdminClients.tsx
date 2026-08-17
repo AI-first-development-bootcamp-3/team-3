@@ -53,6 +53,7 @@ function AdminClients() {
     },
   ]
 
+function AdminClients() {
   return (
     <div dir="rtl">
       <h1>לקוחות</h1>
