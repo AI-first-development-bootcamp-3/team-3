@@ -51,6 +51,21 @@ The request MAY include a `rememberMe` boolean, defaulting to `false` when absen
 - **WHEN** a request to `POST /login` is missing `email`/`password` or supplies a malformed email
 - **THEN** the service responds `400` using the standard error contract
 
+#### Scenario: Too many failed attempts
+
+- **WHEN** a request to `POST /login` arrives from a caller who has exceeded a configured attempt threshold within the window
+- **THEN** the service responds `429` using the standard error contract, without checking the supplied password
+
+#### Scenario: Locked email
+
+- **WHEN** a request to `POST /login` supplies an email that has been locked for sustained failed attempts
+- **THEN** the service responds `423` using the standard error contract, without checking the supplied password
+
+#### Scenario: Locked response does not reveal registration
+
+- **WHEN** a locked registered email and a locked unregistered email are each attempted
+- **THEN** both receive `423` responses that are indistinguishable from one another
+
 ### Requirement: Expired tokens are rejected distinguishably
 
 The service SHALL reject a request bearing an expired token with `401` and an error code that identifies
