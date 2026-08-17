@@ -19,6 +19,13 @@ export interface TimeReportDto {
   description: string;
 }
 
+export interface TimeReportListItemDto extends TimeReportDto {
+  clientName: string;
+  projectName: string;
+  taskName: string;
+  durationHours: number;
+}
+
 export interface ReportingTaskOption {
   id: string;
   name: string;
@@ -55,6 +62,14 @@ function calendarDateToDate(isoDate: string): Date {
 
 function dateToCalendarDate(value: Date): string {
   return value.toISOString().slice(0, 10);
+}
+
+/**
+ * Both times are stored anchored to the same epoch day (see `hhmmToDate`), so
+ * their raw millisecond difference is the worked duration.
+ */
+function hoursBetween(start: Date, end: Date): number {
+  return (end.getTime() - start.getTime()) / 3_600_000;
 }
 
 function toDto(row: {
@@ -197,6 +212,37 @@ export async function createTimeReportBatch(
   );
 
   return created.map(toDto);
+}
+
+/** Returns every row the caller saved in the given calendar month, newest day first. */
+export async function listTimeReportsForMonth(
+  userId: string,
+  month: number,
+  year: number,
+): Promise<TimeReportListItemDto[]> {
+  const rangeStart = new Date(Date.UTC(year, month - 1, 1));
+  const rangeEnd = new Date(Date.UTC(year, month, 1));
+
+  const rows = await prisma.timeReport.findMany({
+    where: {
+      userId,
+      date: { gte: rangeStart, lt: rangeEnd },
+    },
+    include: {
+      client: { select: { name: true } },
+      project: { select: { name: true } },
+      task: { select: { name: true } },
+    },
+    orderBy: [{ date: 'desc' }, { startTime: 'asc' }],
+  });
+
+  return rows.map((row) => ({
+    ...toDto(row),
+    clientName: row.client.name,
+    projectName: row.project.name,
+    taskName: row.task.name,
+    durationHours: hoursBetween(row.startTime, row.endTime),
+  }));
 }
 
 export async function listReportingOptions(): Promise<ReportingOptions> {

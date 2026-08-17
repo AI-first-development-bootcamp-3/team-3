@@ -27,6 +27,17 @@ export interface CreateReportBatchResult {
   reports: Report[]
 }
 
+export interface TimeReportListItem extends Report {
+  clientName: string
+  projectName: string
+  taskName: string
+  durationHours: number
+}
+
+export interface ListReportsResult {
+  reports: TimeReportListItem[]
+}
+
 export interface ReportingTaskOption {
   id: Id
   name: string

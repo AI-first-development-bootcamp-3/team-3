@@ -4,7 +4,9 @@ export interface StoredSession {
   expiresAt: string
 }
 
-const SESSION_KEY = 'abra.session'
+/** Exported so sessionStore's cross-tab `storage` listener (D10) can match
+ * the exact key it must react to without duplicating the literal. */
+export const SESSION_KEY = 'abra.session'
 
 /**
  * Wraps sessionStorage/localStorage access in try/catch: Safari private mode

@@ -1,4 +1,4 @@
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { App, ConfigProvider } from 'antd'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -24,16 +24,52 @@ const options = {
   ],
 }
 
-function mockReportingOptions() {
+const savedReports = {
+  reports: [
+    {
+      id: 'r1',
+      userId: 'u1',
+      clientId: 'client-1',
+      projectId: 'project-1',
+      taskId: 'task-1',
+      date: '2026-08-17',
+      workLocation: 'CLIENT',
+      startTime: '09:00',
+      endTime: '18:00',
+      description: 'Saved',
+      clientName: 'Acme',
+      projectName: 'Website',
+      taskName: 'Design',
+      durationHours: 9,
+    },
+  ],
+}
+
+function mockFetch(handlers: Record<string, unknown>) {
   vi.stubGlobal(
     'fetch',
-    vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      headers: new Headers({ 'content-type': 'application/json' }),
-      json: async () => options,
+    vi.fn((input: RequestInfo | URL) => {
+      const url = String(input)
+      for (const [match, body] of Object.entries(handlers)) {
+        if (url.includes(match)) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: async () => body,
+          })
+        }
+      }
+      return Promise.reject(new Error(`Unhandled fetch: ${url}`))
     }),
   )
+}
+
+function mockReportingOptions() {
+  mockFetch({
+    '/me/reporting-options': options,
+    '/reports?': savedReports,
+  })
 }
 
 function renderHome() {
@@ -123,20 +159,47 @@ describe('Reports home shell', () => {
     expect(screen.queryByText('אין דיווחים להצגה')).not.toBeInTheDocument()
   })
 
-  it('opens the manual report on דיווח ידני and returns home on סגירה', async () => {
+  it('shows saved report days from the monthly list API', async () => {
+    signIn()
+    mockReportingOptions()
+    renderHome()
+
+    expect(await screen.findByText('9 שעות')).toBeInTheDocument()
+    expect(screen.getByText('1 פרויקט מדווח')).toBeInTheDocument()
+    expect(screen.queryByText('אין דיווחים להצגה')).not.toBeInTheDocument()
+  })
+
+  it('opens the side panel on דיווח ידני while keeping the home shell visible and interactive', async () => {
     signIn()
     mockReportingOptions()
     const user = userEvent.setup()
     renderHome()
 
     await user.click(screen.getByRole('button', { name: 'דיווח ידני' }))
-    expect(await screen.findByRole('heading', { name: 'דיווח ידני' })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'דיווח שעות' })).not.toBeInTheDocument()
-    expect(screen.queryByText('אין דיווחים להצגה')).not.toBeInTheDocument()
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'דיווח ידני' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('heading', { name: 'דיווח שעות' })).toBeInTheDocument()
+    expect(screen.getByText('עדיין אין פרויקטים מדווחים')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'חודש הבא' }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'סגירה' }))
-    expect(screen.getByRole('heading', { name: 'דיווח שעות' })).toBeInTheDocument()
-    expect(screen.getByText('אין דיווחים להצגה')).toBeInTheDocument()
-    expect(screen.getAllByText('אין נתונים עדיין')).toHaveLength(5)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByText('9 שעות')).toBeInTheDocument()
+  })
+
+  it('opens the side panel from a demo day row with form-derived status', async () => {
+    signIn()
+    mockReportingOptions()
+    window.history.replaceState({}, '', '/?demo=1')
+    const user = userEvent.setup()
+    renderHome()
+
+    await user.click(screen.getByRole('button', { name: /13\/08\/26, יום ה׳/ }))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toBeInTheDocument()
+    expect(within(dialog).getByText('חסר')).toBeInTheDocument()
+    expect(within(dialog).queryByText('3 מקומות עבודה')).not.toBeInTheDocument()
   })
 })

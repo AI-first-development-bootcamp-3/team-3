@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { prisma } from '../config/prisma.js';
 import { AppError } from '../types/errors.js';
+import type { JwtPayload } from '../types/auth.js';
 
 export interface PublicUser {
   id: string;
@@ -54,9 +55,34 @@ export async function login(email: string, password: string, rememberMe = false)
 
   const expiresInSeconds = rememberMe ? env.JWT_REMEMBER_ME_EXPIRES_IN_SECONDS : env.JWT_EXPIRES_IN_SECONDS;
   const token = jwt.sign({ sub: user.id, role: user.role }, env.JWT_SECRET, { expiresIn: expiresInSeconds });
+
+  // jwt.sign already stamps `iat` unless `noTimestamp` is set, but the
+  // revocation gate in authenticate() now depends on that claim being
+  // present, so it must be part of the contract rather than a library
+  // default a future option flag could silently drop (design.md D6).
+  const { iat } = jwt.decode(token) as JwtPayload;
+  if (iat === undefined) {
+    throw AppError.internal('Signed token is missing iat');
+  }
+
   const expiresAt = new Date(Date.now() + expiresInSeconds * 1000).toISOString();
 
+  // Deliberately does NOT stamp sessionsValidFrom here - logging in must
+  // never end the account's other sessions (design.md D6).
   return { token, expiresAt, user: toPublicUser(user) };
+}
+
+/**
+ * Ends every session for this account: moves sessionsValidFrom forward so
+ * that any token issued before this moment - including the one just used to
+ * call this endpoint - is refused by authenticate() from now on. Global by
+ * design (design.md D1): there is no per-token record to revoke selectively.
+ */
+export async function logout(userId: string): Promise<void> {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { sessionsValidFrom: new Date() },
+  });
 }
 
 /**

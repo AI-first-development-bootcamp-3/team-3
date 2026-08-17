@@ -6,27 +6,83 @@ import type { AbsenceType } from '../src/generated/prisma/enums.js';
  * Fixed ids make the seed repeatable via `upsert`: re-running it converges on
  * the same rows instead of creating duplicates, since names alone aren't
  * unique in the schema.
+ *
+ * Use RFC-4122-shaped v4 ids (version nibble 4, variant 8/9/a/b): POST /reports
+ * validates clientId/projectId/taskId with Zod `.uuid()`, which rejects the
+ * all-zero version nibble used in early fixtures.
  */
 const IDS = {
-  admin: '00000000-0000-0000-0000-000000000001',
-  employee: '00000000-0000-0000-0000-000000000002',
-  clientAcme: '00000000-0000-0000-0000-000000000010',
-  clientGlobex: '00000000-0000-0000-0000-000000000011',
-  projectWebsite: '00000000-0000-0000-0000-000000000020',
-  projectMobile: '00000000-0000-0000-0000-000000000021',
-  taskDesign: '00000000-0000-0000-0000-000000000030',
-  taskDevelopment: '00000000-0000-0000-0000-000000000031',
-  taskTesting: '00000000-0000-0000-0000-000000000032',
-  absenceVacationSingleDay: '00000000-0000-0000-0000-000000000040',
-  absenceVacationMultiDay: '00000000-0000-0000-0000-000000000041',
-  absenceHalfDay: '00000000-0000-0000-0000-000000000042',
-  absenceSickWithDoc: '00000000-0000-0000-0000-000000000043',
-  absenceSickNoDoc: '00000000-0000-0000-0000-000000000044',
-  absenceReserveDutyWeekend: '00000000-0000-0000-0000-000000000045',
-  attachmentSickNote: '00000000-0000-0000-0000-000000000050',
+  admin: '00000000-0000-4000-8000-000000000001',
+  employee: '00000000-0000-4000-8000-000000000002',
+  clientAcme: '00000000-0000-4000-8000-000000000010',
+  clientGlobex: '00000000-0000-4000-8000-000000000011',
+  projectWebsite: '00000000-0000-4000-8000-000000000020',
+  projectMobile: '00000000-0000-4000-8000-000000000021',
+  taskDesign: '00000000-0000-4000-8000-000000000030',
+  taskDevelopment: '00000000-0000-4000-8000-000000000031',
+  taskTesting: '00000000-0000-4000-8000-000000000032',
+  absenceVacationSingleDay: '00000000-0000-4000-8000-000000000040',
+  absenceVacationMultiDay: '00000000-0000-4000-8000-000000000041',
+  absenceHalfDay: '00000000-0000-4000-8000-000000000042',
+  absenceSickWithDoc: '00000000-0000-4000-8000-000000000043',
+  absenceSickNoDoc: '00000000-0000-4000-8000-000000000044',
+  absenceReserveDutyWeekend: '00000000-0000-4000-8000-000000000045',
+  attachmentSickNote: '00000000-0000-4000-8000-000000000050',
 } as const;
 
+/** Pre-v4 fixed ids rejected by POST /reports Zod `.uuid()` — remove before upserting IDS. */
+const LEGACY_ID_PREFIX = '00000000-0000-0000-0000-';
+
+const SEED_EMAILS = ['admin@abra.test', 'employee@abra.test'] as const;
+
+async function removeUserAndDependents(userId: string): Promise<void> {
+  await prisma.timeReport.deleteMany({ where: { userId } });
+  await prisma.attachment.deleteMany({ where: { uploaderId: userId } });
+  await prisma.absence.deleteMany({ where: { userId } });
+  await prisma.loginAttempt.updateMany({ where: { userId }, data: { userId: null } });
+  await prisma.user.delete({ where: { id: userId } });
+}
+
+/** Old seed rows used random ids — drop by email so fixed IDS can be recreated. */
+async function removeConflictingSeedUsers(): Promise<void> {
+  const targetIds = new Set<string>([IDS.admin, IDS.employee]);
+
+  for (const email of SEED_EMAILS) {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user || targetIds.has(user.id)) continue;
+    await removeUserAndDependents(user.id);
+  }
+}
+
+async function removeLegacySeedRows(): Promise<void> {
+  const legacyPattern = `${LEGACY_ID_PREFIX}%`;
+
+  // Prefix delete via SQL — Prisma `startsWith` missed legacy fixed ids in local dev.
+  await prisma.$executeRaw`
+    DELETE FROM "time_reports"
+    WHERE "userId" LIKE ${legacyPattern}
+       OR "clientId" LIKE ${legacyPattern}
+       OR "projectId" LIKE ${legacyPattern}
+       OR "taskId" LIKE ${legacyPattern}
+  `;
+  await prisma.$executeRaw`
+    DELETE FROM "attachments"
+    WHERE id LIKE ${legacyPattern} OR "uploaderId" LIKE ${legacyPattern}
+  `;
+  await prisma.$executeRaw`
+    DELETE FROM "absences"
+    WHERE id LIKE ${legacyPattern} OR "userId" LIKE ${legacyPattern}
+  `;
+  await prisma.$executeRaw`DELETE FROM "tasks" WHERE id LIKE ${legacyPattern}`;
+  await prisma.$executeRaw`DELETE FROM "projects" WHERE id LIKE ${legacyPattern}`;
+  await prisma.$executeRaw`DELETE FROM "clients" WHERE id LIKE ${legacyPattern}`;
+  await prisma.$executeRaw`DELETE FROM "users" WHERE id LIKE ${legacyPattern}`;
+}
+
 async function main() {
+  await removeLegacySeedRows();
+  await removeConflictingSeedUsers();
+
   const passwordHash = await bcrypt.hash('password123', 10);
 
   await prisma.user.upsert({
