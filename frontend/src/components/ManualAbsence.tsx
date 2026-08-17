@@ -143,6 +143,10 @@ function ManualAbsence({ onClose, onSwitchToWork }: Props) {
     setBanner(null)
     setDateConflicts([])
     try {
+      if (!formValues.type || !ABSENCE_TYPE_ROWS.some((row) => row.type === formValues.type)) {
+        setBanner(MISSING_DETAILS)
+        return
+      }
       const absence = await createAbsence({
         type: formValues.type as AbsenceType,
         startDate: formValues.startDate,
