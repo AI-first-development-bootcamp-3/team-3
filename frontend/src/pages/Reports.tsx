@@ -72,18 +72,6 @@ function Reports() {
           </button>
         </div>
 
-      <section className="home-shell__kpis" aria-label="סיכום חודשי">
-        {KPI_LABELS.map((label) => (
-          <article key={label} className="home-shell__kpi">
-            <h2>{label}</h2>
-            <p>אין נתונים עדיין</p>
-          </article>
-        ))}
-      </section>
-      <section className="home-shell__daily">
-        <h2>פירוט יומי</h2>
-        <p>אין דיווחים להצגה</p>
-      </section>
         <div className="home-shell__actions">
           <button type="button" className="home-shell__cta" onClick={() => setShowEntry(true)}>
             דיווח ידני
@@ -108,15 +96,6 @@ function Reports() {
       </header>
 
       <div className="home-shell__body">
-        {showEntry ? (
-          <>
-            <button type="button" className="home-shell__back" onClick={() => setShowEntry(false)}>
-              חזרה
-            </button>
-            <ReportEntryForm />
-          </>
-        ) : (
-          <>
             <section className="home-shell__kpis" aria-label="סיכום חודשי">
               {KPI_CARDS.map((card) => {
                 const value = demo ? DEMO_KPIS[card.label] : undefined
@@ -195,8 +174,6 @@ function Reports() {
                 <p className="home-shell__daily-empty">אין דיווחים להצגה</p>
               )}
             </section>
-          </>
-        )}
       </div>
     </div>
   )

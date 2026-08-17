@@ -105,7 +105,6 @@ describe('Reports home shell', () => {
     expect(label).toHaveTextContent(before ?? '')
   })
 
-  it('opens the manual report on דיווח ידני and returns home on סגירה', async () => {
   it('renders the Figma preview rows only when ?demo=1 asks for them', () => {
     renderHome()
     expect(screen.queryByText('חסר')).not.toBeInTheDocument()
@@ -124,7 +123,7 @@ describe('Reports home shell', () => {
     expect(screen.queryByText('אין דיווחים להצגה')).not.toBeInTheDocument()
   })
 
-  it('reveals the entry form on דיווח ידני and hides it on חזרה', async () => {
+  it('opens the manual report on דיווח ידני and returns home on סגירה', async () => {
     signIn()
     mockReportingOptions()
     const user = userEvent.setup()
