@@ -87,6 +87,18 @@ export class AppError extends Error {
     return new AppError(429, 'TOO_MANY_REQUESTS', message, undefined, retryAfterSeconds);
   }
 
+  /**
+   * Distinct from tooManyRequests(429): this is the durable account-lockout
+   * tier, not the in-memory throttle. Never conditioned on whether the
+   * email is registered - see openspec/changes/login-account-lockout.
+   */
+  static locked(
+    retryAfterSeconds: number,
+    message = 'This account is temporarily locked due to too many failed attempts. Please try again later.',
+  ): AppError {
+    return new AppError(423, 'LOCKED', message, undefined, retryAfterSeconds);
+  }
+
   static internal(message = 'Internal server error'): AppError {
     return new AppError(500, 'INTERNAL_ERROR', message);
   }
