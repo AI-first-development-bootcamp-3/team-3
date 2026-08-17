@@ -14,6 +14,7 @@ export interface PublicUser {
 
 export interface LoginResult {
   token: string;
+  expiresAt: string;
   user: PublicUser;
 }
 
@@ -39,7 +40,7 @@ function toPublicUser(user: {
  * marking a user inactive must actually lock them out, not just hide them
  * from lists.
  */
-export async function login(email: string, password: string): Promise<LoginResult> {
+export async function login(email: string, password: string, rememberMe = false): Promise<LoginResult> {
   const user = await prisma.user.findUnique({ where: { email } });
 
   if (!user || !user.isActive) {
@@ -51,9 +52,11 @@ export async function login(email: string, password: string): Promise<LoginResul
     throw AppError.unauthorized('Invalid email or password');
   }
 
-  const token = jwt.sign({ sub: user.id, role: user.role }, env.JWT_SECRET, { expiresIn: '8h' });
+  const expiresInSeconds = rememberMe ? env.JWT_REMEMBER_ME_EXPIRES_IN_SECONDS : env.JWT_EXPIRES_IN_SECONDS;
+  const token = jwt.sign({ sub: user.id, role: user.role }, env.JWT_SECRET, { expiresIn: expiresInSeconds });
+  const expiresAt = new Date(Date.now() + expiresInSeconds * 1000).toISOString();
 
-  return { token, user: toPublicUser(user) };
+  return { token, expiresAt, user: toPublicUser(user) };
 }
 
 /**
