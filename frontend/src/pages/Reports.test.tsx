@@ -48,6 +48,7 @@ function renderHome() {
 
 describe('Reports home shell', () => {
   afterEach(() => {
+    window.history.replaceState({}, '', '/')
     cleanup()
     vi.unstubAllGlobals()
     sessionStore.getState().clearSession()
@@ -67,15 +68,16 @@ describe('Reports home shell', () => {
   it('shows Figma chrome, five empty KPI cards, and an empty daily list', () => {
     renderHome()
 
-    expect(screen.getByText('abra')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'abra' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'דיווח שעות' })).toBeInTheDocument()
-    expect(screen.getByTestId('month-label')).toHaveTextContent(dayjs().format('MMMM YYYY'))
+    expect(screen.getByTestId('month-label')).toHaveTextContent(dayjs().format('MMMM'))
     expect(screen.getByRole('button', { name: 'דיווח ידני' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'כל הדיווחים' })).toBeDisabled()
 
     const clock = screen.getByRole('button', { name: /הפעלת שעון/ })
     expect(clock).toBeDisabled()
     expect(clock).toHaveAttribute('aria-disabled', 'true')
-    expect(screen.getByText('בקרוב')).toBeInTheDocument()
+    expect(clock).toHaveAccessibleName(/בקרוב/)
 
     for (const label of KPI_LABELS) {
       expect(screen.getByRole('heading', { name: label })).toBeInTheDocument()
@@ -104,6 +106,25 @@ describe('Reports home shell', () => {
   })
 
   it('opens the manual report on דיווח ידני and returns home on סגירה', async () => {
+  it('renders the Figma preview rows only when ?demo=1 asks for them', () => {
+    renderHome()
+    expect(screen.queryByText('חסר')).not.toBeInTheDocument()
+    cleanup()
+
+    window.history.replaceState({}, '', '/?demo=1')
+    renderHome()
+
+    expect(screen.getByText('96')).toBeInTheDocument()
+    expect(screen.queryByText('142.5')).not.toBeInTheDocument()
+    expect(screen.getAllByText('חסר')).toHaveLength(2)
+    expect(screen.getAllByText('9 שעות')).toHaveLength(2)
+    expect(screen.getByText('5.5 שעות')).toBeInTheDocument()
+    expect(screen.getByText('4 שעות')).toBeInTheDocument()
+    expect(screen.getAllByText('סופ״ש')).toHaveLength(2)
+    expect(screen.queryByText('אין דיווחים להצגה')).not.toBeInTheDocument()
+  })
+
+  it('reveals the entry form on דיווח ידני and hides it on חזרה', async () => {
     signIn()
     mockReportingOptions()
     const user = userEvent.setup()
