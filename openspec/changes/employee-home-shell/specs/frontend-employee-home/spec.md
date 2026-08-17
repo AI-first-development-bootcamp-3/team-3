@@ -48,7 +48,7 @@ Activating **דיווח ידני** SHALL show the existing daily time-report ent
 
 ### Requirement: Clock is not a working timer
 
-The home SHALL show **הפעלת שעון** to match Figma density. It SHALL NOT start a timer, SHALL NOT open a stop modal, and SHALL NOT persist time. It MUST be disabled and indicate it is not available yet (**בקרוב**).
+The home SHALL show **הפעלת שעון** to match Figma density. It SHALL NOT start a timer, SHALL NOT open a stop modal, and SHALL NOT persist time. It MUST be disabled, MUST be visually dimmed, and MUST carry **בקרוב** as accessible text and tooltip. Figma has no **בקרוב** badge, so the hint SHALL NOT be printed as visible chrome.
 
 #### Scenario: User cannot start the clock
 
@@ -57,12 +57,26 @@ The home SHALL show **הפעלת שעון** to match Figma density. It SHALL NOT
 
 ### Requirement: KPI row is an empty state, not fake data
 
-The home SHALL show five labeled summary cards matching the mock: **שעות חודשיות**, **ימי חופשה**, **ימי מחלה**, **דיווחים חסרים**, **פרויקטים מדווחים**. Until the summary API exists, each card SHALL show **אין נתונים עדיין**. The UI MUST NOT display invented figures (for example 142.5, 180, 2 vacation days).
+The home SHALL show five labeled summary cards matching the mock: **שעות חודשיות**, **ימי חופשה**, **ימי מחלה**, **דיווחים חסרים**, **פרויקטים מדווחים**, each with its Figma-exported icon. Until the summary API exists, each card SHALL show **אין נתונים עדיין**. The UI MUST NOT display invented figures (for example 142.5, 180, 2 vacation days).
 
 #### Scenario: Home with no summary API
 
 - **WHEN** an employee opens `/` and no dashboard summary has been loaded
 - **THEN** all five cards are visible by label and none shows a fabricated numeric summary
+
+### Requirement: Figma preview data is dev-only and opt-in
+
+A development build MAY render the populated Figma frame (KPI figures, day rows, status tags) from local fixtures so the design can be reviewed before the APIs exist. It SHALL require an explicit `?demo=1` opt-in, SHALL be unreachable from a production build, and SHALL NOT be wired to any API or user data.
+
+#### Scenario: Reviewer opens the preview
+
+- **WHEN** a developer opens `/?demo=1` in a dev build
+- **THEN** the Figma day rows and status tags are shown from fixtures
+
+#### Scenario: Employee opens the home normally
+
+- **WHEN** an employee opens `/` without the flag, in any build
+- **THEN** the empty KPI and daily-list states are shown and no fixture figure appears
 
 ### Requirement: Daily list is an empty state, not fake days
 
