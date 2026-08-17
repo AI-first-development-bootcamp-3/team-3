@@ -1,5 +1,5 @@
 import { Card, Row, Col, Statistic } from 'antd'
-import { UsersOutlined, ProjectOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons'
+import { UserOutlined, ProjectOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons'
 
 function AdminOverview() {
   return (
@@ -12,7 +12,7 @@ function AdminOverview() {
             <Statistic
               title="משתמשים פעילים"
               value={24}
-              prefix={<UsersOutlined />}
+              prefix={<UserOutlined />}
               valueStyle={{ color: '#0c69ff' }}
             />
           </Card>
