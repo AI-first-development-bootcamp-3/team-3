@@ -2,7 +2,7 @@ import type { Readable } from 'node:stream';
 import { prisma } from '../config/prisma.js';
 import { Role, type Role as RoleType } from '../generated/prisma/enums.js';
 import { AppError } from '../types/errors.js';
-import { localFileStorage } from './localFileStorage.js';
+import { supabaseFileStorage } from './supabaseFileStorage.js';
 
 export interface UploadAttachmentInput {
   originalFilename: string;
@@ -20,7 +20,7 @@ export interface AttachmentMetadata {
 }
 
 export async function uploadAttachment(input: UploadAttachmentInput): Promise<AttachmentMetadata> {
-  const storageKey = await localFileStorage.store(input.originalFilename, input.content);
+  const storageKey = await supabaseFileStorage.store(input.originalFilename, input.content);
 
   return prisma.attachment.create({
     data: {
@@ -69,6 +69,6 @@ export async function retrieveAttachment(
     throw AppError.forbidden('Not permitted to access this attachment');
   }
 
-  const stream = await localFileStorage.retrieve(attachment.storageKey);
+  const stream = await supabaseFileStorage.retrieve(attachment.storageKey);
   return { filename: attachment.filename, mimeType: attachment.mimeType, stream };
 }

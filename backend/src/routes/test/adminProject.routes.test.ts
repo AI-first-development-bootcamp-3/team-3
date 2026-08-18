@@ -31,7 +31,7 @@ describe('GET /admin/projects', () => {
       clientName: 'Acme',
       clientId: client.id,
       isActive: true,
-      reportFormat: ReportFormat.CLOCK_IN_OUT,
+      reportFormat: ReportFormat.SUM_HOURS,
     });
   });
 
@@ -67,7 +67,9 @@ describe('POST /admin/projects', () => {
       clientId: client.id,
       clientName: 'Acme',
       isActive: true,
-      reportFormat: ReportFormat.CLOCK_IN_OUT,
+      // Default flipped to SUM_HOURS by report-format-aware-entry (design D8):
+      // a project nobody configured keeps reporting the way it does today.
+      reportFormat: ReportFormat.SUM_HOURS,
     });
   });
 

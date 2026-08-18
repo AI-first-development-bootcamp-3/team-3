@@ -79,6 +79,10 @@ const envSchema = z.object({
   // trusts that many hops; a comma-separated list trusts specific addresses
   // or CIDR ranges (Express's own accepted forms).
   TRUST_PROXY: z.string().default('false'),
+  // Supabase Storage configuration for persisting Absence documents
+  SUPABASE_URL: z.string().min(1).default('https://test.supabase.co'),
+  SUPABASE_ANON_KEY: z.string().min(1).default('test-anon-key'),
+  SUPABASE_SERVICE_KEY: z.string().min(1).default('test-service-key'),
 }).refine((data) => data.JWT_REMEMBER_ME_EXPIRES_IN_SECONDS >= data.JWT_EXPIRES_IN_SECONDS, {
   message: 'JWT_REMEMBER_ME_EXPIRES_IN_SECONDS must be >= JWT_EXPIRES_IN_SECONDS',
   path: ['JWT_REMEMBER_ME_EXPIRES_IN_SECONDS'],

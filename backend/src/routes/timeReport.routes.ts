@@ -23,6 +23,12 @@ export const timeReportRouter = Router();
  * /reports:
  *   post:
  *     summary: Create a daily time report for the authenticated caller
+ *     description: >
+ *       The fields the report must carry follow the project's stored
+ *       `reportFormat`, never a body field: a `SUM_HOURS` project takes `hours`
+ *       and no row times, a `CLOCK_IN_OUT` project takes `rowStartTime` +
+ *       `rowEndTime` and no `hours`. Carrying the other format's fields is a
+ *       `400`.
  *     tags: [Time reports]
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
@@ -31,22 +37,33 @@ export const timeReportRouter = Router();
  *         application/json:
  *           schema:
  *             type: object
- *             required: [date, workLocation, startTime, endTime, hours, clientId, projectId, taskId, description]
+ *             required: [date, workLocation, startTime, endTime, clientId, projectId, taskId, description]
  *             properties:
  *               date: { type: string, format: date, example: '2026-08-16' }
  *               workLocation: { type: string, enum: [OFFICE, CLIENT, HOME] }
  *               startTime: { type: string, example: '09:00', description: 'Day attendance window start (HH:mm). End earlier than or equal to start means the next calendar day (equal = 24h).' }
  *               endTime: { type: string, example: '18:00', description: 'Day attendance window end (HH:mm)' }
- *               hours: { type: number, example: 9, description: 'Project allocation from 0.5 to 24 with at most one decimal place; must not exceed the window' }
+ *               hours: { type: number, example: 9, description: 'Required for a SUM_HOURS project, forbidden for a CLOCK_IN_OUT one: allocation from 0.5 to 24 with at most one decimal place; must not exceed the window' }
+ *               rowStartTime: { type: string, example: '09:00', description: 'Required for a CLOCK_IN_OUT project, forbidden for a SUM_HOURS one: this row own clock-in (HH:mm), inside the day window on the same overnight-aware axis' }
+ *               rowEndTime: { type: string, example: '13:00', description: 'Required for a CLOCK_IN_OUT project, forbidden for a SUM_HOURS one: this row own clock-out (HH:mm), strictly later than `rowStartTime` on the day axis and inside the window' }
  *               clientId: { type: string, format: uuid }
  *               projectId: { type: string, format: uuid }
  *               taskId: { type: string, format: uuid }
  *               description: { type: string }
  *     responses:
  *       201:
- *         description: The persisted time report.
+ *         description: >
+ *           The persisted time report. `startTime`/`endTime` are the day window;
+ *           `rowStartTime`/`rowEndTime` carry the row clock pair on a
+ *           `CLOCK_IN_OUT` row and are `null` otherwise; `hours` is the value
+ *           submitted (`SUM_HOURS`) or derived from the row interval, rounded to
+ *           one decimal (`CLOCK_IN_OUT`).
  *       400:
- *         description: Malformed body, hours overflow (`HOURS_EXCEED_WINDOW`), or hierarchy mismatch.
+ *         description: >
+ *           Malformed body, fields that contradict the project's `reportFormat`,
+ *           row times outside the day window or of zero length, hours overflow
+ *           (`HOURS_EXCEED_WINDOW`), hierarchy mismatch, or a task the caller is
+ *           not assigned to (both reported on `taskId`).
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
@@ -174,7 +191,12 @@ timeReportRouter.post(
  *     summary: Replace every project row of one day in a single transaction
  *     description: >
  *       All rows persist or none do. Row-level problems are reported as
- *       `rows.<index>.<field>` so the client can mark the failing card.
+ *       `rows.<index>.<field>` so the client can mark the failing card. Each row
+ *       is validated against the stored `reportFormat` of the project it names,
+ *       so a `SUM_HOURS` row carries `hours` and a `CLOCK_IN_OUT` row carries
+ *       `rowStartTime` + `rowEndTime`; both kinds may share one day. No two
+ *       `CLOCK_IN_OUT` rows of a day may share a minute — an overlap is a `400`
+ *       naming every clashing row (intervals that merely touch are fine).
  *     tags: [Time reports]
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
@@ -194,19 +216,32 @@ timeReportRouter.post(
  *                 maxItems: 20
  *                 items:
  *                   type: object
- *                   required: [workLocation, hours, clientId, projectId, taskId]
+ *                   required: [workLocation, clientId, projectId, taskId]
  *                   properties:
  *                     workLocation: { type: string, enum: [OFFICE, CLIENT, HOME] }
- *                     hours: { type: number, example: 4, description: 'Allocation with at most one decimal place; sum of rows must not exceed the window' }
+ *                     hours: { type: number, example: 4, description: 'Required for a SUM_HOURS row, forbidden for a CLOCK_IN_OUT one: allocation from 0.5 to 24 with at most one decimal place' }
+ *                     rowStartTime: { type: string, example: '09:00', description: 'Required for a CLOCK_IN_OUT row, forbidden for a SUM_HOURS one: this row own clock-in (HH:mm), inside the day window' }
+ *                     rowEndTime: { type: string, example: '13:00', description: 'Required for a CLOCK_IN_OUT row, forbidden for a SUM_HOURS one: this row own clock-out (HH:mm), strictly later than `rowStartTime` on the day axis and inside the window' }
  *                     clientId: { type: string, format: uuid }
  *                     projectId: { type: string, format: uuid }
  *                     taskId: { type: string, format: uuid }
  *                     description: { type: string, description: 'Optional' }
  *     responses:
  *       201:
- *         description: The persisted rows, in submitted order, each copying the request window.
+ *         description: >
+ *           The persisted rows, in submitted order, each copying the request
+ *           window onto `startTime`/`endTime`, keeping its own
+ *           `rowStartTime`/`rowEndTime` when its project is `CLOCK_IN_OUT`
+ *           (`null` otherwise), and carrying `hours` submitted or derived.
  *       400:
- *         description: Malformed body, hours overflow (`HOURS_EXCEED_WINDOW`), or hierarchy mismatch on any row.
+ *         description: >
+ *           Malformed body, a row whose fields contradict its project's
+ *           `reportFormat`, row times outside the day window or of zero length,
+ *           two clock-in/out rows that overlap, hours overflow
+ *           (`HOURS_EXCEED_WINDOW`, derived hours counted in), hierarchy
+ *           mismatch on any row, or a row naming a task the caller is not
+ *           assigned to — except a row already stored for that caller and date,
+ *           which stays saveable after its assignment is withdrawn.
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
@@ -237,13 +272,45 @@ timeReportRouter.post(
  * @openapi
  * /me/reporting-options:
  *   get:
- *     summary: Active client → project → task tree for the report form
- *     description: Not assignment-filtered yet (SCRUM-71). Returns all active entities with at least one task.
+ *     summary: Assigned client → project → task tree for the report form
+ *     description: >
+ *       Only the active tasks the caller is assigned to, with projects and
+ *       clients left empty by that filtering pruned away. The same scoping
+ *       applies to every role, admins included. Every project carries its
+ *       `reportFormat`, so the form renders the right inputs before the user
+ *       types anything.
  *     tags: [Time reports]
  *     security: [{ bearerAuth: [] }]
  *     responses:
  *       200:
  *         description: Nested clients with projects and tasks, sorted by name.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 clients:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id: { type: string, format: uuid }
+ *                       name: { type: string }
+ *                       projects:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             id: { type: string, format: uuid }
+ *                             name: { type: string }
+ *                             reportFormat: { type: string, enum: [SUM_HOURS, CLOCK_IN_OUT], description: 'Decides whether a row on this project collects `hours` or a `rowStartTime`/`rowEndTime` pair' }
+ *                             tasks:
+ *                               type: array
+ *                               items:
+ *                                 type: object
+ *                                 properties:
+ *                                   id: { type: string, format: uuid }
+ *                                   name: { type: string }
  *       401:
  *         description: Authentication required.
  *         content:

@@ -1,6 +1,7 @@
 import { request } from './apiClient'
+import type { ReportFormat } from '../types'
 
-export type ReportFormat = 'CLOCK_IN_OUT' | 'SUM_HOURS'
+export type { ReportFormat }
 
 export interface AdminProject {
   id: string

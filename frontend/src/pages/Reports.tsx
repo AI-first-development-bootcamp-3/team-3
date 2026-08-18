@@ -31,6 +31,8 @@ import {
 } from './homeDemoData'
 import { buildHomeDays, weekendDatesForVisibleMonth } from './monthlyReportDays'
 import { buildMonthKpis, type MonthKpis } from './monthKpis'
+import { useWorkClock } from '../hooks/useWorkClock'
+import WorkClockStopModal from '../components/WorkClockStopModal'
 import ReportStatusFilterMenu from './ReportStatusFilterMenu'
 import { filterDaysByStatus, type ReportStatusFilter } from './reportStatusFilter'
 import './Reports.css'
@@ -90,6 +92,8 @@ function Reports() {
   // month navigation, and starts clean only on a fresh mount.
   const [statusFilter, setStatusFilter] = useState<ReportStatusFilter>('all')
   const unmountTimerRef = useRef<number | null>(null)
+  const signedIn = !demo && Boolean(sessionStore.getState().user)
+  const clock = useWorkClock({ enabled: signedIn })
 
   const cancelPendingUnmount = () => {
     if (unmountTimerRef.current === null) return
@@ -144,7 +148,8 @@ function Reports() {
     } catch {
       applyMonth(EMPTY_MONTH)
     }
-  }, [applyMonth, fetchMonth, month])
+    await clock.refreshSession()
+  }, [applyMonth, clock.refreshSession, fetchMonth, month])
 
   useEffect(() => {
     if (demo || !sessionStore.getState().user) return
@@ -289,19 +294,33 @@ function Reports() {
                 <img src={addCircle} alt="" width={24} height={24} />
               </span>
             </button>
-            <button
-              type="button"
-              className="home-shell__clock"
-              disabled
-              aria-disabled="true"
-              title="בקרוב"
-            >
-              הפעלת שעון
-              <span className="home-shell__sr-only">בקרוב</span>
-              <span className="home-shell__cta-icon home-shell__cta-icon--clock" aria-hidden="true">
-                <img src={playIcon} alt="" width={24} height={24} />
-              </span>
-            </button>
+            {clock.isActive ? (
+              <div className="home-shell__clock-running">
+                <span className="home-shell__clock-elapsed" data-testid="clock-elapsed" aria-live="polite">
+                  {clock.elapsedLabel}
+                </span>
+                <button
+                  type="button"
+                  className="home-shell__clock home-shell__clock--active"
+                  onClick={() => void clock.handleStop()}
+                  disabled={clock.actionLoading}
+                >
+                  עצור שעון
+                </button>
+              </div>
+            ) : clock.isAwaitingConfirm ? null : (
+              <button
+                type="button"
+                className="home-shell__clock home-shell__clock--idle"
+                onClick={() => void clock.handleStart()}
+                disabled={!signedIn || clock.actionLoading || clock.loading}
+              >
+                הפעלת שעון
+                <span className="home-shell__cta-icon home-shell__cta-icon--clock" aria-hidden="true">
+                  <img src={playIcon} alt="" width={24} height={24} />
+                </span>
+              </button>
+            )}
           </div>
         </header>
 
@@ -368,6 +387,19 @@ function Reports() {
             onSaved={refreshSavedDays}
           />
         </ManualReportModal>
+      ) : null}
+
+      {clock.confirmOpen && clock.session && clock.isAwaitingConfirm ? (
+        <WorkClockStopModal
+          open
+          session={clock.session}
+          loading={clock.actionLoading}
+          onCancel={() => void clock.handleDiscard()}
+          onConfirmed={() => {
+            clock.clearSession()
+            void refreshSavedDays()
+          }}
+        />
       ) : null}
     </div>
   )
