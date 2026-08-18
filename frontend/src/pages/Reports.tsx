@@ -14,7 +14,6 @@ import addCircle from '../assets/home/add-circle.svg'
 import playIcon from '../assets/home/play.svg'
 import arrowLeft from '../assets/home/arrow-left.svg'
 import arrowRight from '../assets/home/arrow-right.svg'
-import chevronSmall from '../assets/home/chevron-forward-small.svg'
 import kpiClock from '../assets/home/kpi-clock.svg'
 import kpiSun from '../assets/home/kpi-sun.svg'
 import kpiHospital from '../assets/home/kpi-hospital.svg'
@@ -34,6 +33,8 @@ import { buildHomeDays, weekendDatesForVisibleMonth } from './monthlyReportDays'
 import { buildMonthKpis, type MonthKpis } from './monthKpis'
 import { useWorkClock } from '../hooks/useWorkClock'
 import WorkClockStopModal from '../components/WorkClockStopModal'
+import ReportStatusFilterMenu from './ReportStatusFilterMenu'
+import { filterDaysByStatus, type ReportStatusFilter } from './reportStatusFilter'
 import './Reports.css'
 
 const KPI_CARDS = [
@@ -87,6 +88,9 @@ function Reports() {
   const [listLoading, setListLoading] = useState(
     () => !isHomeDemo() && Boolean(sessionStore.getState().user),
   )
+  // Deliberately not reset by the month effect: an active filter carries across
+  // month navigation, and starts clean only on a fresh mount.
+  const [statusFilter, setStatusFilter] = useState<ReportStatusFilter>('all')
   const unmountTimerRef = useRef<number | null>(null)
   const signedIn = !demo && Boolean(sessionStore.getState().user)
   const clock = useWorkClock({ enabled: signedIn })
@@ -242,6 +246,12 @@ function Reports() {
     </ul>
   )
 
+  // Filtering happens here, at the point of render: `savedDays`, `monthReports`,
+  // and `monthKpis` all stay whole-month, so the KPI cards and the day panel are
+  // untouched by the filter.
+  const visibleDays = filterDaysByStatus(demo ? DEMO_DAYS : savedDays, statusFilter)
+  const filteredToNothing = visibleDays.length === 0 && statusFilter !== 'all'
+
   return (
     <div className={`reports-layout${panelOpen ? ' reports-layout--panel-open' : ''}`}>
       <div className="home-shell">
@@ -346,19 +356,14 @@ function Reports() {
                   רשימת הדיווחים לחודש {month.format('MMMM YYYY')}
                 </p>
               </div>
-              <button type="button" className="home-shell__filter" disabled aria-disabled="true">
-                כל הדיווחים
-                <span className="home-shell__filter-icon" aria-hidden="true">
-                  <img src={chevronSmall} alt="" width={6} height={12} />
-                </span>
-              </button>
+              <ReportStatusFilterMenu value={statusFilter} onChange={setStatusFilter} />
             </div>
-            {demo ? (
-              renderDayRows(DEMO_DAYS)
-            ) : listLoading ? (
+            {!demo && listLoading ? (
               <p className="home-shell__daily-empty">טוען דיווחים…</p>
-            ) : savedDays.length > 0 ? (
-              renderDayRows(savedDays)
+            ) : visibleDays.length > 0 ? (
+              renderDayRows(visibleDays)
+            ) : filteredToNothing ? (
+              <p className="home-shell__daily-empty">לא נמצאו ימים התואמים לסינון</p>
             ) : (
               <p className="home-shell__daily-empty">אין דיווחים להצגה</p>
             )}
