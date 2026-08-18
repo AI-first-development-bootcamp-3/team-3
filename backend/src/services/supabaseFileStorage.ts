@@ -65,7 +65,8 @@ export const supabaseFileStorage: FileStorage = {
       }
 
       const { Readable } = await import('node:stream');
-      const readable = Readable.from(data);
+      const buffer = Buffer.from(await (data as Blob).arrayBuffer());
+      const readable = Readable.from(buffer);
       return readable;
     } catch (error) {
       if (error instanceof AppError) {

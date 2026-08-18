@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ReportFormat } from '../generated/prisma/enums';
+import { ReportFormat } from '../generated/prisma/enums.js';
 
 export const createProjectBodySchema = z.object({
   name: z.string().min(1, 'Name is required'),
