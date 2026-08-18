@@ -3,8 +3,9 @@ import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { App } from 'antd'
 import { ApiError } from '../services/apiClient'
-import { createAbsence, uploadAttachment, type AttachmentMetadata } from '../services/absences'
+import { createAbsence, updateAbsence, uploadAttachment, type AttachmentMetadata } from '../services/absences'
 import { countWorkingDays } from '../lib/workingDays'
+import type { Absence } from '../types'
 import {
   ABSENCE_TYPE_LABELS,
   ABSENCE_TYPES,
@@ -17,6 +18,7 @@ interface Props {
   onClose: () => void
   onSaved?: () => void
   defaultStartDate?: string
+  existingAbsence?: Absence
 }
 
 function conflictCopy(body: unknown): { title: string; detail: string } {
@@ -33,11 +35,14 @@ function conflictCopy(body: unknown): { title: string; detail: string } {
   }
 }
 
-function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '' }: Props) {
+function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAbsence }: Props) {
   const { message } = App.useApp()
   const [banner, setBanner] = useState<{ title: string; detail: string } | null>(null)
-  const [uploadedFiles, setUploadedFiles] = useState<AttachmentMetadata[]>([])
+  const [uploadedFiles, setUploadedFiles] = useState<AttachmentMetadata[]>(existingAbsence?.attachments ?? [])
   const [isUploading, setIsUploading] = useState(false)
+  const [isMultiDay, setIsMultiDay] = useState(
+    existingAbsence ? existingAbsence.startDate !== existingAbsence.endDate : false,
+  )
   const fileInputRef = useRef<HTMLInputElement>(null)
   const {
     register,
@@ -46,7 +51,12 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '' }: Props) {
     control,
   } = useForm<AbsenceReportInput, unknown, AbsenceReportValues>({
     resolver: zodResolver(absenceReportSchema),
-    defaultValues: { type: '', startDate: defaultStartDate, endDate: '', documents: [] },
+    defaultValues: {
+      type: existingAbsence?.type ?? '',
+      startDate: existingAbsence?.startDate ?? defaultStartDate,
+      endDate: existingAbsence && existingAbsence.startDate !== existingAbsence.endDate ? existingAbsence.endDate : '',
+      documents: [],
+    },
   })
   const startDate = useWatch({ control, name: 'startDate' }) ?? ''
   const endDate = useWatch({ control, name: 'endDate' }) ?? ''
@@ -90,13 +100,19 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '' }: Props) {
     setBanner(null)
     try {
       const attachmentIds = uploadedFiles.map((f) => f.id)
-      await createAbsence({
+      const payload = {
         type: values.type,
         startDate: values.startDate,
         endDate: values.endDate || values.startDate,
         attachmentIds: attachmentIds.length > 0 ? attachmentIds : undefined,
-      })
-      message.success('ההיעדרות נשמרה בהצלחה')
+      }
+      if (existingAbsence) {
+        await updateAbsence(existingAbsence.id, payload)
+        message.success('ההיעדרות עודכנה בהצלחה')
+      } else {
+        await createAbsence(payload)
+        message.success('ההיעדרות נשמרה בהצלחה')
+      }
       onSaved?.()
       onClose()
     } catch (error) {
@@ -143,15 +159,25 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '' }: Props) {
           {errors.type ? <p className="manual-report__field-error">{errors.type.message}</p> : null}
         </label>
         <label className="manual-report__field">
-          <span className="manual-report__field-label">מתאריך</span>
+          <span className="manual-report__field-label">{isMultiDay ? 'מתאריך' : 'תאריך'}</span>
           <input type="date" className="manual-report__field-input" aria-label="מתאריך" {...register('startDate')} />
           {errors.startDate ? <p className="manual-report__field-error">{errors.startDate.message}</p> : null}
         </label>
-        <label className="manual-report__field">
-          <span className="manual-report__field-label">עד תאריך</span>
-          <input type="date" className="manual-report__field-input" aria-label="עד תאריך" {...register('endDate')} />
-          {errors.endDate ? <p className="manual-report__field-error">{errors.endDate.message}</p> : null}
-        </label>
+        {isMultiDay ? (
+          <label className="manual-report__field">
+            <span className="manual-report__field-label">עד תאריך</span>
+            <input type="date" className="manual-report__field-input" aria-label="עד תאריך" {...register('endDate')} />
+            {errors.endDate ? <p className="manual-report__field-error">{errors.endDate.message}</p> : null}
+          </label>
+        ) : existingAbsence ? null : (
+          <button
+            type="button"
+            className="absence-report__more-days-link"
+            onClick={() => setIsMultiDay(true)}
+          >
+            דיווח על היעדרות ליותר מיום אחד
+          </button>
+        )}
       </div>
       <p className="absence-report__count" data-testid="working-day-count">
         {startDate ? `${workingDays} ימי עבודה` : 'בחרו תאריכים כדי לראות כמה ימי עבודה נספרים'}

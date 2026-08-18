@@ -1,5 +1,10 @@
 import { Router } from 'express';
-import { deleteMyAbsence, getMyAbsences, postAbsence } from '../controllers/absence.controller.js';
+import {
+  deleteMyAbsence,
+  getMyAbsences,
+  postAbsence,
+  updateMyAbsence,
+} from '../controllers/absence.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
 import {
@@ -11,6 +16,7 @@ import {
   absenceIdParamSchema,
   createAbsenceBodySchema,
   listAbsencesQuerySchema,
+  updateAbsenceBodySchema,
 } from '../types/absence.schema.js';
 
 export const absenceRouter = Router();
@@ -91,6 +97,60 @@ absenceRouter.get(
   authenticate,
   validate({ query: listAbsencesQuerySchema }),
   getMyAbsences,
+);
+
+/**
+ * @openapi
+ * /absences/{id}:
+ *   patch:
+ *     summary: Update one of the authenticated caller's absences
+ *     description: >
+ *       Re-validates type/dates the same way `POST /absences` does, recomputes
+ *       `workingDayCount`, and runs the conflict check excluding this absence's
+ *       own current dates. `attachmentIds` is the full desired set of attached
+ *       files - anything previously linked but omitted is unlinked.
+ *     tags: [Absences]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [type, startDate]
+ *             properties:
+ *               type: { type: string, enum: [VACATION, SICK, RESERVE_DUTY, OTHER] }
+ *               startDate: { type: string, format: date, example: '2026-08-09' }
+ *               endDate: { type: string, format: date, example: '2026-08-13', description: 'Inclusive; defaults to startDate' }
+ *               attachmentIds: { type: array, items: { type: string, format: uuid }, description: 'Full desired set of attachment UUIDs linked to this absence' }
+ *     responses:
+ *       200:
+ *         description: The updated absence including workingDayCount.
+ *       400:
+ *         description: Malformed body, inverted dates, or no working days in the range.
+ *       401:
+ *         description: Authentication required.
+ *       403:
+ *         description: The absence belongs to another user.
+ *       404:
+ *         description: No active absence with that id.
+ *       409:
+ *         description: Dates conflict with a different absence or reported work hours.
+ *       429:
+ *         description: Too many writes from this caller.
+ */
+absenceRouter.patch(
+  '/absences/:id',
+  authGuardRateLimit,
+  authenticate,
+  writeRateLimit,
+  validate({ params: absenceIdParamSchema, body: updateAbsenceBodySchema }),
+  updateMyAbsence,
 );
 
 /**

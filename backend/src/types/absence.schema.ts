@@ -31,6 +31,10 @@ export const createAbsenceBodySchema = z
 
 export type CreateAbsenceBody = z.infer<typeof createAbsenceBodySchema>;
 
+export const updateAbsenceBodySchema = createAbsenceBodySchema;
+
+export type UpdateAbsenceBody = z.infer<typeof updateAbsenceBodySchema>;
+
 export const listAbsencesQuerySchema = z.object({
   month: z.coerce.number().int().min(1, 'Month must be 1–12').max(12, 'Month must be 1–12'),
   year: z.coerce.number().int().min(2000, 'Year out of range').max(2100, 'Year out of range'),

@@ -271,6 +271,21 @@
   font-size: 16px;
 }
 
+.absence-report__more-days-link {
+  align-self: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #0c69ff;
+  font-size: 14px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.absence-report__more-days-link:hover {
+  color: #0952c9;
+}
+
 .absence-report__documents {
   display: flex;
   flex-direction: column;
