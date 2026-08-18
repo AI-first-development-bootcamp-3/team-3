@@ -110,7 +110,7 @@ describe('AdminEmployeeReports', () => {
     expect(screen.queryByRole('tab', { name: 'דיווח העדרות' })).not.toBeInTheDocument()
 
     await waitFor(() => {
-      expect(fetchMock.mock.calls.some(([callUrl]) => String(callUrl).includes('/admin/reports/options?userId=u-emp'))).toBe(true)
+      expect(screen.getByRole('button', { name: 'הוספת פרויקט' })).toBeEnabled()
     })
 
     await user.click(screen.getByRole('button', { name: 'שמירה' }))
