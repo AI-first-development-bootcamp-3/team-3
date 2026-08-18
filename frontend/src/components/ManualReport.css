@@ -841,6 +841,16 @@
   text-align: start;
 }
 
+.mr-project--desktop__hours--readonly {
+  display: block;
+  border-color: var(--mr-field-disabled);
+  color: #a1a5b2;
+}
+
+.mr-project--desktop__hours[type='time']::-webkit-calendar-picker-indicator {
+  display: none;
+}
+
 .mr-project--desktop__detail-label {
   display: block;
   margin-bottom: 4px;

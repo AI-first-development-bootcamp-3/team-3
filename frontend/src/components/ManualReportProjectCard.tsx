@@ -1,6 +1,11 @@
 import type { UseFormRegister } from 'react-hook-form'
 import type { ReportingOptions, WorkLocation } from '../types'
-import type { ManualReportValues, ProjectRowValues } from './ManualReport.schema'
+import {
+  derivedRowHours,
+  rowFormat,
+  type ManualReportValues,
+  type ProjectRowValues,
+} from './ManualReport.schema'
 import { LOCATION_OPTIONS } from './ManualReport.constants'
 import trashIcon from '../assets/manual-report/desktop/trash.svg'
 
@@ -10,6 +15,8 @@ interface Props {
   index: number
   variant?: 'mobile' | 'desktop'
   values: ProjectRowValues
+  /** The day's כניסה, the axis a row's clock pair is measured against. */
+  dayStart: string
   options: ReportingOptions
   errors: RowErrors
   register: UseFormRegister<ManualReportValues>
@@ -28,6 +35,10 @@ function tasksFor(options: ReportingOptions, values: ProjectRowValues) {
   )
 }
 
+function hoursLabel(value: number): string {
+  return `${Number.isInteger(value) ? value : value.toFixed(1)} שעות`
+}
+
 function PlaceholderOption({ show }: { show: boolean }) {
   if (!show) return null
   return (
@@ -41,6 +52,7 @@ function ManualReportProjectCard({
   index,
   variant = 'desktop',
   values,
+  dayStart,
   options,
   errors,
   register,
@@ -53,6 +65,8 @@ function ManualReportProjectCard({
   const tasks = tasksFor(options, values)
   const projectKey = values.clientId && values.projectId ? `${values.clientId}:${values.projectId}` : ''
   const hoursFilled = Number(values.hours) > 0
+  const clockInOut = rowFormat(values, options) === 'CLOCK_IN_OUT'
+  const derivedHours = derivedRowHours(dayStart, values.rowStartTime ?? '', values.rowEndTime ?? '')
 
   if (variant !== 'desktop') {
     return null
@@ -129,22 +143,63 @@ function ManualReportProjectCard({
             {errors.workLocation ? <p className="mr-project--desktop__error">{errors.workLocation}</p> : null}
         </label>
 
-        <label className="mr-project--desktop__pick-col">
-          <span className="mr-project--desktop__pick-label">שעות</span>
-          <input
-            type="text"
-            inputMode="decimal"
-            autoComplete="off"
-            dir="rtl"
-            placeholder="0"
-            className={`mr-project--desktop__hours${hoursFilled ? ' mr-project--desktop__hours--filled' : ''}`}
-            aria-label={`שעות ${index + 1}`}
-            {...register(`rows.${index}.hours`, {
-              onChange: () => onHoursChange(),
-            })}
-          />
-          {errors.hours ? <p className="mr-project--desktop__error">{errors.hours}</p> : null}
-        </label>
+        {clockInOut ? (
+          <>
+            <label className="mr-project--desktop__time-col">
+              <span className="mr-project--desktop__pick-label">כניסה</span>
+              <input
+                type="time"
+                className={`mr-project--desktop__hours${values.rowStartTime ? ' mr-project--desktop__hours--filled' : ''}`}
+                aria-label={`כניסה ${index + 1}`}
+                {...register(`rows.${index}.rowStartTime`, {
+                  onChange: () => onHoursChange(),
+                })}
+              />
+              {errors.rowStartTime ? <p className="mr-project--desktop__error">{errors.rowStartTime}</p> : null}
+            </label>
+
+            <label className="mr-project--desktop__time-col">
+              <span className="mr-project--desktop__pick-label">יציאה</span>
+              <input
+                type="time"
+                className={`mr-project--desktop__hours${values.rowEndTime ? ' mr-project--desktop__hours--filled' : ''}`}
+                aria-label={`יציאה ${index + 1}`}
+                {...register(`rows.${index}.rowEndTime`, {
+                  onChange: () => onHoursChange(),
+                })}
+              />
+              {errors.rowEndTime ? <p className="mr-project--desktop__error">{errors.rowEndTime}</p> : null}
+            </label>
+
+            <div className="mr-project--desktop__time-col">
+              <span className="mr-project--desktop__pick-label">שעות</span>
+              <output
+                className="mr-project--desktop__hours mr-project--desktop__hours--readonly"
+                aria-label={`שעות ${index + 1}`}
+                aria-live="polite"
+              >
+                {hoursLabel(derivedHours)}
+              </output>
+            </div>
+          </>
+        ) : (
+          <label className="mr-project--desktop__pick-col">
+            <span className="mr-project--desktop__pick-label">שעות</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              dir="rtl"
+              placeholder="0"
+              className={`mr-project--desktop__hours${hoursFilled ? ' mr-project--desktop__hours--filled' : ''}`}
+              aria-label={`שעות ${index + 1}`}
+              {...register(`rows.${index}.hours`, {
+                onChange: () => onHoursChange(),
+              })}
+            />
+            {errors.hours ? <p className="mr-project--desktop__error">{errors.hours}</p> : null}
+          </label>
+        )}
       </div>
 
       <label className="mr-project--desktop__detail-wrap">
