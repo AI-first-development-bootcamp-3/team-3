@@ -7,7 +7,7 @@ export function minutesFromHhmm(hhmm: string): number {
 
 /**
  * Attendance window in hours. If end is later than start, same calendar day.
- * If end is earlier than or equal to start, end is the next day (equal → 24h).
+ * If end equals start, zero hours. If end is earlier than start, end is the next day.
  */
 export function attendanceWindowHours(startTime: string, endTime: string): number {
   return attendanceWindowMinutes(startTime, endTime) / 60;
@@ -16,6 +16,7 @@ export function attendanceWindowHours(startTime: string, endTime: string): numbe
 export function attendanceWindowMinutes(startTime: string, endTime: string): number {
   const start = minutesFromHhmm(startTime);
   const end = minutesFromHhmm(endTime);
+  if (end === start) return 0;
   if (end > start) return end - start;
   return 24 * 60 - start + end;
 }

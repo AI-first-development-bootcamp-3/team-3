@@ -88,6 +88,10 @@ describe('buildManualReportSchema', () => {
     )
   })
 
+  it('treats equal entry and exit times as zero hours', () => {
+    expect(attendanceWindowHours('15:52', '15:52')).toBe(0)
+  })
+
   it('rejects hours of 0', () => {
     const result = schema.safeParse(aDay({ rows: [sumRow({ hours: 0 })] }))
 

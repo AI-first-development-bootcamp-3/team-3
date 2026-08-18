@@ -18,6 +18,7 @@ import { authRouter } from './routes/auth.routes.js';
 import { healthRouter } from './routes/health.routes.js';
 import { sampleRouter } from './routes/sample.routes.js';
 import { timeReportRouter } from './routes/timeReport.routes.js';
+import { workClockRouter } from './routes/workClock.routes.js';
 
 /**
  * The Express app, fully configured but never listening. Kept separate from
@@ -54,6 +55,7 @@ app.use(adminProjectRouter);
 app.use(adminTaskRouter);
 app.use(adminAssignmentRouter);
 app.use(timeReportRouter);
+app.use(workClockRouter);
 app.use(absenceRouter);
 
 // Interactive docs leak endpoint shapes and are dev/QA tooling, not a

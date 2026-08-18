@@ -10,11 +10,12 @@ function minutesFromHhmm(value: string): number {
   return hours * 60 + minutes
 }
 
-/** Overnight-aware day window. Equal clocks are 24 hours. */
+/** Overnight-aware day window. Equal clocks are zero hours. */
 export function attendanceWindowHours(startTime: string, endTime: string): number {
   if (!HHMM.test(startTime) || !HHMM.test(endTime)) return 0
   const start = minutesFromHhmm(startTime)
   const end = minutesFromHhmm(endTime)
+  if (end === start) return 0
   const minutes = end > start ? end - start : 24 * 60 - start + end
   return minutes / 60
 }

@@ -35,6 +35,12 @@ enum ReportFormat {
   SUM_HOURS
 }
 
+enum WorkClockSessionStatus {
+  ACTIVE
+  AWAITING_CONFIRM
+  DISCARDED
+}
+
 enum LoginAttemptOutcome {
   CREDENTIAL_REJECTED
   THROTTLED
@@ -65,6 +71,7 @@ model User {
   absences           Absence[]
   loginAttempts      LoginAttempt[]
   taskAssignments    TaskAssignment[]
+  workClockSessions  WorkClockSession[]
 
   @@map("users")
 }
@@ -231,4 +238,31 @@ model TimeReport {
   updatedAt    DateTime     @updatedAt
 
   @@map("time_reports")
+}
+
+/// Admin month close (SCRUM-146). One row per calendar month when locked.
+model MonthLock {
+  year       Int
+  month      Int
+  lockedAt   DateTime @default(now())
+  lockedById String
+
+  @@id([year, month])
+  @@map("month_locks")
+}
+
+/// Server-backed employee work clock (SCRUM-305). One open session per user.
+model WorkClockSession {
+  id          String                 @id @default(uuid())
+  userId      String
+  user        User                   @relation(fields: [userId], references: [id])
+  startedAt   DateTime
+  stoppedAt   DateTime?
+  status      WorkClockSessionStatus
+  autoStopped Boolean                @default(false)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  @@index([userId, status])
+  @@map("work_clock_sessions")
 }

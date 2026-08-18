@@ -19,3 +19,4 @@ export type {
   ReportingTaskOption,
 } from './report'
 export type { Absence, AbsenceType, CreateAbsenceInput } from './absence'
+export type { ClockSegment, ClockSession, ClockSessionResponse, WorkClockSessionStatus } from './clock'

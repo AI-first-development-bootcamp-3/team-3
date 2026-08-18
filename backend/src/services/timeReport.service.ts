@@ -490,6 +490,7 @@ export async function deleteTimeReportsForDate(userId: string, date: string): Pr
  */
 export async function listReportingOptions(userId: string): Promise<ReportingOptions> {
   const clients = await prisma.client.findMany({
+    where: { isActive: true },
     orderBy: { name: 'asc' },
     select: {
       id: true,

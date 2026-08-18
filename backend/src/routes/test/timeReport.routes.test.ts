@@ -104,7 +104,7 @@ describe('POST /reports', () => {
     expect(await prisma.timeReport.count()).toBe(0);
   });
 
-  it('rejects a missing description with 400 and creates no row', async () => {
+  it('stores a row without a description', async () => {
     const employee = await createUser();
     const task = await createTask();
     const project = await prisma.project.findFirstOrThrow({ where: { id: task.projectId } });
@@ -124,9 +124,9 @@ describe('POST /reports', () => {
         taskId: task.id,
       });
 
-    expect(response.status).toBe(400);
-    expect(response.body.error.details.some((d: { field: string }) => d.field === 'description')).toBe(true);
-    expect(await prisma.timeReport.count()).toBe(0);
+    expect(response.status).toBe(201);
+    expect(response.body.description).toBe('');
+    expect(await prisma.timeReport.count()).toBe(1);
   });
 
   it('accepts an overnight window when hours fit', async () => {
@@ -154,7 +154,7 @@ describe('POST /reports', () => {
     expect(response.body).toMatchObject({ startTime: '22:00', endTime: '06:00', hours: 8 });
   });
 
-  it('rejects hours of 0', async () => {
+  it('accepts zero hours when they fit the attendance window', async () => {
     const employee = await createUser();
     const task = await createTask();
     const project = await prisma.project.findFirstOrThrow({ where: { id: task.projectId } });
@@ -166,17 +166,17 @@ describe('POST /reports', () => {
       .send({
         date: '2026-08-16',
         workLocation: 'OFFICE',
-        startTime: '09:00',
-        endTime: '18:00',
+        startTime: '16:02',
+        endTime: '16:02',
         hours: 0,
         clientId: project.clientId,
         projectId: project.id,
         taskId: task.id,
-        description: 'Zero',
+        description: '',
       });
 
-    expect(response.status).toBe(400);
-    expect(await prisma.timeReport.count()).toBe(0);
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({ startTime: '16:02', endTime: '16:02', hours: 0 });
   });
 
   it('rejects hours that have more than one decimal place', async () => {
@@ -1134,7 +1134,6 @@ describe('GET /reports', () => {
     const client = await createClient({ name: 'Globex' });
     const project = await createProject({ name: 'Mobile app', clientId: client.id });
     const task = await createTask({ name: 'QA', projectId: project.id });
-
     await prisma.timeReport.create({
       data: {
         userId: employee.id,

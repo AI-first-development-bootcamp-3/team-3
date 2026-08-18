@@ -90,6 +90,14 @@ export async function createTaskAssignment(
   });
 }
 
+export async function assignTask(userId: string, taskId: string): Promise<void> {
+  await prisma.taskAssignment.upsert({
+    where: { userId_taskId: { userId, taskId } },
+    update: {},
+    create: { userId, taskId },
+  });
+}
+
 export async function createTimeReport(
   overrides: Partial<
     Pick<
