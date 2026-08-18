@@ -30,6 +30,11 @@ enum TaskStatus {
   CLOSED
 }
 
+enum ReportFormat {
+  CLOCK_IN_OUT
+  SUM_HOURS
+}
+
 enum LoginAttemptOutcome {
   CREDENTIAL_REJECTED
   THROTTLED
@@ -102,15 +107,16 @@ model Client {
 }
 
 model Project {
-  id        String   @id @default(uuid())
-  name      String
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  clientId  String
-  client    Client   @relation(fields: [clientId], references: [id])
-  tasks       Task[]
-  timeReports TimeReport[]
+  id           String       @id @default(uuid())
+  name         String
+  isActive     Boolean      @default(true)
+  reportFormat ReportFormat @default(CLOCK_IN_OUT)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  clientId     String
+  client       Client       @relation(fields: [clientId], references: [id])
+  tasks        Task[]
+  timeReports  TimeReport[]
 
   @@map("projects")
 }
@@ -203,6 +209,7 @@ model TimeReport {
   workLocation WorkLocation
   startTime    DateTime     @db.Time
   endTime      DateTime     @db.Time
+  hours        Decimal      @db.Decimal(4, 1)
   description  String
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt

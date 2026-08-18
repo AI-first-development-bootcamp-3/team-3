@@ -15,7 +15,7 @@ interface SessionState {
 }
 
 function isValidStoredSession(stored: StoredSession | null): stored is StoredSession {
-  if (!stored || typeof stored.token !== 'string' || typeof stored.expiresAt !== 'string' || !stored.user) {
+  if (!stored || typeof stored.expiresAt !== 'string' || !stored.user) {
     return false
   }
   const expiresAt = new Date(stored.expiresAt).getTime()
@@ -26,7 +26,7 @@ function isValidStoredSession(stored: StoredSession | null): stored is StoredSes
  * Zustand, not React Context - apiClient.ts is a plain module and needs to
  * read the token outside React via getState(). See SCRUM-39's design.md.
  */
-export const sessionStore = create<SessionState>((set, get) => ({
+export const sessionStore = create<SessionState>((set) => ({
   user: null,
   token: null,
   // rememberMe no longer selects the storage area (D-cross-tab: every
@@ -34,15 +34,13 @@ export const sessionStore = create<SessionState>((set, get) => ({
   // still uses it to set a longer `expiresAt` for a remembered session. A
   // function implementing a wider type may drop trailing parameters it
   // doesn't need, so it's simply omitted here rather than left unused.
-  setSession: (user, token, expiresAt) => {
-    writeSession(window.localStorage, { user, token, expiresAt })
-    set({ user, token })
+  setSession: (user, _token, expiresAt) => {
+    writeSession(window.localStorage, { user, expiresAt })
+    set({ user, token: 'cookie' })
     armExpiryTimer(expiresAt)
   },
   updateUser: (user) => {
     set({ user })
-    const { token } = get()
-    if (!token) return
     const stored = readSession(window.localStorage)
     if (stored) {
       writeSession(window.localStorage, { ...stored, user })
@@ -61,7 +59,7 @@ export const sessionStore = create<SessionState>((set, get) => ({
     // still be readable or that user is silently logged out.
     const stored = readSession(window.localStorage) ?? readSession(window.sessionStorage)
     if (!isValidStoredSession(stored)) return
-    set({ user: stored.user as User, token: stored.token })
+    set({ user: stored.user as User, token: 'cookie' })
     armExpiryTimer(stored.expiresAt)
   },
 }))
@@ -133,7 +131,7 @@ function endSessionLocally(message: string, description: string): void {
   // down for the same underlying expiry (a request in flight at the exact
   // expiry instant) - skip the redundant toast/redirect rather than
   // showing it twice.
-  if (!sessionStore.getState().token) return
+  if (!sessionStore.getState().user) return
   sessionStore.getState().clearSession()
   notification.warning({ message, description })
   redirectToLogin()

@@ -12,7 +12,7 @@ docker compose up -d postgres
 cd backend
 npm install                 # postinstall runs `prisma generate`
 npx prisma migrate deploy   # or `prisma migrate dev` when changing the schema
-npm run seed                # admin + employee users, sample clients/projects/tasks
+npm run seed                # 7 demo users (admin@abra.test / employee@abra.test / gal@abra.test / …) + NVIDIA/Intel/AMD/HP/Amazon catalog, password `password123`
 npm run dev
 curl http://localhost:3000/health   # -> {"status":"ok"}
 ```
@@ -72,10 +72,13 @@ first. See `.env.example` for the full annotated list; `DATABASE_URL`,
   `src/types/`. All field failures come back in one 400, and the request
   object is replaced with the parsed, stripped result — downstream code
   only ever sees trusted, typed data.
-- **Auth:** `authenticate` (`src/middleware/auth.middleware.ts`) verifies
-  the bearer token and attaches `req.user`; `requireRole(role)` composes
-  after it to restrict a route by role. An unauthenticated request to a
-  role-guarded route gets 401, never 403.
+- **Auth:** `authenticate` (`src/middleware/auth.middleware.ts`) reads the
+  session from an httpOnly `abra_session` cookie (browser) or a `Bearer`
+  token (tests/Swagger), then attaches `req.user`. `POST /login` never
+  returns the JWT in JSON. `requireRole(role)` composes after authenticate
+  to restrict a route by role. An unauthenticated request to a role-guarded
+  route gets 401, never 403. `GET /me` is the session ping used to kick a
+  deactivated account immediately.
 - **Soft delete**, **test database**, and **file storage** each have their
   own section below — read them before touching `User`/`Client`/`Project`/
   `Task`, writing an integration test, or adding a new attachment-like
@@ -195,9 +198,56 @@ proxy in front of the backend. Set it only when deploying behind one you
 actually trust; enabling it without a real proxy in front lets any client
 pick its own rate-limit bucket by forging the header.
 
+## Time reports
+
+`POST /reports` and `POST /reports/batch` take one **day attendance window**
+(`startTime` / `endTime` as `HH:mm`) plus per-project `hours` from `0.5` to
+`24` with at most one decimal place (`3.3` yes, `3.34` no). If `endTime` is earlier than or equal to `startTime`,
+the window continues into the next calendar day (equal clocks = 24 hours).
+Project hours may sum to less than the window (unallocated lunch/rest);
+they must not exceed it (`400` `HOURS_EXCEED_WINDOW`). Batch copies the
+request window onto every stored row and **replaces** any rows the caller
+already saved on that date (so a second save does not duplicate hours).
+
+`DELETE /reports?date=YYYY-MM-DD` removes every row the authenticated caller
+saved on that calendar date (`204`). It never touches another user's rows.
+A date with no rows for the caller is `404`.
+
+## Absences
+
+`GET /absences?month=&year=` lists the caller's absences whose range overlaps
+that calendar month (`200`). Unauthenticated callers get `401`.
+
+`POST /absences` creates one full-day absence for the authenticated caller
+(`type` `VACATION` / `SICK` / `RESERVE_DUTY` / `OTHER`, `startDate`, optional
+inclusive `endDate`). Friday and Saturday are excluded from `workingDayCount`;
+a weekend-only range is `400`. Overlap with another absence or with reported
+work hours is `409` with per-date details. Attachments and half-day are later
+tickets. The same write rate limit as report POSTs applies.
+
+`DELETE /absences/:id` cancels that absence for the authenticated owner
+(`204`). The row is soft-deleted (`isActive` false) so it stays in history.
+The whole range is cancelled, not one day inside it. Another user's id is
+`403`; an unknown or already-cancelled id is `404`.
+
+## Admin catalog
+
+All `/admin/*` routes require an administrator (`401` unauthenticated, `403`
+authenticated but not admin). List endpoints include inactive rows so an
+admin can reactivate them.
+
+- `GET /admin/users` — every account (`displayName`, email, role, `isActive`).
+- `GET`/`POST /admin/clients`, `PATCH /admin/clients/:id` — `isActive: false` is soft-delete.
+- `GET`/`POST /admin/projects`, `PATCH /admin/projects/:id` — create only under an active client. `reportFormat` is `CLOCK_IN_OUT` (default) or `SUM_HOURS`.
+- `GET`/`POST /admin/tasks`, `PATCH /admin/tasks/:id` — create only under an active project. Closing a task is `status: CLOSED` (the UI "delete task").
+- `GET /admin/assignments` — one row per **OPEN** task under an active client and project, with assigned workers.
+- `POST /admin/assignments` `{ taskId, userIds[] }` — skip duplicates; unknown/inactive users are `400`.
+- `DELETE /admin/assignments?taskId=&userId=` — `204`, or `404` if that pair is not assigned.
+
 ## Write rate limiting
 
-`POST /reports` and `POST /reports/batch`
+`POST /reports`, `POST /reports/batch`, `POST /absences`, and
+`DELETE /absences/:id`
 (`src/middleware/writeRateLimit.middleware.ts`) cap how many writes one
 authenticated caller can drive within the same window — every request counts,
 not just the failures, because what needs bounding is a valid token replaying

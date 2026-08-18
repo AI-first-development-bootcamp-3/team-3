@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { notification } from 'antd'
 import { logoutAndRedirect } from './auth'
 import { sessionStore } from './sessionStore'
@@ -34,6 +34,10 @@ afterEach(() => {
 })
 
 describe('logoutAndRedirect', () => {
+  beforeEach(() => {
+    vi.spyOn(notification, 'success').mockImplementation(() => '' as unknown as void)
+  })
+
   it('clears the session, clears the query cache, and redirects when the server call succeeds', async () => {
     establishSession()
     mockFetchOnce({ ok: true, status: 204 })

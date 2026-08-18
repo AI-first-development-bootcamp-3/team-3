@@ -49,6 +49,12 @@
   border-bottom: 1px solid var(--home-divider);
 }
 
+.home-shell__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
 .home-shell__brand {
   display: flex;
   align-items: center;
@@ -429,12 +435,13 @@
   flex-direction: row-reverse;
   align-items: center;
   gap: 4px;
-  padding: 2px 8px 6px;
+  padding: 5px 10px;
   border-radius: 100px;
   background: var(--home-bg);
   font-size: 15px;
   font-weight: 500;
-  line-height: 1;
+  line-height: 1.35;
+  white-space: nowrap;
   color: #696f76;
 }
 
@@ -453,7 +460,8 @@
   color: #945312;
 }
 
-.home-shell__tag--weekend {
+.home-shell__tag--weekend,
+.home-shell__tag--absence {
   background: #f0f4fa;
   color: #0c3058;
 }

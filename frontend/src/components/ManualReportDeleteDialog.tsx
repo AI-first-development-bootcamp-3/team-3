@@ -1,12 +1,27 @@
 import danger from '../assets/manual-report/danger.svg'
 
 interface Props {
+  title?: string
+  body?: string
+  confirmLabel?: string
   onCancel: () => void
   onConfirm: () => void
 }
 
-/** Figma alert 1:6792 — removing a project is destructive, so it asks first. */
-function ManualReportDeleteDialog({ onCancel, onConfirm }: Props) {
+const PROJECT_COPY = {
+  title: 'למחוק את פרויקט זה מהדיווחים?',
+  body: 'הפעולה תסיר את כל השיוכים של הפרויקט הזה מדוחות השעות. האם אתה בטוח שתרצה להמשיך?',
+  confirmLabel: 'מחק את הפרויקט',
+}
+
+/** Figma alert 1:6792 — removing a project or a saved day asks first. */
+function ManualReportDeleteDialog({
+  title = PROJECT_COPY.title,
+  body = PROJECT_COPY.body,
+  confirmLabel = PROJECT_COPY.confirmLabel,
+  onCancel,
+  onConfirm,
+}: Props) {
   return (
     <div className="mr-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="mr-dialog-title">
       <div className="mr-dialog">
@@ -16,11 +31,9 @@ function ManualReportDeleteDialog({ onCancel, onConfirm }: Props) {
           </span>
           <div>
             <h2 className="mr-dialog__title" id="mr-dialog-title">
-              למחוק את פרויקט זה מהדיווחים?
+              {title}
             </h2>
-            <p className="mr-dialog__body">
-              הפעולה תסיר את כל השיוכים של הפרויקט הזה מדוחות השעות. האם אתה בטוח שתרצה להמשיך?
-            </p>
+            <p className="mr-dialog__body">{body}</p>
           </div>
         </div>
         <div className="mr-dialog__actions">
@@ -28,7 +41,7 @@ function ManualReportDeleteDialog({ onCancel, onConfirm }: Props) {
             מעדיף שלא למחוק
           </button>
           <button type="button" className="mr-dialog__confirm" onClick={onConfirm}>
-            מחק את הפרויקט
+            {confirmLabel}
           </button>
         </div>
       </div>

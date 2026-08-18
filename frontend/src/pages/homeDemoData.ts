@@ -14,7 +14,7 @@ import tagNote from '../assets/home/tag-note.svg'
 import dayJobs from '../assets/home/day-jobs.svg'
 import dayWeekend from '../assets/home/day-weekend.svg'
 
-export type DemoStatusTone = 'missing' | 'full' | 'partial' | 'weekend'
+export type DemoStatusTone = 'missing' | 'full' | 'partial' | 'weekend' | 'absence'
 
 export type DemoTag = { text: string; icon: string }
 
@@ -34,6 +34,7 @@ export const DEMO_STATUS_ICONS: Record<DemoStatusTone, string> = {
   full: tagCheckGreen,
   partial: tagAlertOrange,
   weekend: tagCloseBlue,
+  absence: tagCloseBlue,
 }
 
 export const DEMO_KPIS: Record<string, { value: string; caption: string }> = {

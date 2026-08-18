@@ -14,6 +14,29 @@ function tokenFor(user: { id: string; role: string }): string {
   return jwt.sign({ sub: user.id, role: user.role }, env.JWT_SECRET, { expiresIn: '1h' });
 }
 
+describe('GET /admin/users', () => {
+  afterEach(async () => {
+    await resetDatabase();
+  });
+
+  it('lists users including inactive ones', async () => {
+    const admin = await createUser({ role: Role.ADMIN, displayName: 'Admin' });
+    await createUser({ displayName: 'Dana', isActive: false });
+
+    const response = await request(app).get('/admin/users').set('Authorization', `Bearer ${tokenFor(admin)}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.users.map((user: { displayName: string }) => user.displayName).sort()).toEqual(['Admin', 'Dana']);
+    expect(response.body.users.find((user: { displayName: string }) => user.displayName === 'Dana').isActive).toBe(false);
+  });
+
+  it('rejects a non-admin caller with 403', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    const response = await request(app).get('/admin/users').set('Authorization', `Bearer ${tokenFor(employee)}`);
+    expect(response.status).toBe(403);
+  });
+});
+
 describe('POST /admin/users', () => {
   afterEach(async () => {
     await resetDatabase();

@@ -102,14 +102,3 @@ main {
   background: #f6f6f6;
 }
 
-.admin-shell {
-  display: flex;
-  flex-direction: column;
-  min-height: 100svh;
-}
-
-.admin-shell__content {
-  padding: 24px;
-  flex: 1;
-  background: var(--bg);
-}

@@ -48,7 +48,7 @@ describe('apiClient request', () => {
     await expect(request('/clients/missing')).rejects.toBeInstanceOf(ApiError)
   })
 
-  it('attaches the session token when one is set', async () => {
+  it('sends cookies and does not attach a Bearer token', async () => {
     sessionStore
       .getState()
       .setSession(
@@ -62,7 +62,8 @@ describe('apiClient request', () => {
     await request('/protected')
 
     const [, init] = fetchMock.mock.calls[0]
-    expect(init.headers.Authorization).toBe('Bearer abc123')
+    expect(init.credentials).toBe('include')
+    expect((init.headers as Record<string, string>).Authorization).toBeUndefined()
   })
 
   it('omits the Authorization header when no token is set', async () => {
@@ -71,7 +72,7 @@ describe('apiClient request', () => {
     await request('/public')
 
     const [, init] = fetchMock.mock.calls[0]
-    expect(init.headers.Authorization).toBeUndefined()
+    expect((init.headers as Record<string, string>).Authorization).toBeUndefined()
   })
 
   it('clears session and redirects to login on 401 response', async () => {
@@ -140,6 +141,34 @@ describe('apiClient request', () => {
     await expect(request('/protected')).rejects.toBeInstanceOf(ApiError)
 
     expect(notificationSpy).toHaveBeenCalledWith({ message: 'החיבור פג ונותק', description: 'יש להתחבר שוב' })
+    redirectSpy.mockRestore()
+    notificationSpy.mockRestore()
+  })
+
+  it('shows the inactive-account copy on ACCOUNT_DEACTIVATED', async () => {
+    const redirectSpy = vi.spyOn(navigation, 'redirectToLogin').mockImplementation(() => {})
+    const notificationSpy = vi.spyOn(notification, 'warning').mockImplementation(() => '' as unknown as void)
+    sessionStore
+      .getState()
+      .setSession(
+        { id: '1', fullName: 'Dan', email: 'd@x.com', userType: 'admin', active: true },
+        'abc123',
+        new Date(Date.now() + 60_000).toISOString(),
+        false,
+      )
+
+    mockFetchOnce({
+      ok: false,
+      status: 401,
+      json: { error: { code: 'ACCOUNT_DEACTIVATED', message: 'Account is no longer active' } },
+    })
+
+    await expect(request('/protected')).rejects.toBeInstanceOf(ApiError)
+
+    expect(notificationSpy).toHaveBeenCalledWith({
+      message: 'החשבון אינו פעיל',
+      description: 'פנו למנהל המערכת',
+    })
     redirectSpy.mockRestore()
     notificationSpy.mockRestore()
   })

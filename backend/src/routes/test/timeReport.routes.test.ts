@@ -10,7 +10,7 @@ import {
   reportWriteRateLimitStore,
 } from '../../middleware/writeRateLimit.middleware.js';
 import { Role } from '../../generated/prisma/enums.js';
-import { createClient, createProject, createTask, createUser } from '../../test/factories.js';
+import { createClient, createProject, createTask, createTimeReport, createUser } from '../../test/factories.js';
 import { resetDatabase } from '../../test/resetDatabase.js';
 
 function tokenFor(user: { id: string; role: string }): string {
@@ -36,6 +36,7 @@ describe('POST /reports', () => {
         workLocation: 'OFFICE',
         startTime: '09:00',
         endTime: '18:00',
+        hours: 9,
         clientId: client.id,
         projectId: project.id,
         taskId: task.id,
@@ -52,6 +53,7 @@ describe('POST /reports', () => {
       workLocation: 'OFFICE',
       startTime: '09:00',
       endTime: '18:00',
+      hours: 9,
       description: 'Built the form',
     });
     expect(response.body.id).toEqual(expect.any(String));
@@ -67,6 +69,7 @@ describe('POST /reports', () => {
       workLocation: 'OFFICE',
       startTime: '09:00',
       endTime: '18:00',
+      hours: 9,
       clientId: '00000000-0000-4000-8000-000000000001',
       projectId: '00000000-0000-4000-8000-000000000002',
       taskId: '00000000-0000-4000-8000-000000000003',
@@ -90,6 +93,7 @@ describe('POST /reports', () => {
         workLocation: 'HOME',
         startTime: '09:00',
         endTime: '12:00',
+        hours: 3,
         clientId: project.clientId,
         projectId: project.id,
         taskId: task.id,
@@ -100,7 +104,7 @@ describe('POST /reports', () => {
     expect(await prisma.timeReport.count()).toBe(0);
   });
 
-  it('rejects end time before start time with 400', async () => {
+  it('accepts an overnight window when hours fit', async () => {
     const employee = await createUser();
     const task = await createTask();
     const project = await prisma.project.findFirstOrThrow({ where: { id: task.projectId } });
@@ -111,16 +115,89 @@ describe('POST /reports', () => {
       .send({
         date: '2026-08-16',
         workLocation: 'CLIENT',
-        startTime: '18:00',
-        endTime: '09:00',
+        startTime: '22:00',
+        endTime: '06:00',
+        hours: 8,
         clientId: project.clientId,
         projectId: project.id,
         taskId: task.id,
-        description: 'Backwards',
+        description: 'Night',
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({ startTime: '22:00', endTime: '06:00', hours: 8 });
+  });
+
+  it('rejects hours of 0', async () => {
+    const employee = await createUser();
+    const task = await createTask();
+    const project = await prisma.project.findFirstOrThrow({ where: { id: task.projectId } });
+
+    const response = await request(app)
+      .post('/reports')
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({
+        date: '2026-08-16',
+        workLocation: 'OFFICE',
+        startTime: '09:00',
+        endTime: '18:00',
+        hours: 0,
+        clientId: project.clientId,
+        projectId: project.id,
+        taskId: task.id,
+        description: 'Zero',
       });
 
     expect(response.status).toBe(400);
     expect(await prisma.timeReport.count()).toBe(0);
+  });
+
+  it('rejects hours that have more than one decimal place', async () => {
+    const employee = await createUser();
+    const task = await createTask();
+    const project = await prisma.project.findFirstOrThrow({ where: { id: task.projectId } });
+
+    const response = await request(app)
+      .post('/reports')
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({
+        date: '2026-08-16',
+        workLocation: 'OFFICE',
+        startTime: '09:00',
+        endTime: '18:00',
+        hours: 3.34,
+        clientId: project.clientId,
+        projectId: project.id,
+        taskId: task.id,
+        description: 'Uneven',
+      });
+
+    expect(response.status).toBe(400);
+    expect(await prisma.timeReport.count()).toBe(0);
+  });
+
+  it('accepts hours with a single decimal place', async () => {
+    const employee = await createUser();
+    const task = await createTask();
+    const project = await prisma.project.findFirstOrThrow({ where: { id: task.projectId } });
+
+    const response = await request(app)
+      .post('/reports')
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({
+        date: '2026-08-16',
+        workLocation: 'OFFICE',
+        startTime: '09:00',
+        endTime: '18:00',
+        hours: 3.3,
+        clientId: project.clientId,
+        projectId: project.id,
+        taskId: task.id,
+        description: 'One decimal',
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.hours).toBe(3.3);
   });
 
   it('rejects a task that does not belong to the given project with 400', async () => {
@@ -137,6 +214,7 @@ describe('POST /reports', () => {
         workLocation: 'OFFICE',
         startTime: '09:00',
         endTime: '18:00',
+        hours: 9,
         clientId: project.clientId,
         projectId: otherProject.id,
         taskId: task.id,
@@ -162,6 +240,7 @@ describe('POST /reports', () => {
         workLocation: 'OFFICE',
         startTime: '09:00',
         endTime: '18:00',
+        hours: 9,
         clientId: project.clientId,
         projectId: project.id,
         taskId: task.id,
@@ -191,14 +270,17 @@ describe('POST /reports/batch', () => {
   ) {
     return {
       workLocation: 'OFFICE',
-      startTime: '09:00',
-      endTime: '13:00',
+      hours: 4,
       clientId: client.id,
       projectId: project.id,
       taskId: task.id,
       description: 'Morning',
       ...overrides,
     };
+  }
+
+  function dayBody(rows: Record<string, unknown>[]) {
+    return { date: '2026-08-17', startTime: '09:00', endTime: '18:00', rows };
   }
 
   it('creates every row of the day and stamps them with the caller and date', async () => {
@@ -211,21 +293,19 @@ describe('POST /reports/batch', () => {
     const response = await request(app)
       .post('/reports/batch')
       .set('Authorization', `Bearer ${tokenFor(employee)}`)
-      .send({
-        date: '2026-08-17',
-        rows: [
-          rowFor(first),
+      .send(
+        dayBody([
+          rowFor(first, { hours: 4 }),
           {
             workLocation: 'HOME',
-            startTime: '13:00',
-            endTime: '18:00',
+            hours: 3,
             clientId: secondClient.id,
             projectId: secondProject.id,
             taskId: secondTask.id,
             description: 'Afternoon',
           },
-        ],
-      });
+        ]),
+      );
 
     expect(response.status).toBe(201);
     expect(response.body.reports).toHaveLength(2);
@@ -234,9 +314,16 @@ describe('POST /reports/batch', () => {
       taskId: first.task.id,
       date: '2026-08-17',
       startTime: '09:00',
-      endTime: '13:00',
+      endTime: '18:00',
+      hours: 4,
     });
-    expect(response.body.reports[1]).toMatchObject({ taskId: secondTask.id, workLocation: 'HOME' });
+    expect(response.body.reports[1]).toMatchObject({
+      taskId: secondTask.id,
+      workLocation: 'HOME',
+      hours: 3,
+      startTime: '09:00',
+      endTime: '18:00',
+    });
     expect(await prisma.timeReport.count()).toBe(2);
   });
 
@@ -247,7 +334,7 @@ describe('POST /reports/batch', () => {
     const response = await request(app)
       .post('/reports/batch')
       .set('Authorization', `Bearer ${tokenFor(employee)}`)
-      .send({ date: '2026-08-17', rows: [rowFor(hierarchy, { description: undefined })] });
+      .send(dayBody([rowFor(hierarchy, { description: undefined })]));
 
     expect(response.status).toBe(201);
     expect(response.body.reports[0].description).toBe('');
@@ -282,10 +369,7 @@ describe('POST /reports/batch', () => {
     const response = await request(app)
       .post('/reports/batch')
       .set('Authorization', `Bearer ${tokenFor(employee)}`)
-      .send({
-        date: '2026-08-17',
-        rows: [rowFor(hierarchy), rowFor(hierarchy, { projectId: otherProject.id })],
-      });
+      .send(dayBody([rowFor(hierarchy), rowFor(hierarchy, { projectId: otherProject.id })]));
 
     expect(response.status).toBe(400);
     expect(response.body.error.details).toContainEqual(
@@ -294,23 +378,73 @@ describe('POST /reports/batch', () => {
     expect(await prisma.timeReport.count()).toBe(0);
   });
 
-  it('names the row whose end time precedes its start time', async () => {
+  it('rejects a batch whose hours exceed the attendance window', async () => {
     const employee = await createUser();
     const hierarchy = await aHierarchy();
 
     const response = await request(app)
       .post('/reports/batch')
       .set('Authorization', `Bearer ${tokenFor(employee)}`)
-      .send({
-        date: '2026-08-17',
-        rows: [rowFor(hierarchy), rowFor(hierarchy, { startTime: '18:00', endTime: '09:00' })],
-      });
+      .send(dayBody([rowFor(hierarchy, { hours: 4 }), rowFor(hierarchy, { hours: 6 })]));
 
     expect(response.status).toBe(400);
-    expect(response.body.error.details).toContainEqual(
-      expect.objectContaining({ field: 'rows.1.endTime' }),
-    );
+    expect(response.body.error.code).toBe('HOURS_EXCEED_WINDOW');
     expect(await prisma.timeReport.count()).toBe(0);
+  });
+
+  it('replaces the caller\'s previous rows for that date instead of appending', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    const other = await createUser({ role: Role.EMPLOYEE });
+    const hierarchy = await aHierarchy();
+    const token = tokenFor(employee);
+
+    await request(app)
+      .post('/reports/batch')
+      .set('Authorization', `Bearer ${token}`)
+      .send(dayBody([rowFor(hierarchy, { hours: 4 }), rowFor(hierarchy, { hours: 3, description: 'Second' })]))
+      .expect(201);
+
+    await request(app)
+      .post('/reports/batch')
+      .set('Authorization', `Bearer ${tokenFor(other)}`)
+      .send(dayBody([rowFor(hierarchy, { hours: 2, description: 'Other user' })]))
+      .expect(201);
+
+    const again = await request(app)
+      .post('/reports/batch')
+      .set('Authorization', `Bearer ${token}`)
+      .send(dayBody([rowFor(hierarchy, { hours: 5, description: 'Kept' })]));
+
+    expect(again.status).toBe(201);
+    expect(again.body.reports).toHaveLength(1);
+    expect(again.body.reports[0]).toMatchObject({ hours: 5, description: 'Kept' });
+
+    const mine = await prisma.timeReport.findMany({ where: { userId: employee.id } });
+    expect(mine).toHaveLength(1);
+    expect(Number(mine[0]?.hours)).toBe(5);
+
+    expect(await prisma.timeReport.count({ where: { userId: other.id } })).toBe(1);
+  });
+
+  it('keeps the previous day when a replacement batch is invalid', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    const hierarchy = await aHierarchy();
+    const token = tokenFor(employee);
+
+    await request(app)
+      .post('/reports/batch')
+      .set('Authorization', `Bearer ${token}`)
+      .send(dayBody([rowFor(hierarchy, { hours: 4 })]))
+      .expect(201);
+
+    const failed = await request(app)
+      .post('/reports/batch')
+      .set('Authorization', `Bearer ${token}`)
+      .send(dayBody([rowFor(hierarchy, { hours: 10 })]));
+
+    expect(failed.status).toBe(400);
+    expect(await prisma.timeReport.count({ where: { userId: employee.id } })).toBe(1);
+    expect(Number((await prisma.timeReport.findFirst({ where: { userId: employee.id } }))?.hours)).toBe(4);
   });
 });
 
@@ -370,11 +504,12 @@ describe('report write rate limiting', () => {
       .set('Authorization', `Bearer ${tokenFor(colleague)}`)
       .send({
         date: '2026-08-17',
+        startTime: '09:00',
+        endTime: '18:00',
         rows: [
           {
             workLocation: 'OFFICE',
-            startTime: '09:00',
-            endTime: '13:00',
+            hours: 4,
             clientId: client.id,
             projectId: project.id,
             taskId: task.id,
@@ -422,6 +557,7 @@ describe('GET /reports', () => {
         workLocation: 'CLIENT',
         startTime: new Date('1970-01-01T09:00:00.000Z'),
         endTime: new Date('1970-01-01T18:00:00.000Z'),
+        hours: 9,
         description: 'Manual test',
       },
     });
@@ -435,6 +571,7 @@ describe('GET /reports', () => {
         workLocation: 'OFFICE',
         startTime: new Date('1970-01-01T09:00:00.000Z'),
         endTime: new Date('1970-01-01T12:00:00.000Z'),
+        hours: 3,
         description: 'Not mine',
       },
     });
@@ -448,6 +585,7 @@ describe('GET /reports', () => {
         workLocation: 'HOME',
         startTime: new Date('1970-01-01T09:00:00.000Z'),
         endTime: new Date('1970-01-01T10:00:00.000Z'),
+        hours: 1,
         description: 'Previous month',
       },
     });
@@ -483,6 +621,76 @@ describe('GET /reports', () => {
 
   it('rejects an unauthenticated caller with 401', async () => {
     const response = await request(app).get('/reports').query({ month: 8, year: 2026 });
+
+    expect(response.status).toBe(401);
+  });
+});
+
+describe('DELETE /reports', () => {
+  afterEach(async () => {
+    await resetDatabase();
+  });
+
+  it('deletes every row the caller saved on that date and leaves other days and users', async () => {
+    const employee = await createUser();
+    const other = await createUser();
+    const keep = await createTimeReport({
+      userId: employee.id,
+      date: new Date('2026-08-16T00:00:00.000Z'),
+    });
+    await createTimeReport({
+      userId: employee.id,
+      date: new Date('2026-08-17T00:00:00.000Z'),
+    });
+    await createTimeReport({
+      userId: employee.id,
+      date: new Date('2026-08-17T00:00:00.000Z'),
+    });
+    const colleague = await createTimeReport({
+      userId: other.id,
+      date: new Date('2026-08-17T00:00:00.000Z'),
+    });
+
+    const response = await request(app)
+      .delete('/reports')
+      .query({ date: '2026-08-17' })
+      .set('Authorization', `Bearer ${tokenFor(employee)}`);
+
+    expect(response.status).toBe(204);
+    expect(await prisma.timeReport.count({ where: { userId: employee.id } })).toBe(1);
+    expect(await prisma.timeReport.findFirst({ where: { id: keep.id } })).not.toBeNull();
+    expect(await prisma.timeReport.findFirst({ where: { id: colleague.id } })).not.toBeNull();
+  });
+
+  it('rejects a date with no rows for the caller with 404', async () => {
+    const employee = await createUser();
+    await createTimeReport({
+      userId: employee.id,
+      date: new Date('2026-08-16T00:00:00.000Z'),
+    });
+
+    const response = await request(app)
+      .delete('/reports')
+      .query({ date: '2026-08-17' })
+      .set('Authorization', `Bearer ${tokenFor(employee)}`);
+
+    expect(response.status).toBe(404);
+    expect(await prisma.timeReport.count()).toBe(1);
+  });
+
+  it('rejects a malformed date with 400', async () => {
+    const employee = await createUser();
+
+    const response = await request(app)
+      .delete('/reports')
+      .query({ date: '17-08-2026' })
+      .set('Authorization', `Bearer ${tokenFor(employee)}`);
+
+    expect(response.status).toBe(400);
+  });
+
+  it('rejects an unauthenticated caller with 401', async () => {
+    const response = await request(app).delete('/reports').query({ date: '2026-08-17' });
 
     expect(response.status).toBe(401);
   });
@@ -525,9 +733,10 @@ describe('report read rate limiting', () => {
 
 describe('OpenAPI for time reports', () => {
   it('documents POST /reports, POST /reports/batch and GET /me/reporting-options', () => {
-    const spec = openApiSpec as { paths?: Record<string, { post?: unknown; get?: unknown }> };
+    const spec = openApiSpec as { paths?: Record<string, { post?: unknown; get?: unknown; delete?: unknown }> };
     expect(spec.paths?.['/reports']).toHaveProperty('post');
     expect(spec.paths?.['/reports']).toHaveProperty('get');
+    expect(spec.paths?.['/reports']).toHaveProperty('delete');
     expect(spec.paths?.['/reports/batch']).toHaveProperty('post');
     expect(spec.paths?.['/me/reporting-options']).toHaveProperty('get');
   });

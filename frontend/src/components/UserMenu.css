@@ -1,0 +1,147 @@
+.user-menu {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.user-menu__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #141e3e;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.user-menu__panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  /* Physical right: the avatar sits on the viewport's right in RTL. Logical
+   * `inset-inline-end` would be `left` in RTL and grow the panel off-screen. */
+  right: 0;
+  left: auto;
+  z-index: 40;
+  width: 240px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow:
+    0 3px 6px rgb(139 138 183 / 10%),
+    0 11px 11px rgb(139 138 183 / 9%),
+    0 25px 15px rgb(139 138 183 / 5%);
+  text-align: right;
+}
+
+.user-menu__identity {
+  padding: 4px 8px 12px;
+  border-bottom: 1px solid #ececec;
+  margin-bottom: 8px;
+}
+
+.user-menu__name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #141e3e;
+}
+
+.user-menu__email {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #848891;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.user-menu__item {
+  display: block;
+  width: 100%;
+  padding: 10px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #212525;
+  font: inherit;
+  font-size: 15px;
+  text-align: right;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.user-menu__item:hover {
+  background: #f6f6f6;
+}
+
+.user-menu__item--danger {
+  color: #c00;
+}
+
+.user-menu__modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgb(20 30 62 / 45%);
+}
+
+.user-menu__modal {
+  width: min(100%, 360px);
+  padding: 24px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow:
+    0 3px 6px rgb(139 138 183 / 10%),
+    0 11px 11px rgb(139 138 183 / 9%),
+    0 25px 15px rgb(139 138 183 / 5%);
+  text-align: right;
+}
+
+.user-menu__modal h2 {
+  margin: 0 0 20px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #141e3e;
+}
+
+.user-menu__modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.user-menu__modal-cancel,
+.user-menu__modal-confirm {
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.user-menu__modal-cancel {
+  background: #f6f6f6;
+  color: #212525;
+}
+
+.user-menu__modal-confirm {
+  background: #141e3e;
+  color: #fff;
+}
+
+.user-menu__modal-confirm:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

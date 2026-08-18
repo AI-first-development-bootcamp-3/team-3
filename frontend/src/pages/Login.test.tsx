@@ -66,7 +66,7 @@ describe('Login page', () => {
       ok: true,
       status: 200,
       json: {
-        token: 'a-jwt-token',
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
         user: { id: '1', email: 'admin@abra.test', displayName: 'Admin', role: 'ADMIN', mustChangePassword: false },
       },
     })
@@ -83,7 +83,7 @@ describe('Login page', () => {
     await user.click(screen.getByRole('button', { name: /התחבר/ }))
 
     await waitFor(() => {
-      expect(sessionStore.getState().token).toBe('a-jwt-token')
+      expect(sessionStore.getState().token).toBe('cookie')
     })
     expect(sessionStore.getState().user).toMatchObject({ userType: 'admin', mustChangePassword: false })
   })
@@ -272,12 +272,15 @@ describe('Login page', () => {
     await user.click(screen.getByRole('button', { name: /התחבר/ }))
 
     await waitFor(() => {
-      expect(sessionStore.getState().token).toBe('a-jwt-token')
+      expect(sessionStore.getState().token).toBe('cookie')
     })
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(JSON.parse(requestInit.body as string)).toMatchObject({ rememberMe: false })
+    expect(requestInit.credentials).toBe('include')
     expect(window.localStorage.getItem('abra.session')).not.toBeNull()
     expect(window.sessionStorage.getItem('abra.session')).toBeNull()
+    expect(JSON.parse(window.localStorage.getItem('abra.session') ?? '{}').token).toBeUndefined()
+    expect(window.localStorage.getItem('abra.lastEmail')).toBe('admin@abra.test')
   })
 
   it('sends rememberMe: true and stores the session in localStorage when checked', async () => {
@@ -304,11 +307,33 @@ describe('Login page', () => {
     await user.click(screen.getByRole('button', { name: /התחבר/ }))
 
     await waitFor(() => {
-      expect(sessionStore.getState().token).toBe('a-jwt-token')
+      expect(sessionStore.getState().token).toBe('cookie')
     })
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(JSON.parse(requestInit.body as string)).toMatchObject({ rememberMe: true })
     expect(window.localStorage.getItem('abra.session')).not.toBeNull()
     expect(window.sessionStorage.getItem('abra.session')).toBeNull()
+  })
+
+  it('explains that an inactive account should contact an admin', async () => {
+    mockFetchOnce({
+      ok: false,
+      status: 403,
+      json: { error: { code: 'ACCOUNT_INACTIVE', message: 'This account is inactive. Contact an administrator.' } },
+    })
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter>
+        <Login />
+      </MemoryRouter>,
+    )
+
+    await user.type(screen.getByLabelText(/אימייל/), 'admin@abra.test')
+    await user.type(screen.getByLabelText(/סיסמה/), 'password123')
+    await user.click(screen.getByRole('button', { name: /התחבר/ }))
+
+    expect(await screen.findByText(/החשבון אינו פעיל/)).toBeInTheDocument()
+    expect(sessionStore.getState().token).toBeNull()
   })
 })

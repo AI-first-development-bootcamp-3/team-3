@@ -48,13 +48,12 @@ export async function request<T>(
   options: RequestOptions = {},
 ): Promise<T> {
   const { method = 'GET', body, headers = {}, handleUnauthorizedGlobally = true } = options
-  const { token } = sessionStore.getState()
 
   const response = await fetch(`${API_URL}${path}`, {
     method,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...headers,
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -70,16 +69,15 @@ export async function request<T>(
       // sessionStore's proactive expiry timer may have already torn this
       // session down for the same underlying expiry - skip the redundant
       // toast/redirect rather than showing it twice.
-      if (sessionStore.getState().token) {
+      if (sessionStore.getState().user) {
         sessionStore.getState().clearSession()
-        // The body may be undefined for a non-JSON response, and its shape
-        // isn't guaranteed even when present - read the code defensively.
-        // SESSION_REVOKED (backend/src/middleware/auth.middleware.ts) means
-        // the server deliberately ended the session (e.g. revoked from another
-        // tab); every other 401 code (TOKEN_EXPIRED, ACCOUNT_DEACTIVATED,
-        // plain UNAUTHORIZED, ...) keeps the generic expiry copy.
         const code = (responseBody as { error?: { code?: string } } | undefined)?.error?.code
-        if (code === 'SESSION_REVOKED') {
+        if (code === 'ACCOUNT_DEACTIVATED') {
+          notification.warning({
+            message: 'החשבון אינו פעיל',
+            description: 'פנו למנהל המערכת',
+          })
+        } else if (code === 'SESSION_REVOKED') {
           notification.warning({
             message: 'החיבור נותק',
             description: 'התנתקת מהמערכת',
