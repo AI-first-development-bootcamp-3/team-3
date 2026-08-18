@@ -14,6 +14,7 @@ const options = {
         {
           id: 'project-1',
           name: 'Cargo',
+          reportFormat: 'SUM_HOURS',
           tasks: [
             { id: 'task-1', name: 'UI UX Design' },
             { id: 'task-2', name: 'Marketing' },
@@ -24,7 +25,17 @@ const options = {
     {
       id: 'client-2',
       name: 'אברא',
-      projects: [{ id: 'project-2', name: 'abra app', tasks: [{ id: 'task-3', name: 'Consulting' }] }],
+      projects: [
+        { id: 'project-2', name: 'abra app', reportFormat: 'SUM_HOURS', tasks: [{ id: 'task-3', name: 'Consulting' }] },
+      ],
+    },
+    {
+      id: 'client-3',
+      name: 'נמל אשדוד',
+      projects: [
+        { id: 'project-3', name: 'משמרות', reportFormat: 'CLOCK_IN_OUT', tasks: [{ id: 'task-4', name: 'Shifts' }] },
+        { id: 'project-4', name: 'משמרות ערב', reportFormat: 'CLOCK_IN_OUT', tasks: [{ id: 'task-5', name: 'Night' }] },
+      ],
     },
   ],
 }
@@ -86,6 +97,49 @@ async function fillCard(
   const hoursInput = screen.getByLabelText(`שעות ${index}`)
   await user.clear(hoursInput)
   await user.type(hoursInput, hours)
+}
+
+/** Fills a card of a כניסה/יציאה project: pickers, then its own clock pair. */
+async function fillClockCard(
+  user: ReturnType<typeof userEvent.setup>,
+  index: number,
+  projectValue: string,
+  rowStart: string,
+  rowEnd: string,
+) {
+  await user.selectOptions(screen.getByLabelText(`פרויקט ${index}`), projectValue)
+  await user.selectOptions(screen.getByLabelText(`מיקום ${index}`), 'OFFICE')
+  fireEvent.change(screen.getByLabelText(`כניסה ${index}`), { target: { value: rowStart } })
+  fireEvent.change(screen.getByLabelText(`יציאה ${index}`), { target: { value: rowEnd } })
+}
+
+/** One row of a day already stored, as the list endpoint hands it back. A row
+ * carrying `rowStartTime` was reported as כניסה/יציאה, one without it as
+ * סיכום שעות — whatever its project is set to today. */
+function savedRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'r1',
+    userId: 'u1',
+    clientId: 'client-1',
+    projectId: 'project-1',
+    taskId: 'task-2',
+    date: '2026-08-17',
+    workLocation: 'OFFICE' as const,
+    startTime: '09:00',
+    endTime: '18:00',
+    hours: 4,
+    description: 'Saved',
+    clientName: 'אל-על',
+    projectName: 'Cargo',
+    taskName: 'Marketing',
+    durationHours: 4,
+    ...overrides,
+  }
+}
+
+function batchBody(fetchMock: ReturnType<typeof mockFetch>) {
+  const call = fetchMock.mock.calls.find(([url]) => String(url).includes('/reports/batch'))
+  return JSON.parse(String((call?.[1] as RequestInit).body))
 }
 
 describe('ManualReport', { timeout: 20_000 }, () => {
@@ -400,6 +454,46 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/reports/batch'))).toBe(false)
   })
 
+  it('explains the missing assignment and blocks the save when the user has no projects', async () => {
+    signIn()
+    const fetchMock = mockFetch(() => ({ ok: true, status: 200, json: { clients: [] } }))
+    const user = userEvent.setup()
+
+    renderScreen()
+
+    expect(await screen.findByText('עדיין לא שויכו לכם פרויקטים')).toBeInTheDocument()
+    expect(
+      screen.getByText('כדי לדווח שעות צריך שיוך לפרויקט. פנו למנהל ישיר ואפשר יהיה להתחיל לדווח.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('עדיין אין פרויקטים מדווחים')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'הוספת פרויקט' })).toBeDisabled()
+
+    await user.click(screen.getByRole('button', { name: 'שמירה' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('אין פרויקטים לדיווח')
+    expect(alert).toHaveTextContent('פנו למנהל ישיר כדי שישייך אתכם לפרויקט')
+    expect(screen.queryByText('חסר לנו פרט או שניים')).not.toBeInTheDocument()
+    expect(screen.queryByText('יש להוסיף לפחות פרויקט אחד')).not.toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/reports/batch'))).toBe(false)
+  })
+
+  it('blocks the save on a saved day when the user no longer has any assigned project', async () => {
+    signIn()
+    const fetchMock = mockFetch(() => ({ ok: true, status: 200, json: { clients: [] } }))
+    const user = userEvent.setup()
+
+    renderScreen(vi.fn(), { initialDate: '2026-08-17', initialReports: [savedRow()] })
+
+    expect(await screen.findByText('עדיין לא שויכו לכם פרויקטים לדיווח. פנו למנהל ישיר.')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'שמירה' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('אין פרויקטים לדיווח')
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/reports/batch'))).toBe(false)
+  })
+
   it('rejects hours with more than one decimal place', async () => {
     signIn()
     const fetchMock = mockFetch(() => ({ ok: true, status: 200, json: options }))
@@ -549,6 +643,296 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     const summary = screen.getByText('סיכום').closest<HTMLElement>('.manual-report__summary')
     expect(summary).not.toBeNull()
     expect(within(summary!).queryByText('חסר')).not.toBeInTheDocument()
+  })
+
+  it('shows the editable שעות field for a סיכום שעות project', async () => {
+    signIn()
+    mockFetch(() => ({ ok: true, status: 200, json: options }))
+    const user = userEvent.setup()
+
+    renderScreen()
+    await user.click(await screen.findByRole('button', { name: 'הוספת פרויקט' }))
+    await user.selectOptions(screen.getByLabelText('פרויקט 1'), 'client-1:project-1')
+
+    expect(screen.getByLabelText('שעות 1').tagName).toBe('INPUT')
+    expect(screen.queryByLabelText('כניסה 1')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('יציאה 1')).not.toBeInTheDocument()
+  })
+
+  it('shows a clock pair and read-only derived hours for a כניסה/יציאה project', async () => {
+    signIn()
+    mockFetch(() => ({ ok: true, status: 200, json: options }))
+    const user = userEvent.setup()
+
+    renderScreen()
+    await user.click(await screen.findByRole('button', { name: 'הוספת פרויקט' }))
+    await fillClockCard(user, 1, 'client-3:project-3', '09:00', '13:00')
+
+    expect(screen.getByLabelText('משימה 1')).toHaveValue('task-4')
+    const derived = screen.getByLabelText('שעות 1')
+    expect(derived.tagName).toBe('OUTPUT')
+    expect(derived).toHaveTextContent('4 שעות')
+  })
+
+  it('swaps the card inputs and clears the stale hours when the project format changes', async () => {
+    signIn()
+    const fetchMock = mockFetch((url) =>
+      url.includes('/reports/batch')
+        ? { ok: true, status: 201, json: { reports: [] } }
+        : { ok: true, status: 200, json: options },
+    )
+    const user = userEvent.setup()
+
+    renderScreen()
+    await user.click(await screen.findByRole('button', { name: 'הוספת פרויקט' }))
+    await fillCard(user, 1, 'client-1:project-1', 'task-2', '4')
+    expect(screen.getByLabelText('שעות 1')).toHaveValue('4')
+
+    await user.selectOptions(screen.getByLabelText('פרויקט 1'), 'client-3:project-3')
+
+    expect(screen.getByLabelText('כניסה 1')).toBeInTheDocument()
+    expect(screen.getByLabelText('שעות 1').tagName).toBe('OUTPUT')
+
+    fireEvent.change(screen.getByLabelText('כניסה 1'), { target: { value: '09:00' } })
+    fireEvent.change(screen.getByLabelText('יציאה 1'), { target: { value: '12:00' } })
+    await user.click(screen.getByRole('button', { name: 'שמירה' }))
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/reports/batch'))).toBe(true)
+    })
+    expect(batchBody(fetchMock).rows[0]).toEqual({
+      clientId: 'client-3',
+      projectId: 'project-3',
+      taskId: 'task-4',
+      workLocation: 'OFFICE',
+      rowStartTime: '09:00',
+      rowEndTime: '12:00',
+      description: '',
+    })
+  })
+
+  it('clears the stale hours when the card goes back to a סיכום שעות project', async () => {
+    signIn()
+    mockFetch(() => ({ ok: true, status: 200, json: options }))
+    const user = userEvent.setup()
+
+    renderScreen()
+    await user.click(await screen.findByRole('button', { name: 'הוספת פרויקט' }))
+    await fillCard(user, 1, 'client-1:project-1', 'task-2', '4')
+    await user.selectOptions(screen.getByLabelText('פרויקט 1'), 'client-3:project-3')
+    await user.selectOptions(screen.getByLabelText('פרויקט 1'), 'client-1:project-1')
+
+    expect(screen.getByLabelText('שעות 1').tagName).toBe('INPUT')
+    expect(screen.getByLabelText('שעות 1')).toHaveValue('0')
+  })
+
+  it('does not save a clock pair that falls outside the day window', async () => {
+    signIn()
+    const fetchMock = mockFetch(() => ({ ok: true, status: 200, json: options }))
+    const user = userEvent.setup()
+
+    renderScreen()
+    await screen.findByRole('button', { name: 'הוספת פרויקט' })
+    fireEvent.change(screen.getByLabelText('שעת כניסה'), { target: { value: '09:00' } })
+    fireEvent.change(screen.getByLabelText('שעת יציאה'), { target: { value: '18:00' } })
+    await user.click(screen.getByRole('button', { name: 'הוספת פרויקט' }))
+    await fillClockCard(user, 1, 'client-3:project-3', '08:00', '13:00')
+
+    await user.click(screen.getByRole('button', { name: 'שמירה' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('שעות הפרויקט מחוץ לחלון היום')
+    expect(
+      screen.getByText('שעות הפרויקט חייבות להיות בתוך חלון הכניסה–יציאה של היום'),
+    ).toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/reports/batch'))).toBe(false)
+  })
+
+  it('marks both cards and blocks the save when two clock-in/out projects overlap', async () => {
+    signIn()
+    const fetchMock = mockFetch(() => ({ ok: true, status: 200, json: options }))
+    const user = userEvent.setup()
+
+    renderScreen()
+    await screen.findByRole('button', { name: 'הוספת פרויקט' })
+    fireEvent.change(screen.getByLabelText('שעת כניסה'), { target: { value: '09:00' } })
+    fireEvent.change(screen.getByLabelText('שעת יציאה'), { target: { value: '18:00' } })
+    await user.click(screen.getByRole('button', { name: 'הוספת פרויקט' }))
+    await fillClockCard(user, 1, 'client-3:project-3', '09:00', '13:00')
+    await user.click(screen.getByRole('button', { name: 'הוספת פרויקט' }))
+    await fillClockCard(user, 2, 'client-3:project-4', '12:00', '17:00')
+
+    await user.click(screen.getByRole('button', { name: 'שמירה' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('יש חפיפה בין הפרויקטים')
+    expect(screen.getAllByText('שני פרויקטים לא יכולים להיות מדווחים על אותו פרק זמן')).toHaveLength(2)
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/reports/batch'))).toBe(false)
+  })
+
+  it('saves a mixed day of typed and clocked projects in one batch', async () => {
+    signIn()
+    const fetchMock = mockFetch((url) =>
+      url.includes('/reports/batch')
+        ? { ok: true, status: 201, json: { reports: [] } }
+        : { ok: true, status: 200, json: options },
+    )
+    const user = userEvent.setup()
+
+    renderScreen()
+    await screen.findByRole('button', { name: 'הוספת פרויקט' })
+    fireEvent.change(screen.getByLabelText('שעת כניסה'), { target: { value: '09:00' } })
+    fireEvent.change(screen.getByLabelText('שעת יציאה'), { target: { value: '18:00' } })
+    await user.click(screen.getByRole('button', { name: 'הוספת פרויקט' }))
+    await fillCard(user, 1, 'client-1:project-1', 'task-2', '4')
+    await user.click(screen.getByRole('button', { name: 'הוספת פרויקט' }))
+    await fillClockCard(user, 2, 'client-3:project-3', '13:00', '16:00')
+
+    const summary = screen.getByText('סיכום').closest<HTMLElement>('.manual-report__summary')
+    expect(within(summary!).getByText('סה״כ 7 שעות')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'שמירה' }))
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/reports/batch'))).toBe(true)
+    })
+    const body = batchBody(fetchMock)
+    expect(body).toMatchObject({ startTime: '09:00', endTime: '18:00' })
+    expect(body.rows[0]).toMatchObject({ projectId: 'project-1', hours: 4 })
+    expect(body.rows[0]).not.toHaveProperty('rowStartTime')
+    expect(body.rows[1]).toMatchObject({ projectId: 'project-3', rowStartTime: '13:00', rowEndTime: '16:00' })
+    expect(body.rows[1]).not.toHaveProperty('hours')
+  })
+
+  it('counts derived hours against the attendance window', async () => {
+    signIn()
+    const fetchMock = mockFetch(() => ({ ok: true, status: 200, json: options }))
+    const user = userEvent.setup()
+
+    renderScreen()
+    await screen.findByRole('button', { name: 'הוספת פרויקט' })
+    fireEvent.change(screen.getByLabelText('שעת כניסה'), { target: { value: '09:00' } })
+    fireEvent.change(screen.getByLabelText('שעת יציאה'), { target: { value: '18:00' } })
+    await user.click(screen.getByRole('button', { name: 'הוספת פרויקט' }))
+    await fillClockCard(user, 1, 'client-3:project-3', '09:00', '17:00')
+    await user.click(screen.getByRole('button', { name: 'הוספת פרויקט' }))
+    await fillCard(user, 2, 'client-1:project-1', 'task-2', '2')
+
+    await user.click(screen.getByRole('button', { name: 'שמירה' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('יותר מדי שעות בפרויקטים')
+    expect(alert).toHaveTextContent('10')
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/reports/batch'))).toBe(false)
+  })
+
+  it('keeps a saved כניסה/יציאה row in its own format after its project became סיכום שעות', async () => {
+    signIn()
+    const fetchMock = mockFetch((url) =>
+      url.includes('/reports/batch')
+        ? { ok: true, status: 201, json: { reports: [] } }
+        : { ok: true, status: 200, json: options },
+    )
+    const user = userEvent.setup()
+
+    renderScreen(vi.fn(), {
+      initialDate: '2026-08-17',
+      initialReports: [savedRow({ rowStartTime: '10:00', rowEndTime: '13:00', hours: 3 })],
+    })
+
+    expect(await screen.findByLabelText('כניסה 1')).toHaveValue('10:00')
+    expect(screen.getByLabelText('יציאה 1')).toHaveValue('13:00')
+    const derived = screen.getByLabelText('שעות 1')
+    expect(derived.tagName).toBe('OUTPUT')
+    expect(derived).toHaveTextContent('3 שעות')
+
+    await user.click(screen.getByRole('button', { name: 'שמירה' }))
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/reports/batch'))).toBe(true)
+    })
+    const row = batchBody(fetchMock).rows[0]
+    expect(row).toMatchObject({ projectId: 'project-1', rowStartTime: '10:00', rowEndTime: '13:00' })
+    expect(row).not.toHaveProperty('hours')
+    expect(row).not.toHaveProperty('savedFormat')
+  })
+
+  it('keeps a saved סיכום שעות row in its own format after its project became כניסה/יציאה', async () => {
+    signIn()
+    const fetchMock = mockFetch((url) =>
+      url.includes('/reports/batch')
+        ? { ok: true, status: 201, json: { reports: [] } }
+        : { ok: true, status: 200, json: options },
+    )
+    const user = userEvent.setup()
+
+    renderScreen(vi.fn(), {
+      initialDate: '2026-08-17',
+      initialReports: [savedRow({ clientId: 'client-3', projectId: 'project-3', taskId: 'task-4', hours: 4 })],
+    })
+
+    const typed = await screen.findByLabelText('שעות 1')
+    expect(typed.tagName).toBe('INPUT')
+    expect(typed).toHaveValue('4')
+    expect(screen.queryByLabelText('כניסה 1')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'שמירה' }))
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/reports/batch'))).toBe(true)
+    })
+    const row = batchBody(fetchMock).rows[0]
+    expect(row).toMatchObject({ projectId: 'project-3', hours: 4 })
+    expect(row).not.toHaveProperty('rowStartTime')
+    expect(row).not.toHaveProperty('savedFormat')
+  })
+
+  it('drops the saved format and clears the stale clock pair when the card picks another project', async () => {
+    signIn()
+    const fetchMock = mockFetch((url) =>
+      url.includes('/reports/batch')
+        ? { ok: true, status: 201, json: { reports: [] } }
+        : { ok: true, status: 200, json: options },
+    )
+    const user = userEvent.setup()
+
+    renderScreen(vi.fn(), {
+      initialDate: '2026-08-17',
+      initialReports: [savedRow({ rowStartTime: '10:00', rowEndTime: '13:00', hours: 3 })],
+    })
+
+    await screen.findByLabelText('כניסה 1')
+    await user.selectOptions(screen.getByLabelText('פרויקט 1'), 'client-2:project-2')
+
+    expect(screen.getByLabelText('שעות 1').tagName).toBe('INPUT')
+    expect(screen.queryByLabelText('כניסה 1')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('יציאה 1')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'שמירה' }))
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/reports/batch'))).toBe(true)
+    })
+    const row = batchBody(fetchMock).rows[0]
+    expect(row).toMatchObject({ projectId: 'project-2', taskId: 'task-3', hours: 3 })
+    expect(row).not.toHaveProperty('rowStartTime')
+  })
+
+  it('drops the saved format and clears the stale hours when the card picks a כניסה/יציאה project', async () => {
+    signIn()
+    mockFetch(() => ({ ok: true, status: 200, json: options }))
+    const user = userEvent.setup()
+
+    renderScreen(vi.fn(), {
+      initialDate: '2026-08-17',
+      initialReports: [savedRow({ clientId: 'client-3', projectId: 'project-3', taskId: 'task-4', hours: 4 })],
+    })
+
+    expect(await screen.findByLabelText('שעות 1')).toHaveValue('4')
+    await user.selectOptions(screen.getByLabelText('פרויקט 1'), 'client-3:project-4')
+
+    expect(screen.getByLabelText('כניסה 1')).toHaveValue('')
+    expect(screen.getByLabelText('יציאה 1')).toHaveValue('')
+    expect(screen.getByLabelText('שעות 1').tagName).toBe('OUTPUT')
+    expect(screen.getByLabelText('שעות 1')).toHaveTextContent('0 שעות')
   })
 
   it('posts a Thursday–Sunday vacation with two working days from the absence tab', async () => {

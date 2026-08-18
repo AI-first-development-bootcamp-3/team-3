@@ -5,7 +5,9 @@ export type { Project } from './project'
 export type { Task, TaskStatus } from './task'
 export type {
   Report,
+  ReportFormat,
   ReportRowInput,
+  ReportRowTimeFields,
   CreateReportBatchInput,
   CreateReportBatchResult,
   ListReportsResult,
@@ -17,3 +19,4 @@ export type {
   ReportingTaskOption,
 } from './report'
 export type { Absence, AbsenceType, CreateAbsenceInput } from './absence'
+export type { ClockSegment, ClockSession, ClockSessionResponse, WorkClockSessionStatus } from './clock'
