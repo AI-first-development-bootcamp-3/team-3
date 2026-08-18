@@ -6,6 +6,7 @@ import type {
   AbsenceModel,
   ClientModel,
   ProjectModel,
+  TaskAssignmentModel,
   TaskModel,
   TimeReportModel,
   UserModel,
@@ -70,6 +71,21 @@ export async function createTask(
       projectId,
       ...(overrides.isActive !== undefined ? { isActive: overrides.isActive } : {}),
       ...(overrides.status !== undefined ? { status: overrides.status } : {}),
+    },
+  });
+}
+
+/**
+ * Assigns a user to a task. The row's presence *is* the assignment — there is
+ * no active flag — so removing it in a test is how an unassignment is modelled.
+ */
+export async function createTaskAssignment(
+  overrides: Partial<Pick<TaskAssignmentModel, 'userId' | 'taskId'>> = {},
+): Promise<TaskAssignmentModel> {
+  return prisma.taskAssignment.create({
+    data: {
+      userId: overrides.userId ?? (await createUser()).id,
+      taskId: overrides.taskId ?? (await createTask()).id,
     },
   });
 }

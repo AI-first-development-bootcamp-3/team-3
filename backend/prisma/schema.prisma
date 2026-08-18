@@ -110,7 +110,12 @@ model Project {
   id           String       @id @default(uuid())
   name         String
   isActive     Boolean      @default(true)
-  reportFormat ReportFormat @default(CLOCK_IN_OUT)
+  /// Default is SUM_HOURS, not CLOCK_IN_OUT as admin-report-format first set
+  /// it: that choice predated `TimeReport.hours`, and once every row became
+  /// hours-based, leaving it would have flipped every never-configured
+  /// project to per-row clock pairs. See
+  /// openspec/changes/report-format-aware-entry/design.md, D8.
+  reportFormat ReportFormat @default(SUM_HOURS)
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   clientId     String
@@ -207,8 +212,19 @@ model TimeReport {
   task         Task         @relation(fields: [taskId], references: [id])
   date         DateTime     @db.Date
   workLocation WorkLocation
+  /// The *day* attendance window, copied onto every row of that day —
+  /// not this row's own interval. manual-report-inline-hours redefined
+  /// them this way and the entry form reads the window back off the first
+  /// row of a day, so this meaning must not drift.
   startTime    DateTime     @db.Time
   endTime      DateTime     @db.Time
+  /// This row's own clock pair, set only when its project's reportFormat is
+  /// CLOCK_IN_OUT. NULL on every SUM_HOURS row — including every row saved
+  /// before report-format-aware-entry, all of which were hours-only.
+  rowStartTime DateTime?    @db.Time
+  rowEndTime   DateTime?    @db.Time
+  /// Typed by the employee on a SUM_HOURS row; derived from
+  /// rowStartTime..rowEndTime on a CLOCK_IN_OUT row.
   hours        Decimal      @db.Decimal(4, 1)
   description  String
   createdAt    DateTime     @default(now())
