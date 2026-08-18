@@ -3,5 +3,17 @@ export type { User, UserType } from './user'
 export type { Client } from './client'
 export type { Project } from './project'
 export type { Task, TaskStatus } from './task'
-export type { Report } from './report'
-export type { Absence, AbsenceType } from './absence'
+export type {
+  Report,
+  ReportRowInput,
+  CreateReportBatchInput,
+  CreateReportBatchResult,
+  ListReportsResult,
+  TimeReportListItem,
+  WorkLocation,
+  ReportingOptions,
+  ReportingClientOption,
+  ReportingProjectOption,
+  ReportingTaskOption,
+} from './report'
+export type { Absence, AbsenceType, CreateAbsenceInput } from './absence'

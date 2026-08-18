@@ -1,7 +1,11 @@
 import { prisma } from '../config/prisma.js';
+import { allocationsFitWindow } from '../lib/attendanceWindow.js';
 import type { WorkLocation } from '../generated/prisma/enums.js';
-import { AppError } from '../types/errors.js';
-import type { CreateTimeReportBody } from '../types/timeReport.schema.js';
+import { AppError, type ErrorDetail } from '../types/errors.js';
+import type {
+  CreateTimeReportBatchBody,
+  CreateTimeReportBody,
+} from '../types/timeReport.schema.js';
 
 export interface TimeReportDto {
   id: string;
@@ -13,7 +17,15 @@ export interface TimeReportDto {
   workLocation: WorkLocation;
   startTime: string;
   endTime: string;
+  hours: number;
   description: string;
+}
+
+export interface TimeReportListItemDto extends TimeReportDto {
+  clientName: string;
+  projectName: string;
+  taskName: string;
+  durationHours: number;
 }
 
 export interface ReportingTaskOption {
@@ -64,6 +76,7 @@ function toDto(row: {
   workLocation: WorkLocation;
   startTime: Date;
   endTime: Date;
+  hours: { toNumber?: () => number } | number | string;
   description: string;
 }): TimeReportDto {
   return {
@@ -76,8 +89,38 @@ function toDto(row: {
     workLocation: row.workLocation,
     startTime: dateToHhmm(row.startTime),
     endTime: dateToHhmm(row.endTime),
+    hours: Number(row.hours),
     description: row.description,
   };
+}
+
+const HIERARCHY_MISMATCH = 'Client, project, and task must form one active hierarchy';
+const HOURS_EXCEED_WINDOW = 'Project hours cannot exceed the attendance window';
+
+interface HierarchyIds {
+  clientId: string;
+  projectId: string;
+  taskId: string;
+}
+
+/**
+ * Soft-deleted tasks are already filtered out by the Prisma extension, so a
+ * missing row here means "unknown or deactivated task".
+ */
+function isOneActiveHierarchy(
+  task:
+    | { projectId: string; project: { isActive: boolean; clientId: string; client: { isActive: boolean } } }
+    | undefined
+    | null,
+  ids: HierarchyIds,
+): boolean {
+  return Boolean(
+    task &&
+      task.project.isActive &&
+      task.project.client.isActive &&
+      task.projectId === ids.projectId &&
+      task.project.clientId === ids.clientId,
+  );
 }
 
 /**
@@ -86,9 +129,9 @@ function toDto(row: {
  * active client → project → task chain.
  */
 export async function createTimeReport(userId: string, input: CreateTimeReportBody): Promise<TimeReportDto> {
-  if (input.endTime < input.startTime) {
-    throw AppError.badRequest('End time must not be before start time', [
-      { field: 'endTime', message: 'End time must not be before start time' },
+  if (!allocationsFitWindow(input.startTime, input.endTime, [input.hours])) {
+    throw new AppError(400, 'HOURS_EXCEED_WINDOW', HOURS_EXCEED_WINDOW, [
+      { field: 'hours', message: HOURS_EXCEED_WINDOW },
     ]);
   }
 
@@ -97,16 +140,8 @@ export async function createTimeReport(userId: string, input: CreateTimeReportBo
     include: { project: { include: { client: true } } },
   });
 
-  if (
-    !task ||
-    !task.project.isActive ||
-    !task.project.client.isActive ||
-    task.projectId !== input.projectId ||
-    task.project.clientId !== input.clientId
-  ) {
-    throw AppError.badRequest('Client, project, and task must form one active hierarchy', [
-      { field: 'taskId', message: 'Client, project, and task must form one active hierarchy' },
-    ]);
+  if (!isOneActiveHierarchy(task, input)) {
+    throw AppError.badRequest(HIERARCHY_MISMATCH, [{ field: 'taskId', message: HIERARCHY_MISMATCH }]);
   }
 
   const created = await prisma.timeReport.create({
@@ -119,11 +154,116 @@ export async function createTimeReport(userId: string, input: CreateTimeReportBo
       workLocation: input.workLocation,
       startTime: hhmmToDate(input.startTime),
       endTime: hhmmToDate(input.endTime),
+      hours: input.hours,
       description: input.description,
     },
   });
 
   return toDto(created);
+}
+
+/**
+ * Replaces every project row of one day for this caller. Existing rows on that
+ * date are removed in the same transaction as the insert, so a later save (or
+ * deleting a card then saving) cannot stack duplicate hours. Rows are validated
+ * first; a day is never left half saved.
+ */
+export async function createTimeReportBatch(
+  userId: string,
+  input: CreateTimeReportBatchBody,
+): Promise<TimeReportDto[]> {
+  const tasks = await prisma.task.findMany({
+    where: { id: { in: input.rows.map((row) => row.taskId) } },
+    include: { project: { include: { client: true } } },
+  });
+  const tasksById = new Map(tasks.map((task) => [task.id, task]));
+
+  const details: ErrorDetail[] = [];
+  input.rows.forEach((row, index) => {
+    if (!isOneActiveHierarchy(tasksById.get(row.taskId), row)) {
+      details.push({ field: `rows.${index}.taskId`, message: HIERARCHY_MISMATCH });
+    }
+  });
+
+  if (details.length > 0) {
+    throw AppError.badRequest('One or more report rows are invalid', details);
+  }
+
+  if (!allocationsFitWindow(input.startTime, input.endTime, input.rows.map((row) => row.hours))) {
+    throw new AppError(400, 'HOURS_EXCEED_WINDOW', HOURS_EXCEED_WINDOW, [
+      { field: 'hours', message: HOURS_EXCEED_WINDOW },
+    ]);
+  }
+
+  const date = calendarDateToDate(input.date);
+  const created = await prisma.$transaction(async (tx) => {
+    await tx.timeReport.deleteMany({ where: { userId, date } });
+    return Promise.all(
+      input.rows.map((row) =>
+        tx.timeReport.create({
+          data: {
+            userId,
+            clientId: row.clientId,
+            projectId: row.projectId,
+            taskId: row.taskId,
+            date,
+            workLocation: row.workLocation,
+            startTime: hhmmToDate(input.startTime),
+            endTime: hhmmToDate(input.endTime),
+            hours: row.hours,
+            description: row.description,
+          },
+        }),
+      ),
+    );
+  });
+
+  return created.map(toDto);
+}
+
+/** Returns every row the caller saved in the given calendar month, newest day first. */
+export async function listTimeReportsForMonth(
+  userId: string,
+  month: number,
+  year: number,
+): Promise<TimeReportListItemDto[]> {
+  const rangeStart = new Date(Date.UTC(year, month - 1, 1));
+  const rangeEnd = new Date(Date.UTC(year, month, 1));
+
+  const rows = await prisma.timeReport.findMany({
+    where: {
+      userId,
+      date: { gte: rangeStart, lt: rangeEnd },
+    },
+    include: {
+      client: { select: { name: true } },
+      project: { select: { name: true } },
+      task: { select: { name: true } },
+    },
+    orderBy: [{ date: 'desc' }, { startTime: 'asc' }],
+  });
+
+  return rows.map((row) => ({
+    ...toDto(row),
+    clientName: row.client.name,
+    projectName: row.project.name,
+    taskName: row.task.name,
+    durationHours: Number(row.hours),
+  }));
+}
+
+/** Removes every row the caller saved on one calendar date. Other users are untouched. */
+export async function deleteTimeReportsForDate(userId: string, date: string): Promise<void> {
+  const result = await prisma.timeReport.deleteMany({
+    where: {
+      userId,
+      date: calendarDateToDate(date),
+    },
+  });
+
+  if (result.count === 0) {
+    throw AppError.notFound('No time reports for this date');
+  }
 }
 
 export async function listReportingOptions(): Promise<ReportingOptions> {

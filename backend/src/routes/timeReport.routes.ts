@@ -1,8 +1,20 @@
 import { Router } from 'express';
-import { getMyReportingOptions, postTimeReport } from '../controllers/timeReport.controller.js';
+import {
+  getMyReportingOptions,
+  getMyTimeReports,
+  postTimeReport,
+  postTimeReportBatch,
+  deleteMyTimeReportsForDate,
+} from '../controllers/timeReport.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
-import { createTimeReportBodySchema } from '../types/timeReport.schema.js';
+import { readRateLimit, writeRateLimit } from '../middleware/writeRateLimit.middleware.js';
+import {
+  createTimeReportBatchBodySchema,
+  createTimeReportBodySchema,
+  deleteTimeReportsQuerySchema,
+  listTimeReportsQuerySchema,
+} from '../types/timeReport.schema.js';
 
 export const timeReportRouter = Router();
 
@@ -19,12 +31,13 @@ export const timeReportRouter = Router();
  *         application/json:
  *           schema:
  *             type: object
- *             required: [date, workLocation, startTime, endTime, clientId, projectId, taskId, description]
+ *             required: [date, workLocation, startTime, endTime, hours, clientId, projectId, taskId, description]
  *             properties:
  *               date: { type: string, format: date, example: '2026-08-16' }
  *               workLocation: { type: string, enum: [OFFICE, CLIENT, HOME] }
- *               startTime: { type: string, example: '09:00', description: 'HH:mm' }
- *               endTime: { type: string, example: '18:00', description: 'HH:mm' }
+ *               startTime: { type: string, example: '09:00', description: 'Day attendance window start (HH:mm). End earlier than or equal to start means the next calendar day (equal = 24h).' }
+ *               endTime: { type: string, example: '18:00', description: 'Day attendance window end (HH:mm)' }
+ *               hours: { type: number, example: 9, description: 'Project allocation from 0.5 to 24 with at most one decimal place; must not exceed the window' }
  *               clientId: { type: string, format: uuid }
  *               projectId: { type: string, format: uuid }
  *               taskId: { type: string, format: uuid }
@@ -33,7 +46,7 @@ export const timeReportRouter = Router();
  *       201:
  *         description: The persisted time report.
  *       400:
- *         description: Malformed body, invalid interval, or hierarchy mismatch.
+ *         description: Malformed body, hours overflow (`HOURS_EXCEED_WINDOW`), or hierarchy mismatch.
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
@@ -42,12 +55,182 @@ export const timeReportRouter = Router();
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
+ *       429:
+ *         description: Too many report writes from this caller. Retry after the duration given in the `Retry-After` header.
+ *         headers:
+ *           Retry-After:
+ *             schema: { type: integer }
+ *             description: Seconds to wait before retrying.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
  */
+/**
+ * @openapi
+ * /reports:
+ *   get:
+ *     summary: List the authenticated caller's time reports for one calendar month
+ *     tags: [Time reports]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: query
+ *         name: month
+ *         required: true
+ *         schema: { type: integer, minimum: 1, maximum: 12 }
+ *       - in: query
+ *         name: year
+ *         required: true
+ *         schema: { type: integer, minimum: 2000, maximum: 2100 }
+ *     responses:
+ *       200:
+ *         description: Every saved row in the month, with hierarchy names and duration.
+ *       400:
+ *         description: Invalid month or year.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ *       401:
+ *         description: Authentication required.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ *       429:
+ *         description: Too many read requests from this caller. Retry after the duration given in the `Retry-After` header.
+ *         headers:
+ *           Retry-After:
+ *             schema: { type: integer }
+ *             description: Seconds to wait before retrying.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ */
+timeReportRouter.get(
+  '/reports',
+  // Ahead of `authenticate` on purpose, so the token verify and user-row read
+  // that middleware performs sit behind the limiter rather than in front of it.
+  // Address-keyed as a consequence — see the middleware's own comment.
+  readRateLimit,
+  authenticate,
+  validate({ query: listTimeReportsQuerySchema }),
+  getMyTimeReports,
+);
+
+/**
+ * @openapi
+ * /reports:
+ *   delete:
+ *     summary: Delete every time-report row the caller saved on one calendar date
+ *     tags: [Time reports]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: query
+ *         name: date
+ *         required: true
+ *         schema: { type: string, format: date, example: '2026-08-16' }
+ *     responses:
+ *       204:
+ *         description: The caller's rows for that date were deleted.
+ *       400:
+ *         description: Missing or malformed date.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ *       401:
+ *         description: Authentication required.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ *       404:
+ *         description: The caller has no rows on that date.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ *       429:
+ *         description: Too many report writes from this caller.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ */
+timeReportRouter.delete(
+  '/reports',
+  authenticate,
+  writeRateLimit,
+  validate({ query: deleteTimeReportsQuerySchema }),
+  deleteMyTimeReportsForDate,
+);
+
 timeReportRouter.post(
   '/reports',
   authenticate,
+  writeRateLimit,
   validate({ body: createTimeReportBodySchema }),
   postTimeReport,
+);
+
+/**
+ * @openapi
+ * /reports/batch:
+ *   post:
+ *     summary: Replace every project row of one day in a single transaction
+ *     description: >
+ *       All rows persist or none do. Row-level problems are reported as
+ *       `rows.<index>.<field>` so the client can mark the failing card.
+ *     tags: [Time reports]
+ *     security: [{ bearerAuth: [] }]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [date, startTime, endTime, rows]
+ *             properties:
+ *               date: { type: string, format: date, example: '2026-08-16' }
+ *               startTime: { type: string, example: '09:00', description: 'Shared day window start (HH:mm). Overnight when end ≤ start.' }
+ *               endTime: { type: string, example: '18:00', description: 'Shared day window end (HH:mm)' }
+ *               rows:
+ *                 type: array
+ *                 minItems: 1
+ *                 maxItems: 20
+ *                 items:
+ *                   type: object
+ *                   required: [workLocation, hours, clientId, projectId, taskId]
+ *                   properties:
+ *                     workLocation: { type: string, enum: [OFFICE, CLIENT, HOME] }
+ *                     hours: { type: number, example: 4, description: 'Allocation with at most one decimal place; sum of rows must not exceed the window' }
+ *                     clientId: { type: string, format: uuid }
+ *                     projectId: { type: string, format: uuid }
+ *                     taskId: { type: string, format: uuid }
+ *                     description: { type: string, description: 'Optional' }
+ *     responses:
+ *       201:
+ *         description: The persisted rows, in submitted order, each copying the request window.
+ *       400:
+ *         description: Malformed body, hours overflow (`HOURS_EXCEED_WINDOW`), or hierarchy mismatch on any row.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ *       401:
+ *         description: Authentication required.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ *       429:
+ *         description: Too many report writes from this caller. Retry after the duration given in the `Retry-After` header.
+ *         headers:
+ *           Retry-After:
+ *             schema: { type: integer }
+ *             description: Seconds to wait before retrying.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ */
+timeReportRouter.post(
+  '/reports/batch',
+  authenticate,
+  writeRateLimit,
+  validate({ body: createTimeReportBatchBodySchema }),
+  postTimeReportBatch,
 );
 
 /**

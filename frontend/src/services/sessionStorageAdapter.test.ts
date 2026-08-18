@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { readSession, removeSession, writeSession, type StoredSession } from './sessionStorageAdapter'
 
-const sample: StoredSession = { user: { id: '1' }, token: 'a-jwt-token', expiresAt: '2026-09-01T00:00:00.000Z' }
+const sample: StoredSession = { user: { id: '1' }, expiresAt: '2026-09-01T00:00:00.000Z' }
 
 describe('sessionStorageAdapter', () => {
   it('round-trips a write then read', () => {

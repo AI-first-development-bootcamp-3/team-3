@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -11,6 +12,29 @@ import { resetDatabase } from '../../test/resetDatabase.js';
 function tokenFor(user: { id: string; role: string }): string {
   return jwt.sign({ sub: user.id, role: user.role }, env.JWT_SECRET, { expiresIn: '1h' });
 }
+
+describe('GET /admin/users', () => {
+  afterEach(async () => {
+    await resetDatabase();
+  });
+
+  it('lists users including inactive ones', async () => {
+    const admin = await createUser({ role: Role.ADMIN, displayName: 'Admin' });
+    await createUser({ displayName: 'Dana', isActive: false });
+
+    const response = await request(app).get('/admin/users').set('Authorization', `Bearer ${tokenFor(admin)}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.users.map((user: { displayName: string }) => user.displayName).sort()).toEqual(['Admin', 'Dana']);
+    expect(response.body.users.find((user: { displayName: string }) => user.displayName === 'Dana').isActive).toBe(false);
+  });
+
+  it('rejects a non-admin caller with 403', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    const response = await request(app).get('/admin/users').set('Authorization', `Bearer ${tokenFor(employee)}`);
+    expect(response.status).toBe(403);
+  });
+});
 
 describe('POST /admin/users', () => {
   afterEach(async () => {
@@ -129,5 +153,254 @@ describe('POST /admin/users', () => {
 
     const found = await prisma.user.findFirst({ where: { email: 'not-an-email' } });
     expect(found).toBeNull();
+  });
+});
+
+describe('PATCH /admin/users/:id/reset-password', () => {
+  afterEach(async () => {
+    await resetDatabase();
+  });
+
+  it('generates a new temporary password, sets mustChangePassword: true, and the new password logs in', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+    const target = await createUser({ email: 'reset-me@example.test', mustChangePassword: false });
+
+    const response = await request(app)
+      .patch(`/admin/users/${target.id}/reset-password`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send();
+
+    expect(response.status).toBe(200);
+    expect(response.body.temporaryPassword).toEqual(expect.any(String));
+    expect(response.body.user).toMatchObject({ id: target.id, mustChangePassword: true });
+    expect(response.body.user.passwordHash).toBeUndefined();
+
+    const loginResponse = await request(app)
+      .post('/login')
+      .send({ email: 'reset-me@example.test', password: response.body.temporaryPassword });
+    expect(loginResponse.status).toBe(200);
+  });
+
+  it('rejects a non-admin caller with 403', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    const target = await createUser();
+
+    const response = await request(app)
+      .patch(`/admin/users/${target.id}/reset-password`)
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send();
+
+    expect(response.status).toBe(403);
+  });
+
+  it('rejects an unauthenticated caller with 401', async () => {
+    const target = await createUser();
+
+    const response = await request(app).patch(`/admin/users/${target.id}/reset-password`).send();
+
+    expect(response.status).toBe(401);
+  });
+
+  it('returns 404 for an unknown user id', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+
+    const response = await request(app)
+      .patch(`/admin/users/${crypto.randomUUID()}/reset-password`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send();
+
+    expect(response.status).toBe(404);
+  });
+
+  it('rejects a malformed id with 400', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+
+    const response = await request(app)
+      .patch('/admin/users/not-a-uuid/reset-password')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send();
+
+    expect(response.status).toBe(400);
+  });
+});
+
+describe('PATCH /admin/users/:id/role', () => {
+  afterEach(async () => {
+    await resetDatabase();
+  });
+
+  it("changes the user's role", async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+    const target = await createUser({ role: Role.EMPLOYEE });
+
+    const response = await request(app)
+      .patch(`/admin/users/${target.id}/role`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ role: 'ADMIN' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.user).toMatchObject({ id: target.id, role: 'ADMIN' });
+    expect(response.body.user.passwordHash).toBeUndefined();
+
+    const updated = await prisma.user.findUniqueOrThrow({ where: { id: target.id } });
+    expect(updated.role).toBe(Role.ADMIN);
+  });
+
+  it('rejects a non-admin caller with 403', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    const target = await createUser();
+
+    const response = await request(app)
+      .patch(`/admin/users/${target.id}/role`)
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({ role: 'ADMIN' });
+
+    expect(response.status).toBe(403);
+  });
+
+  it('rejects an unauthenticated caller with 401', async () => {
+    const target = await createUser();
+
+    const response = await request(app).patch(`/admin/users/${target.id}/role`).send({ role: 'ADMIN' });
+
+    expect(response.status).toBe(401);
+  });
+
+  it('returns 404 for an unknown user id', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+
+    const response = await request(app)
+      .patch(`/admin/users/${crypto.randomUUID()}/role`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ role: 'ADMIN' });
+
+    expect(response.status).toBe(404);
+  });
+
+  it('rejects an invalid role value with 400', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+    const target = await createUser();
+
+    const response = await request(app)
+      .patch(`/admin/users/${target.id}/role`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ role: 'SUPERUSER' });
+
+    expect(response.status).toBe(400);
+  });
+});
+
+describe('PATCH /admin/users/:id/status', () => {
+  afterEach(async () => {
+    await resetDatabase();
+  });
+
+  it('deactivates an active user', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+    const target = await createUser({ isActive: true });
+
+    const response = await request(app)
+      .patch(`/admin/users/${target.id}/status`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ isActive: false });
+
+    expect(response.status).toBe(200);
+    expect(response.body.user).toMatchObject({ id: target.id, isActive: false });
+    expect(response.body.user.passwordHash).toBeUndefined();
+  });
+
+  it('reactivates a deactivated user', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+    const target = await createUser({ isActive: false });
+
+    const response = await request(app)
+      .patch(`/admin/users/${target.id}/status`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ isActive: true });
+
+    expect(response.status).toBe(200);
+    expect(response.body.user).toMatchObject({ id: target.id, isActive: true });
+  });
+
+  it('setting isActive to the value the account already holds succeeds with 200', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+    const target = await createUser({ isActive: true });
+
+    const response = await request(app)
+      .patch(`/admin/users/${target.id}/status`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ isActive: true });
+
+    expect(response.status).toBe(200);
+    expect(response.body.user).toMatchObject({ id: target.id, isActive: true });
+  });
+
+  it('rejects a non-admin caller with 403 and leaves the target unchanged', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    const target = await createUser({ isActive: true });
+
+    const response = await request(app)
+      .patch(`/admin/users/${target.id}/status`)
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({ isActive: false });
+
+    expect(response.status).toBe(403);
+
+    const found = await prisma.user.findUniqueOrThrow({ where: { id: target.id } });
+    expect(found.isActive).toBe(true);
+  });
+
+  it('rejects an unauthenticated caller with 401', async () => {
+    const target = await createUser();
+
+    const response = await request(app).patch(`/admin/users/${target.id}/status`).send({ isActive: false });
+
+    expect(response.status).toBe(401);
+  });
+
+  it('rejects a missing isActive with 400', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+    const target = await createUser();
+
+    const response = await request(app)
+      .patch(`/admin/users/${target.id}/status`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({});
+
+    expect(response.status).toBe(400);
+  });
+
+  it('rejects a non-boolean isActive with 400', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+    const target = await createUser();
+
+    const response = await request(app)
+      .patch(`/admin/users/${target.id}/status`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ isActive: 'false' });
+
+    expect(response.status).toBe(400);
+  });
+
+  it('rejects a malformed id with 400', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+
+    const response = await request(app)
+      .patch('/admin/users/not-a-uuid/status')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ isActive: false });
+
+    expect(response.status).toBe(400);
+  });
+
+  it('returns 404 for an unknown user id', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+
+    const response = await request(app)
+      .patch(`/admin/users/${crypto.randomUUID()}/status`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ isActive: false });
+
+    expect(response.status).toBe(404);
   });
 });

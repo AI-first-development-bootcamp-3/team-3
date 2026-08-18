@@ -1,15 +1,63 @@
 import type { Id, ISODateString } from './common'
 
-/**
- * PROVISIONAL - SCRUM-6 (hours reporting epic) hasn't been decomposed yet.
- * This shape is a best-effort guess to unblock the API client (SCRUM-20);
- * expect it to change once SCRUM-6 lands.
- */
+export type WorkLocation = 'OFFICE' | 'CLIENT' | 'HOME'
+
 export interface Report {
   id: Id
   userId: Id
+  clientId: Id
+  projectId: Id
   taskId: Id
   date: ISODateString
+  workLocation: WorkLocation
+  startTime: string
+  endTime: string
   hours: number
-  notes?: string
+  description: string
+}
+
+/** One project row of a day, as sent to `POST /reports/batch`. */
+export type ReportRowInput = Omit<Report, 'id' | 'userId' | 'date' | 'startTime' | 'endTime'>
+
+export interface CreateReportBatchInput {
+  date: ISODateString
+  startTime: string
+  endTime: string
+  rows: ReportRowInput[]
+}
+
+export interface CreateReportBatchResult {
+  reports: Report[]
+}
+
+export interface TimeReportListItem extends Report {
+  clientName: string
+  projectName: string
+  taskName: string
+  durationHours: number
+}
+
+export interface ListReportsResult {
+  reports: TimeReportListItem[]
+}
+
+export interface ReportingTaskOption {
+  id: Id
+  name: string
+}
+
+export interface ReportingProjectOption {
+  id: Id
+  name: string
+  tasks: ReportingTaskOption[]
+}
+
+export interface ReportingClientOption {
+  id: Id
+  name: string
+  projects: ReportingProjectOption[]
+}
+
+export interface ReportingOptions {
+  clients: ReportingClientOption[]
 }

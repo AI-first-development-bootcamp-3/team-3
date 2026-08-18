@@ -1,23 +1,16 @@
-import { Link, Outlet, useLocation } from "react-router-dom";
-import { Menu } from "antd";
+import { Outlet } from 'react-router-dom'
+import SessionGuard from '../components/SessionGuard'
 
-const items = [
-  { key: "/", label: <Link to="/">Reports</Link> },
-  { key: "/absences", label: <Link to="/absences">Absences</Link> },
-  { key: "/admin", label: <Link to="/admin">Admin</Link> },
-];
-
+/** App chrome lives on each product shell (employee home, admin), not a global Ant menu. */
 function Layout() {
-  const { pathname } = useLocation();
-
   return (
-    <div>
-      <Menu mode="horizontal" selectedKeys={[pathname]} items={items} />
+    <div className="app-shell">
+      <SessionGuard />
       <main>
         <Outlet />
       </main>
     </div>
-  );
+  )
 }
 
-export default Layout;
+export default Layout

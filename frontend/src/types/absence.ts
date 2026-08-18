@@ -1,6 +1,6 @@
 import type { Id, ISODateString } from './common'
 
-export type AbsenceType = 'vacation' | 'sick' | 'reserve_duty' | 'other'
+export type AbsenceType = 'VACATION' | 'SICK' | 'RESERVE_DUTY' | 'OTHER'
 
 export interface Absence {
   id: Id
@@ -9,6 +9,11 @@ export interface Absence {
   startDate: ISODateString
   endDate: ISODateString
   halfDay: boolean
-  missingDocument: boolean
-  cancelled: boolean
+  workingDayCount: number
+}
+
+export interface CreateAbsenceInput {
+  type: AbsenceType
+  startDate: ISODateString
+  endDate?: ISODateString
 }
