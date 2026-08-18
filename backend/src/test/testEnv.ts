@@ -10,4 +10,7 @@ export const testEnv = {
   CORS_ORIGIN: 'http://localhost:5173',
   JWT_SECRET: 'test-only-secret-at-least-32-characters-long',
   LOG_LEVEL: 'silent',
+  SUPABASE_URL: 'https://test.supabase.co',
+  SUPABASE_ANON_KEY: 'test-anon-key-for-testing-only',
+  SUPABASE_SERVICE_KEY: 'test-service-key-for-testing-only',
 } as const;

@@ -18,6 +18,7 @@ export const absenceReportSchema = z
       .refine((value) => value !== '', { message: 'יש לבחור סוג היעדרות' }),
     startDate: isoDate,
     endDate: z.string(),
+    documents: z.array(z.instanceof(File)).optional().default([]),
   })
   .superRefine((values, ctx) => {
     if (values.endDate && values.endDate < values.startDate) {

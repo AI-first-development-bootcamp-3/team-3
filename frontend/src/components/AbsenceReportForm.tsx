@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { App } from 'antd'
 import { ApiError } from '../services/apiClient'
-import { createAbsence } from '../services/absences'
+import { createAbsence, uploadAttachment, type AttachmentMetadata } from '../services/absences'
 import { countWorkingDays } from '../lib/workingDays'
 import {
   ABSENCE_TYPE_LABELS,
@@ -36,6 +36,9 @@ function conflictCopy(body: unknown): { title: string; detail: string } {
 function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '' }: Props) {
   const { message } = App.useApp()
   const [banner, setBanner] = useState<{ title: string; detail: string } | null>(null)
+  const [uploadedFiles, setUploadedFiles] = useState<AttachmentMetadata[]>([])
+  const [isUploading, setIsUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const {
     register,
     handleSubmit,
@@ -43,7 +46,7 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '' }: Props) {
     control,
   } = useForm<AbsenceReportInput, unknown, AbsenceReportValues>({
     resolver: zodResolver(absenceReportSchema),
-    defaultValues: { type: '', startDate: defaultStartDate, endDate: '' },
+    defaultValues: { type: '', startDate: defaultStartDate, endDate: '', documents: [] },
   })
   const startDate = useWatch({ control, name: 'startDate' }) ?? ''
   const endDate = useWatch({ control, name: 'endDate' }) ?? ''
@@ -52,13 +55,46 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '' }: Props) {
     [startDate, endDate],
   )
 
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || [])
+    if (files.length === 0) return
+
+    setIsUploading(true)
+    const newUploadedFiles: AttachmentMetadata[] = []
+
+    for (const file of files) {
+      try {
+        const metadata = await uploadAttachment(file)
+        newUploadedFiles.push(metadata)
+      } catch {
+        message.error(`Failed to upload ${file.name}`)
+      }
+    }
+
+    if (newUploadedFiles.length > 0) {
+      setUploadedFiles((prev) => [...prev, ...newUploadedFiles])
+      message.success(`${newUploadedFiles.length} file(s) uploaded`)
+    }
+
+    setIsUploading(false)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const removeFile = (fileId: string) => {
+    setUploadedFiles((prev) => prev.filter((f) => f.id !== fileId))
+  }
+
   const onSubmit = async (values: AbsenceReportValues) => {
     setBanner(null)
     try {
+      const attachmentIds = uploadedFiles.map((f) => f.id)
       await createAbsence({
         type: values.type,
         startDate: values.startDate,
         endDate: values.endDate || values.startDate,
+        attachmentIds: attachmentIds.length > 0 ? attachmentIds : undefined,
       })
       message.success('ההיעדרות נשמרה בהצלחה')
       onSaved?.()
@@ -120,6 +156,47 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '' }: Props) {
       <p className="absence-report__count" data-testid="working-day-count">
         {startDate ? `${workingDays} ימי עבודה` : 'בחרו תאריכים כדי לראות כמה ימי עבודה נספרים'}
       </p>
+      <div className="absence-report__documents">
+        <label className="manual-report__field">
+          <span className="manual-report__field-label">מסמכים (אופציונלי)</span>
+          <button
+            type="button"
+            className="absence-report__upload-button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+          >
+            <span className="absence-report__upload-icon">📄</span>
+            <span className="absence-report__upload-text">יש לצרף תמונה או מסמך</span>
+            <span className="absence-report__upload-formats">JPG / PNG / PDF / documents</span>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+            style={{ display: 'none' }}
+            onChange={handleFileSelect}
+            disabled={isUploading}
+          />
+        </label>
+        {uploadedFiles.length > 0 && (
+          <div className="absence-report__uploaded-files">
+            {uploadedFiles.map((file) => (
+              <div key={file.id} className="absence-report__file-item">
+                <span className="absence-report__file-name">{file.filename}</span>
+                <button
+                  type="button"
+                  className="absence-report__file-remove"
+                  onClick={() => removeFile(file.id)}
+                  aria-label={`Remove ${file.filename}`}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       {banner ? (
         <div className="manual-report__banner" role="alert">
           <div className="manual-report__banner-text">

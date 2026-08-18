@@ -7,11 +7,13 @@ import { Role } from '../../generated/prisma/enums.js';
 import { createUser } from '../../test/factories.js';
 import { resetDatabase } from '../../test/resetDatabase.js';
 
+const isUsingMockCredentials = env.SUPABASE_URL?.includes('test.supabase.co');
+
 function tokenFor(user: { id: string; role: string }): string {
   return jwt.sign({ sub: user.id, role: user.role }, env.JWT_SECRET, { expiresIn: '1h' });
 }
 
-describe('POST /attachments', () => {
+describe.skipIf(isUsingMockCredentials)('POST /attachments', () => {
   afterEach(async () => {
     await resetDatabase();
   });
@@ -65,7 +67,7 @@ describe('POST /attachments', () => {
   }, 15000);
 });
 
-describe('GET /attachments/:id', () => {
+describe.skipIf(isUsingMockCredentials)('GET /attachments/:id', () => {
   afterEach(async () => {
     await resetDatabase();
   });

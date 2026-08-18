@@ -2,7 +2,16 @@ import multer from 'multer';
 
 export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
 
-const ALLOWED_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
+const ALLOWED_MIME_TYPES = new Set([
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/plain',
+]);
 
 /**
  * Buffers the upload in memory rather than writing to disk directly — files
