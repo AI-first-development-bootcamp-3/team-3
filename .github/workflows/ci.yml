@@ -202,47 +202,17 @@ jobs:
           echo "Timed out waiting for Render deploy to go live"
           exit 1
 
-  deploy-frontend:
-    name: deploy frontend (Vercel)
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: [lint, test-frontend, test-backend, build, docker-build]
-    runs-on: ubuntu-latest
-    outputs:
-      url: ${{ steps.deploy.outputs.url }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - run: npm install --global vercel@latest
-
-      - run: vercel pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}"
-        working-directory: frontend
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
-      - run: vercel build --prod --token="${{ secrets.VERCEL_TOKEN }}"
-        working-directory: frontend
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
-      - id: deploy
-        run: |
-          url=$(vercel deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}")
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-        working-directory: frontend
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
+  # Frontend deploys via Render's own native GitHub integration (Static Site,
+  # auto-deploys on push to main) - no trigger step needed here, unlike
+  # deploy-backend which uses Render's API explicitly.
   smoke-test:
     name: post-deploy smoke test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: [deploy-backend, deploy-frontend]
+    needs: [deploy-backend]
     runs-on: ubuntu-latest
     steps:
       - name: Backend health check
         run: curl -sf "${{ secrets.RENDER_BACKEND_URL }}/health"
 
       - name: Frontend reachability check
-        run: curl -sf "${{ needs.deploy-frontend.outputs.url }}"
+        run: curl -sf "${{ secrets.RENDER_FRONTEND_URL }}"
