@@ -1,6 +1,15 @@
 import type { RequestHandler } from 'express';
-import { changeUserRole, createUser, resetUserPassword, setUserActive } from '../services/adminUser.service.js';
+import { changeUserRole, createUser, listUsers, resetUserPassword, setUserActive } from '../services/adminUser.service.js';
 import type { ChangeRoleBody, CreateUserBody, SetUserActiveBody, UserIdParam } from '../types/adminUser.schema.js';
+
+export const getAdminUsers: RequestHandler = async (_req, res, next) => {
+  try {
+    const users = await listUsers();
+    res.status(200).json({ users });
+  } catch (error) {
+    next(error);
+  }
+};
 
 export const postAdminUser: RequestHandler = async (req, res, next) => {
   try {

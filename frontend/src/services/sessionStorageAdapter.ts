@@ -1,12 +1,12 @@
 export interface StoredSession {
   user: unknown
-  token: string
   expiresAt: string
 }
 
 /** Exported so sessionStore's cross-tab `storage` listener (D10) can match
  * the exact key it must react to without duplicating the literal. */
 export const SESSION_KEY = 'abra.session'
+export const LAST_EMAIL_KEY = 'abra.lastEmail'
 
 /**
  * Wraps sessionStorage/localStorage access in try/catch: Safari private mode
@@ -36,5 +36,21 @@ export function removeSession(storage: Storage): void {
     storage.removeItem(SESSION_KEY)
   } catch {
     // no-op: storage unavailable
+  }
+}
+
+export function readLastEmail(): string {
+  try {
+    return window.localStorage.getItem(LAST_EMAIL_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+export function writeLastEmail(email: string): void {
+  try {
+    window.localStorage.setItem(LAST_EMAIL_KEY, email)
+  } catch {
+    // no-op
   }
 }

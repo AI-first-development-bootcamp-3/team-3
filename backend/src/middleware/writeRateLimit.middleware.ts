@@ -123,3 +123,32 @@ export const readRateLimit = rateLimit({
   keyGenerator: (req: Request) => ipKeyGenerator(req.ip ?? ''),
   handler: rejectAsTooManyRequests,
 });
+
+/** Exported so tests can clear the counters between cases. */
+export const authGuardRateLimitStore = new MemoryStore();
+
+/**
+ * Caps how fast one address can make `authenticate` do its work — a token
+ * verify and a user-row read — on routes whose own limiter is keyed by the
+ * caller and therefore has to run *after* authentication.
+ *
+ * Those two orderings want different things and cannot be the same limiter: a
+ * per-caller budget needs a verified identity, while protecting the identity
+ * check itself has to happen before there is one. So this runs first and is
+ * address-keyed, and the route's own limiter still runs afterwards to bound
+ * what a single authenticated caller can do.
+ *
+ * Sized well above ordinary use on purpose. It is the outer of two limits and
+ * a whole office can share one address, so it exists to stop an unauthenticated
+ * flood rather than to shape a legitimate caller's traffic — the inner
+ * per-caller limiter does that.
+ */
+export const authGuardRateLimit = rateLimit({
+  windowMs: env.RATE_LIMIT_WINDOW_SECONDS * 1000,
+  limit: env.RATE_LIMIT_AUTH_GUARD_MAX_REQUESTS,
+  store: authGuardRateLimitStore,
+  standardHeaders: false,
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => ipKeyGenerator(req.ip ?? ''),
+  handler: rejectAsTooManyRequests,
+});

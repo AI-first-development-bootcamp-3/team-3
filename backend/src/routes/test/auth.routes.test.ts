@@ -9,8 +9,18 @@ import { logoutRateLimitStore } from '../../middleware/writeRateLimit.middleware
 import { createUser } from '../../test/factories.js';
 import { resetDatabase } from '../../test/resetDatabase.js';
 
+import { SESSION_COOKIE_NAME } from '../../http/sessionCookie.js';
+
 function tokenFor(user: { id: string; role: string }): string {
   return jwt.sign({ sub: user.id, role: user.role }, env.JWT_SECRET, { expiresIn: '1h' });
+}
+
+function cookieToken(response: { headers: { 'set-cookie'?: string | string[] } }): string {
+  const header = response.headers['set-cookie'];
+  const list = Array.isArray(header) ? header : header ? [header] : [];
+  const line = list.find((entry) => entry.startsWith(`${SESSION_COOKIE_NAME}=`));
+  if (!line) throw new Error('login response missing session cookie');
+  return decodeURIComponent(line.split(';')[0].slice(`${SESSION_COOKIE_NAME}=`.length));
 }
 
 /**
@@ -44,7 +54,9 @@ describe('POST /login', () => {
       .send({ email: 'login-ok@example.test', password: 'password123' });
 
     expect(response.status).toBe(200);
-    expect(response.body.token).toEqual(expect.any(String));
+    expect(response.body.token).toBeUndefined();
+    expect(cookieToken(response)).toEqual(expect.any(String));
+    expect(String(response.headers['set-cookie'])).toMatch(/HttpOnly/i);
     expect(response.body.user).toMatchObject({
       id: user.id,
       email: 'login-ok@example.test',
@@ -78,10 +90,11 @@ describe('POST /login', () => {
       .post('/login')
       .send({ email: 'login-inactive@example.test', password: 'password123' });
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(403);
+    expect(response.body.error.code).toBe('ACCOUNT_INACTIVE');
   });
 
-  it('rejects a malformed body', async () => {
+  it('rejects a malformed email', async () => {
     const response = await request(app).post('/login').send({ email: 'not-an-email' });
 
     expect(response.status).toBe(400);
@@ -111,7 +124,7 @@ describe('POST /login', () => {
       .send({ email: 'login-default-lifetime@example.test', password: 'password123' });
 
     expect(response.status).toBe(200);
-    const decoded = jwt.decode(response.body.token) as { iat: number; exp: number };
+    const decoded = jwt.decode(cookieToken(response)) as { iat: number; exp: number };
     expect(decoded.exp - decoded.iat).toBe(env.JWT_EXPIRES_IN_SECONDS);
   });
 
@@ -123,7 +136,7 @@ describe('POST /login', () => {
       .send({ email: 'login-remember-false@example.test', password: 'password123', rememberMe: false });
 
     expect(response.status).toBe(200);
-    const decoded = jwt.decode(response.body.token) as { iat: number; exp: number };
+    const decoded = jwt.decode(cookieToken(response)) as { iat: number; exp: number };
     expect(decoded.exp - decoded.iat).toBe(env.JWT_EXPIRES_IN_SECONDS);
   });
 
@@ -135,7 +148,7 @@ describe('POST /login', () => {
       .send({ email: 'login-remember-true@example.test', password: 'password123', rememberMe: true });
 
     expect(response.status).toBe(200);
-    const decoded = jwt.decode(response.body.token) as { iat: number; exp: number };
+    const decoded = jwt.decode(cookieToken(response)) as { iat: number; exp: number };
     expect(decoded.exp - decoded.iat).toBe(env.JWT_REMEMBER_ME_EXPIRES_IN_SECONDS);
   });
 
@@ -150,7 +163,7 @@ describe('POST /login', () => {
       .post('/login')
       .send({ email: 'login-compare-b@example.test', password: 'password123', rememberMe: true });
 
-    expect(expiryOf(rememberedResponse.body.token)).toBeGreaterThan(expiryOf(defaultResponse.body.token));
+    expect(expiryOf(cookieToken(rememberedResponse))).toBeGreaterThan(expiryOf(cookieToken(defaultResponse)));
   });
 
   it('rejects a non-boolean rememberMe value', async () => {
@@ -171,7 +184,7 @@ describe('POST /login', () => {
       .send({ email: 'login-no-remember-claim@example.test', password: 'password123', rememberMe: true });
 
     expect(response.status).toBe(200);
-    const decoded = jwt.decode(response.body.token) as Record<string, unknown>;
+    const decoded = jwt.decode(cookieToken(response)) as Record<string, unknown>;
     expect(decoded).not.toHaveProperty('rememberMe');
     expect(Object.keys(decoded).sort()).toEqual(['exp', 'iat', 'role', 'sub']);
   });
@@ -185,7 +198,38 @@ describe('POST /login', () => {
 
     expect(response.status).toBe(200);
     const expiresAtSeconds = Math.floor(new Date(response.body.expiresAt).getTime() / 1000);
-    expect(expiresAtSeconds).toBe(expiryOf(response.body.token));
+    expect(expiresAtSeconds).toBe(expiryOf(cookieToken(response)));
+  });
+});
+
+describe('GET /me', () => {
+  afterEach(async () => {
+    await flushAttemptWrites();
+    await resetDatabase();
+  });
+
+  it('returns the signed-in profile when the session cookie is present', async () => {
+    const user = await createUser({ email: 'me-ok@example.test', displayName: 'Me User' });
+    const loginResponse = await request(app)
+      .post('/login')
+      .send({ email: 'me-ok@example.test', password: 'password123' });
+
+    const response = await request(app)
+      .get('/me')
+      .set('Cookie', `${SESSION_COOKIE_NAME}=${cookieToken(loginResponse)}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      id: user.id,
+      email: 'me-ok@example.test',
+      displayName: 'Me User',
+    });
+    expect(response.body.passwordHash).toBeUndefined();
+  });
+
+  it('returns 401 without a session', async () => {
+    const response = await request(app).get('/me');
+    expect(response.status).toBe(401);
   });
 });
 
@@ -301,9 +345,11 @@ describe('POST /logout', () => {
       .post('/login')
       .send({ email: 'logout-then-relogin@example.test', password: 'password123' });
     expect(loginResponse.status).toBe(200);
-    const newToken = loginResponse.body.token as string;
+    const newToken = cookieToken(loginResponse);
 
-    const newTokenWorks = await request(app).get('/sample/protected').set('Authorization', `Bearer ${newToken}`);
+    const newTokenWorks = await request(app)
+      .get('/sample/protected')
+      .set('Cookie', `${SESSION_COOKIE_NAME}=${newToken}`);
     expect(newTokenWorks.status).toBe(200);
 
     const preLogoutStillRefused = await request(app)

@@ -26,3 +26,9 @@ export function listReports(month: number, year: number): Promise<ListReportsRes
   const params = new URLSearchParams({ month: String(month), year: String(year) })
   return request<ListReportsResult>(`/reports?${params}`)
 }
+
+/** Removes every saved row of one calendar day for the signed-in caller. */
+export function deleteReportsForDate(date: string): Promise<void> {
+  const params = new URLSearchParams({ date })
+  return request<void>(`/reports?${params}`, { method: 'DELETE' })
+}

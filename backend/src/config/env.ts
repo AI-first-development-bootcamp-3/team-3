@@ -21,8 +21,8 @@ const envSchema = z.object({
   // Default session lifetime, in seconds. 28800 = 8 hours.
   JWT_EXPIRES_IN_SECONDS: z.coerce.number().int().positive().default(28800),
   // Lifetime, in seconds, when the caller opts into "remember me" at login.
-  // 2592000 = 30 days.
-  JWT_REMEMBER_ME_EXPIRES_IN_SECONDS: z.coerce.number().int().positive().default(2592000),
+  // 604800 = 7 days.
+  JWT_REMEMBER_ME_EXPIRES_IN_SECONDS: z.coerce.number().int().positive().default(604800),
   // Local-filesystem root for uploaded attachments — a mounted volume in
   // Docker/production. Free-tier container filesystems are ephemeral; see
   // backend/README.md -> File storage.
@@ -58,6 +58,12 @@ const envSchema = z.object({
   // budget — a page load plus heavy month navigation is well under 60 — times
   // the same ~10-people-per-office-NAT assumption as RATE_LIMIT_IP_MAX_ATTEMPTS.
   RATE_LIMIT_READ_MAX_REQUESTS: z.coerce.number().int().positive().default(600),
+  // Requests one *address* may make to routes that guard `authenticate` with an
+  // address-keyed limiter while still applying a per-caller one afterwards (see
+  // authGuardRateLimit). Deliberately the loosest of these caps: it is the outer
+  // limit on a key a whole office can share, so it is there to stop an
+  // unauthenticated flood, not to shape one caller's traffic.
+  RATE_LIMIT_AUTH_GUARD_MAX_REQUESTS: z.coerce.number().int().positive().default(1200),
   // Requests to POST /logout one *address* may make within that same window.
   // Address-keyed, not subject-keyed, because this limiter deliberately runs
   // ahead of `authenticate` (see writeRateLimit.middleware.ts), so there is no

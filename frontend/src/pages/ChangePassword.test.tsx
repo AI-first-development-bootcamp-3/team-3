@@ -33,18 +33,18 @@ describe('ChangePassword page', () => {
       </MemoryRouter>,
     )
 
-    await user.type(screen.getByLabelText(/^new password$/i), 'a-new-password')
-    await user.type(screen.getByLabelText(/confirm new password/i), 'does-not-match')
-    await user.click(screen.getByRole('button', { name: /set password/i }))
+    await user.type(screen.getByLabelText('סיסמה חדשה'), 'a-new-password')
+    await user.type(screen.getByLabelText('אימות סיסמה'), 'does-not-match')
+    await user.click(screen.getByRole('button', { name: 'שמירת סיסמה' }))
 
-    expect(await screen.findByText(/passwords do not match/i)).toBeInTheDocument()
+    expect(await screen.findByText('הסיסמאות אינן תואמות')).toBeInTheDocument()
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('updates the stored session with mustChangePassword: false on success', async () => {
     sessionStore.getState().setSession(
       { id: '1', fullName: 'New Hire', email: 'new@abra.test', userType: 'regular', active: true, mustChangePassword: true },
-      'a-jwt-token',
+      'cookie',
       new Date(Date.now() + 60_000).toISOString(),
       false,
     )
@@ -61,9 +61,9 @@ describe('ChangePassword page', () => {
       </MemoryRouter>,
     )
 
-    await user.type(screen.getByLabelText(/^new password$/i), 'a-brand-new-password')
-    await user.type(screen.getByLabelText(/confirm new password/i), 'a-brand-new-password')
-    await user.click(screen.getByRole('button', { name: /set password/i }))
+    await user.type(screen.getByLabelText('סיסמה חדשה'), 'a-brand-new-password')
+    await user.type(screen.getByLabelText('אימות סיסמה'), 'a-brand-new-password')
+    await user.click(screen.getByRole('button', { name: 'שמירת סיסמה' }))
 
     await waitFor(() => {
       expect(sessionStore.getState().user?.mustChangePassword).toBe(false)

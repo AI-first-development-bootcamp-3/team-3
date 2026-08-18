@@ -1,15 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useFieldArray, useForm, useWatch, type FieldPath } from 'react-hook-form'
+import { useFieldArray, useForm, useWatch, type FieldErrors, type FieldPath } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { App } from 'antd'
 import { ApiError } from '../services/apiClient'
 import dayjs from '../services/dayjs'
-import { createReportBatch, getReportingOptions } from '../services/reports'
-import type { ReportingOptions, WorkLocation } from '../types'
-import { manualReportSchema, type ManualReportValues, type ProjectRowValues } from './ManualReport.schema'
+import { deleteAbsence } from '../services/absences'
+import { createReportBatch, deleteReportsForDate, getReportingOptions } from '../services/reports'
+import type { Absence, ReportingOptions, TimeReportListItem, WorkLocation } from '../types'
+import {
+  attendanceWindowHours,
+  manualReportSchema,
+  OVERFLOW_HOURS_MESSAGE,
+  type ManualReportValues,
+  type ProjectRowValues,
+} from './ManualReport.schema'
+import AbsenceReportForm from './AbsenceReportForm'
 import ManualReportDeleteDialog from './ManualReportDeleteDialog'
-import ManualReportPicker from './ManualReportPicker'
-import { type PickerStep } from './ManualReport.constants'
 import ManualReportProjectCard, { type RowErrors } from './ManualReportProjectCard'
 import { CloseMark, WarningTriangle } from './ManualReportIcons'
 import addCircleBlue from '../assets/manual-report/desktop/add-circle-blue.svg'
@@ -31,16 +37,18 @@ import tagCloseBlue from '../assets/home/tag-close-blue.svg'
 import './ManualReport.css'
 
 const STANDARD_HOURS = 9
-const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/
-const NEXT_STEP: Record<PickerStep, PickerStep | null> = {
-  project: 'task',
-  task: 'location',
-  location: null,
-}
 
 const MISSING_DETAILS = {
   title: 'חסר לנו פרט או שניים',
   detail: 'מלא את כל הנתונים הדרושים כדי שנוכל לשמור את הדיווח בהצלחה.',
+}
+const ZERO_HOURS = {
+  title: 'שעות לא תקינות',
+  detail: 'יש להזין מספר בין 0.5 ל-24, עם לכל היותר ספרה אחת אחרי הנקודה.',
+}
+const EMPTY_TREE = {
+  title: 'אין פרויקטים לדיווח',
+  detail: 'אין מידע זמין כרגע, נסו שוב מאוחר יותר או פנו למנהל ישיר',
 }
 const TOO_MANY_SAVES = {
   title: 'שמרתם יותר מדי פעמים ברצף',
@@ -51,7 +59,7 @@ const SAVE_FAILED = {
   detail: 'לא הצלחנו לשמור את הדיווח. בדקו את החיבור ונסו שוב.',
 }
 
-export type ManualReportHeaderTone = 'missing' | 'full' | 'partial' | 'weekend'
+export type ManualReportHeaderTone = 'missing' | 'full' | 'partial' | 'weekend' | 'absence'
 
 export type ManualReportHeaderTag = { text: string; icon?: string }
 
@@ -65,6 +73,8 @@ interface Props {
   onClose: () => void
   onSaved?: () => void
   initialDate?: string
+  initialReports?: TimeReportListItem[]
+  initialAbsences?: Absence[]
   headerMeta?: ManualReportHeaderMeta
 }
 
@@ -73,28 +83,40 @@ const STATUS_ICONS: Record<ManualReportHeaderTone, string> = {
   full: tagCheckGreen,
   partial: tagAlertOrange,
   weekend: tagCloseBlue,
+  absence: tagCloseBlue,
 }
 
-function emptyRow(startTime: string, endTime: string): ProjectRowValues {
-  return { clientId: '', projectId: '', taskId: '', workLocation: '', startTime, endTime, description: '' }
+function emptyRow(): ProjectRowValues {
+  return { clientId: '', projectId: '', taskId: '', workLocation: '', hours: 0, description: '' }
 }
 
-function freshDay(date?: string): ManualReportValues {
-  const day = date ? dayjs(date) : dayjs()
+function valuesFromReports(date: string, reports: TimeReportListItem[]): ManualReportValues {
+  const first = reports[0]
   return {
-    date: day.isValid() ? day.format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
+    date,
+    dayStart: first?.startTime || '09:00',
+    dayEnd: first?.endTime || '18:00',
+    rows: reports.map((report) => ({
+      clientId: report.clientId,
+      projectId: report.projectId,
+      taskId: report.taskId,
+      workLocation: report.workLocation,
+      hours: Number(report.hours ?? report.durationHours) || 0,
+      description: report.description ?? '',
+    })),
+  }
+}
+
+function freshDay(date?: string, reports?: TimeReportListItem[]): ManualReportValues {
+  const day = date ? dayjs(date) : dayjs()
+  const iso = day.isValid() ? day.format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD')
+  if (reports && reports.length > 0) return valuesFromReports(iso, reports)
+  return {
+    date: iso,
     dayStart: '09:00',
     dayEnd: '18:00',
     rows: [],
   }
-}
-
-function hoursBetween(start: string, end: string): number {
-  if (!HHMM.test(start) || !HHMM.test(end)) return 0
-  const [startHour, startMinute] = start.split(':').map(Number)
-  const [endHour, endMinute] = end.split(':').map(Number)
-  const minutes = endHour * 60 + endMinute - (startHour * 60 + startMinute)
-  return minutes > 0 ? minutes / 60 : 0
 }
 
 function formatHours(value: number): string {
@@ -124,6 +146,9 @@ function translateApiMessage(message: string): string {
   if (/invalid uuid/i.test(message)) {
     return 'ערך לא תקין — בחרו שוב מהרשימה'
   }
+  if (message.includes('cannot exceed the attendance window')) {
+    return OVERFLOW_HOURS_MESSAGE
+  }
   return message
 }
 
@@ -144,34 +169,113 @@ function tagIcon(tag: ManualReportHeaderTag): string {
   return buildingIcon
 }
 
+function hoursShortOfWindow(allocated: number, windowHours: number): boolean {
+  return windowHours > 0 && allocated + 0.1 <= windowHours + 1e-9
+}
+
 function deriveHeader(
   headerMeta: ManualReportHeaderMeta | undefined,
-  projectCount: number,
   reportedHours: number,
+  windowHours: number,
 ): ManualReportHeaderMeta {
   if (headerMeta?.tone === 'weekend') {
     return { status: headerMeta.status, tone: 'weekend', tags: [] }
   }
-  if (projectCount > 0 && reportedHours >= STANDARD_HOURS) {
+  if (headerMeta?.tone === 'absence') {
+    return { status: headerMeta.status, tone: 'absence', tags: [] }
+  }
+  if (hoursShortOfWindow(reportedHours, windowHours) || reportedHours <= 0) {
+    return { status: 'חסר', tone: 'missing', tags: [] }
+  }
+  if (windowHours >= STANDARD_HOURS || reportedHours >= STANDARD_HOURS) {
     return { status: 'מלא', tone: 'full', tags: [] }
   }
-  if (reportedHours > 0) {
-    return { status: 'חלקי', tone: 'partial', tags: [] }
+  return { status: 'חלקי', tone: 'partial', tags: [] }
+}
+
+function arrayErrorMessage(error: unknown): string | undefined {
+  if (!error || typeof error !== 'object') return undefined
+  const record = error as { message?: unknown; root?: { message?: unknown } }
+  if (typeof record.message === 'string' && record.message.length > 0) return record.message
+  if (typeof record.root?.message === 'string' && record.root.message.length > 0) return record.root.message
+  return undefined
+}
+
+function hoursPhrase(value: number): string {
+  if (value === 1) return 'שעה אחת'
+  if (value === 0.5) return 'חצי שעה'
+  return `${formatHours(value)} שעות`
+}
+
+function overflowBanner(allocated: number, windowHours: number) {
+  const extra = Math.max(0, Math.round((allocated - windowHours) * 10) / 10)
+  return {
+    title: 'יותר מדי שעות בפרויקטים',
+    detail: `סכום שעות הפרויקטים הוא ${formatHours(allocated)}, וחלון הכניסה–יציאה הוא ${hoursPhrase(windowHours)}. יש להפחית ${hoursPhrase(extra)}.`,
   }
-  return { status: 'חסר', tone: 'missing', tags: [] }
+}
+
+function bannerForInvalid(
+  formErrors: FieldErrors<ManualReportValues>,
+  allocatedHours: number,
+  windowHours: number,
+) {
+  const rowList = formErrors.rows
+  if (arrayErrorMessage(rowList) === OVERFLOW_HOURS_MESSAGE) {
+    return overflowBanner(allocatedHours, windowHours)
+  }
+  const rowIssues = Object.entries(rowList ?? {})
+    .filter(([key]) => /^\d+$/.test(key))
+    .map(([, value]) => value)
+  const missingPick = rowIssues.some(
+    (row) => row && typeof row === 'object' && ('projectId' in row || 'taskId' in row || 'workLocation' in row || 'clientId' in row),
+  )
+  if (missingPick) return MISSING_DETAILS
+  if (rowIssues.some((row) => row && typeof row === 'object' && 'hours' in row)) return ZERO_HOURS
+  return MISSING_DETAILS
+}
+
+function dayDeleteCopy(absences: Absence[], hasHours: boolean) {
+  if (absences.length > 0 && !hasHours) {
+    const first = absences[0]
+    const range =
+      first && first.startDate !== first.endDate
+        ? ` כל ימי הטווח (${dayjs(first.startDate).format('D/M')}–${dayjs(first.endDate).format('D/M')}) יימחקו.`
+        : ''
+    return {
+      title: 'למחוק את דיווח ההיעדרות?',
+      body: `ההיעדרות תוסר מהחודש.${range} אפשר לדווח מחדש אחר כך.`,
+      confirmLabel: 'מחק היעדרות',
+    }
+  }
+  return {
+    title: 'למחוק את הדיווח ליום זה?',
+    body: 'כל הפרויקטים שדווחו ביום זה יימחקו. אפשר לדווח מחדש אחר כך.',
+    confirmLabel: 'מחק את הדיווח',
+  }
 }
 
 /**
  * Desktop דיווח ידני side panel — Figma frame 1:17385 beside the hours home.
  */
-function ManualReport({ onClose, onSaved, initialDate, headerMeta }: Props) {
+function ManualReport({
+  onClose,
+  onSaved,
+  initialDate,
+  initialReports,
+  initialAbsences,
+  headerMeta,
+}: Props) {
   const { message } = App.useApp()
   const [options, setOptions] = useState<ReportingOptions | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [banner, setBanner] = useState<{ title: string; detail: string } | null>(null)
-  const [picker, setPicker] = useState<{ row: number; step: PickerStep } | null>(null)
   const [pendingRemoval, setPendingRemoval] = useState<number | null>(null)
+  const [pendingDayDelete, setPendingDayDelete] = useState(false)
   const [hoursOpen, setHoursOpen] = useState(true)
+  const [reportTab, setReportTab] = useState<'hours' | 'absence'>(() =>
+    (initialAbsences?.length ?? 0) > 0 && (initialReports?.length ?? 0) === 0 ? 'absence' : 'hours',
+  )
 
   const {
     control,
@@ -184,7 +288,7 @@ function ManualReport({ onClose, onSaved, initialDate, headerMeta }: Props) {
     formState: { errors, isSubmitting },
   } = useForm<ManualReportValues>({
     resolver: zodResolver(manualReportSchema),
-    defaultValues: freshDay(initialDate),
+    defaultValues: freshDay(initialDate, initialReports),
   })
 
   const { fields, append, remove } = useFieldArray({ control, name: 'rows' })
@@ -192,8 +296,8 @@ function ManualReport({ onClose, onSaved, initialDate, headerMeta }: Props) {
   const rows = useMemo(() => (day.rows ?? []) as ProjectRowValues[], [day.rows])
 
   useEffect(() => {
-    reset(freshDay(initialDate))
-  }, [initialDate, reset])
+    reset(freshDay(initialDate, initialReports))
+  }, [initialDate, initialReports, reset])
 
   useEffect(() => {
     let cancelled = false
@@ -210,16 +314,20 @@ function ManualReport({ onClose, onSaved, initialDate, headerMeta }: Props) {
   }, [])
 
   const dayTotal = useMemo(
-    () => hoursBetween(day.dayStart ?? '', day.dayEnd ?? ''),
+    () => attendanceWindowHours(day.dayStart ?? '', day.dayEnd ?? ''),
     [day.dayStart, day.dayEnd],
   )
   const reported = useMemo(
-    () => rows.reduce((total, row) => total + hoursBetween(row.startTime, row.endTime), 0),
+    () => rows.reduce((total, row) => total + Number(row.hours || 0), 0),
     [rows],
   )
-  const remaining = Math.max(STANDARD_HOURS - reported, 0)
+  const remaining = Math.max(dayTotal - reported, 0)
   const hasHierarchy = (options?.clients.length ?? 0) > 0
-  const header = deriveHeader(headerMeta, fields.length, reported)
+  const dayAbsences = initialAbsences ?? []
+  const hasSavedDay = (initialReports?.length ?? 0) > 0 || dayAbsences.length > 0
+  const deleteCopy = dayDeleteCopy(dayAbsences, (initialReports?.length ?? 0) > 0)
+  const header = deriveHeader(headerMeta, reported, dayTotal)
+  const rowsError = arrayErrorMessage(errors.rows)
 
   const progressHint =
     fields.length === 0
@@ -236,23 +344,21 @@ function ManualReport({ onClose, onSaved, initialDate, headerMeta }: Props) {
       projectId: projectMessage,
       taskId: issues.taskId?.message,
       workLocation: issues.workLocation?.message,
-      startTime: issues.startTime?.message,
-      endTime: issues.endTime?.message,
+      hours: issues.hours?.message,
       description: issues.description?.message,
     }
   }
 
   const clearRowFieldErrors = (index: number) => {
-    const paths = (
-      ['clientId', 'projectId', 'taskId', 'workLocation', 'startTime', 'endTime', 'description'] as const
-    ).map((field) => `rows.${index}.${field}` as FieldPath<ManualReportValues>)
+    const paths = (['clientId', 'projectId', 'taskId', 'workLocation', 'hours', 'description'] as const).map(
+      (field) => `rows.${index}.${field}` as FieldPath<ManualReportValues>,
+    )
     clearErrors(paths)
   }
 
   const addRow = () => {
     setBanner(null)
-    append(emptyRow(day.dayStart ?? '09:00', day.dayEnd ?? '18:00'))
-    setPicker({ row: fields.length, step: 'project' })
+    append(emptyRow())
   }
 
   const selectProject = (index: number, clientId: string, projectId: string) => {
@@ -270,56 +376,65 @@ function ManualReport({ onClose, onSaved, initialDate, headerMeta }: Props) {
     })
   }
 
-  const advancePicker = () => {
-    if (!picker) return
-    const next = NEXT_STEP[picker.step]
-    setPicker(next ? { row: picker.row, step: next } : null)
-  }
-
-  const stepBack = () => {
-    if (!picker) return
-    if (picker.step === 'task') setPicker({ row: picker.row, step: 'project' })
-    else if (picker.step === 'location') setPicker({ row: picker.row, step: 'task' })
-    else setPicker(null)
-  }
-
-  const openPicker = (row: number, step: PickerStep) => {
-    const values = rows[row]
-    if (step === 'task' && !values?.projectId) setPicker({ row, step: 'project' })
-    else setPicker({ row, step })
-  }
-
   const onSubmit = async (values: ManualReportValues) => {
     setBanner(null)
+    if (!hasHierarchy) {
+      setBanner(EMPTY_TREE)
+      return
+    }
     try {
       await createReportBatch({
         date: values.date,
+        startTime: values.dayStart,
+        endTime: values.dayEnd,
         rows: values.rows.map((row) => ({
           clientId: row.clientId,
           projectId: row.projectId,
           taskId: row.taskId,
           workLocation: row.workLocation as WorkLocation,
-          startTime: row.startTime,
-          endTime: row.endTime,
+          hours: Number(row.hours),
           description: row.description,
         })),
       })
       message.success('הדיווח נשמר בהצלחה')
       onSaved?.()
-      reset(freshDay(initialDate))
+      reset(freshDay(initialDate, initialReports))
       onClose()
     } catch (error) {
       if (error instanceof ApiError && error.status === 400) {
         const details = apiFieldErrors(error.body)
         applyApiFieldErrors(details, setError)
-        setBanner(MISSING_DETAILS)
+        const code = (error.body as { error?: { code?: string } } | undefined)?.error?.code
+        setBanner(code === 'HOURS_EXCEED_WINDOW' ? overflowBanner(reported, dayTotal) : MISSING_DETAILS)
         return
       }
       setBanner(error instanceof ApiError && error.status === 429 ? TOO_MANY_SAVES : SAVE_FAILED)
     }
   }
 
-  const onInvalid = () => setBanner(MISSING_DETAILS)
+  const onInvalid = (formErrors: FieldErrors<ManualReportValues>) =>
+    setBanner(bannerForInvalid(formErrors, reported, dayTotal))
+
+  const deleteSavedDay = async () => {
+    setPendingDayDelete(false)
+    setBanner(null)
+    const date = day.date || initialDate
+    if (!date) return
+    try {
+      if ((initialReports?.length ?? 0) > 0) {
+        await deleteReportsForDate(date)
+      }
+      for (const absence of dayAbsences) {
+        await deleteAbsence(absence.id)
+      }
+      message.success('הדיווח נמחק')
+      onSaved?.()
+      reset(freshDay(date))
+      onClose()
+    } catch {
+      setBanner(SAVE_FAILED)
+    }
+  }
 
   if (loadError) {
     return (
@@ -334,52 +449,39 @@ function ManualReport({ onClose, onSaved, initialDate, headerMeta }: Props) {
     )
   }
 
-  return (
-    <form
-      className="manual-report manual-report--desktop"
-      onSubmit={handleSubmit(onSubmit, onInvalid)}
-      noValidate
-      aria-labelledby="manual-report-day-title"
-    >
-      <div className="manual-report__scroll">
-        <header className="manual-report__top">
-          <div className="manual-report__top-actions">
-            <button type="button" className="manual-report__icon-btn" onClick={onClose} aria-label="סגירה">
-              <img src={closeCircle} alt="" width={24} height={24} />
-            </button>
-            <button
-              type="button"
-              className="manual-report__delete-day"
-              disabled
-              title="בקרוב"
-              aria-disabled="true"
-            >
-              <img src={trashIcon} alt="" width={24} height={24} />
-              מחיקת דיווח
-            </button>
-          </div>
+  const tabs = (
+        <div className="manual-report__tabs" role="tablist" aria-label="סוג דיווח">
+          <button
+            type="button"
+            role="tab"
+            className={`manual-report__tab${reportTab === 'hours' ? ' manual-report__tab--active' : ''}`}
+            aria-selected={reportTab === 'hours'}
+            onClick={() => setReportTab('hours')}
+          >
+            דיווח ידני
+          </button>
+          <button
+            type="button"
+            role="tab"
+            className={`manual-report__tab${reportTab === 'absence' ? ' manual-report__tab--active' : ''}`}
+            aria-selected={reportTab === 'absence'}
+            onClick={() => setReportTab('absence')}
+          >
+            דיווח העדרות
+          </button>
+        </div>
+  )
 
+  const topChrome = (
+        <header className="manual-report__top">
           <div className="manual-report__top-meta">
-            <div className="manual-report__header-tags">
-              <span className={`manual-report__header-tag manual-report__header-tag--${header.tone}`}>
-                {header.status}
-                <img src={STATUS_ICONS[header.tone]} alt="" width={16} height={16} />
-              </span>
-              {header.tags.length > 0 ? <span className="manual-report__header-sep" aria-hidden="true" /> : null}
-              {header.tags.map((tag) => (
-                <span key={tag.text} className="manual-report__header-tag manual-report__header-tag--neutral">
-                  {tag.text}
-                  <img src={tagIcon(tag)} alt="" width={16} height={16} />
-                </span>
-              ))}
-            </div>
             <div className="manual-report__top-date">
               <label className="manual-report__date-picker">
-                <span className="manual-report__date" id="manual-report-day-title">
-                  {formatDayTitle(day.date ?? '')}
-                </span>
                 <span className="manual-report__date-icon" aria-hidden="true">
                   <img src={calendarJobs} alt="" width={24} height={24} />
+                </span>
+                <span className="manual-report__date" id="manual-report-day-title">
+                  {formatDayTitle(day.date ?? '')}
                 </span>
                 <input
                   type="date"
@@ -389,20 +491,53 @@ function ManualReport({ onClose, onSaved, initialDate, headerMeta }: Props) {
                 />
               </label>
             </div>
+            <div className="manual-report__header-tags">
+              <span className={`manual-report__header-tag manual-report__header-tag--${header.tone}`}>
+                {header.status}
+                {header.tone !== 'weekend' && header.tone !== 'absence' ? (
+                  <img src={STATUS_ICONS[header.tone]} alt="" width={16} height={16} />
+                ) : null}
+              </span>
+              {header.tags.length > 0 ? <span className="manual-report__header-sep" aria-hidden="true" /> : null}
+              {header.tags.map((tag) => (
+                <span key={tag.text} className="manual-report__header-tag manual-report__header-tag--neutral">
+                  {tag.text}
+                  <img src={tagIcon(tag)} alt="" width={16} height={16} />
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="manual-report__top-actions">
+            <button
+              type="button"
+              className="manual-report__delete-day"
+              disabled={!hasSavedDay}
+              title={hasSavedDay ? undefined : 'אין דיווח שמור למחוק'}
+              onClick={() => {
+                if (!hasSavedDay) return
+                setBanner(null)
+                setPendingDayDelete(true)
+              }}
+            >
+              מחיקת דיווח
+              <img src={trashIcon} alt="" width={24} height={24} />
+            </button>
+            <button type="button" className="manual-report__icon-btn" onClick={onClose} aria-label="סגירה">
+              <img src={closeCircle} alt="" width={24} height={24} />
+            </button>
           </div>
           {errors.date ? <p className="manual-report__field-error manual-report__date-error">{errors.date.message}</p> : null}
         </header>
+  )
 
-        <div className="manual-report__tabs" role="tablist" aria-label="סוג דיווח">
-          <button type="button" role="tab" className="manual-report__tab manual-report__tab--active" aria-selected="true">
-            דיווח ידני
-          </button>
-          <button type="button" role="tab" className="manual-report__tab" aria-selected="false" disabled>
-            דיווח העדרות
-          </button>
-        </div>
-
-        {banner ? (
+  return (
+    <div className="manual-report manual-report--desktop" aria-labelledby="manual-report-day-title">
+      {reportTab === 'hours' ? (
+        <form className="manual-report__panel" onSubmit={handleSubmit(onSubmit, onInvalid)} noValidate>
+          <div className="manual-report__scroll">
+            {topChrome}
+            {tabs}
+            {banner ? (
           <div className="manual-report__banner" role="alert">
             <span className="manual-report__banner-icon">
               <WarningTriangle />
@@ -460,7 +595,6 @@ function ManualReport({ onClose, onSaved, initialDate, headerMeta }: Props) {
               </div>
             </div>
           ) : null}
-          {errors.dayEnd ? <p className="manual-report__field-error">{errors.dayEnd.message}</p> : null}
         </section>
 
         <section className="manual-report__projects">
@@ -491,11 +625,25 @@ function ManualReport({ onClose, onSaved, initialDate, headerMeta }: Props) {
                   key={field.id}
                   index={index}
                   variant="desktop"
-                  values={rows[index] ?? emptyRow('', '')}
+                  values={rows[index] ?? emptyRow()}
                   options={options}
                   errors={rowErrors(index)}
                   register={register}
-                  onPick={(step) => openPicker(index, step)}
+                  onProjectChange={(clientId, projectId) => selectProject(index, clientId, projectId)}
+                  onTaskChange={(taskId) => {
+                    setBanner(null)
+                    clearRowFieldErrors(index)
+                    setValue(`rows.${index}.taskId`, taskId, { shouldValidate: false, shouldDirty: true })
+                  }}
+                  onLocationChange={(location) => {
+                    setBanner(null)
+                    clearRowFieldErrors(index)
+                    setValue(`rows.${index}.workLocation`, location, { shouldValidate: false, shouldDirty: true })
+                  }}
+                  onHoursChange={() => {
+                    setBanner(null)
+                    clearRowFieldErrors(index)
+                  }}
                   onRemove={() => setPendingRemoval(index)}
                 />
               ))
@@ -509,11 +657,10 @@ function ManualReport({ onClose, onSaved, initialDate, headerMeta }: Props) {
             הוספת פרויקט
             <img src={addCircleBlue} alt="" width={24} height={24} />
           </button>
-          {errors.rows?.message ? <p className="manual-report__field-error">{errors.rows.message}</p> : null}
+          {rowsError ? <p className="manual-report__field-error">{rowsError}</p> : null}
         </section>
-      </div>
-
-      <footer className="manual-report__footer">
+          </div>
+          <footer className="manual-report__footer">
         <div className="manual-report__summary">
           <div className="manual-report__summary-head">
             <span className="manual-report__summary-title">סיכום</span>
@@ -524,53 +671,58 @@ function ManualReport({ onClose, onSaved, initialDate, headerMeta }: Props) {
               {reported > 0 ? (
                 <span className="manual-report__summary-badge">סה״כ {formatHours(reported)} שעות</span>
               ) : null}
+              {hoursShortOfWindow(reported, dayTotal) && reported > 0 ? (
+                <span className="manual-report__summary-badge manual-report__summary-badge--missing">חסר</span>
+              ) : null}
             </div>
           </div>
           <div className="manual-report__progress-labels">
             <span>{progressHint}</span>
             <span>
-              {formatHours(reported)} מתוך {STANDARD_HOURS} שעות
+              {formatHours(reported)} מתוך {formatHours(dayTotal || STANDARD_HOURS)} שעות
             </span>
           </div>
           <div
             className="manual-report__progress-track"
             role="progressbar"
             aria-valuemin={0}
-            aria-valuemax={STANDARD_HOURS}
+            aria-valuemax={dayTotal || STANDARD_HOURS}
             aria-valuenow={reported}
           >
             <div
               className="manual-report__progress-fill"
-              style={{ width: `${Math.min(reported / STANDARD_HOURS, 1) * 100}%` }}
+              style={{
+                width: `${Math.min(reported / (dayTotal || STANDARD_HOURS), 1) * 100}%`,
+              }}
             />
           </div>
         </div>
-        <button type="submit" className="manual-report__save" disabled={!hasHierarchy || isSubmitting}>
+        <button type="submit" className="manual-report__save" disabled={isSubmitting}>
           שמירה
         </button>
       </footer>
+        </form>
+      ) : (
+        <div className="manual-report__scroll">
+          {topChrome}
+          {tabs}
+          <AbsenceReportForm
+            onClose={onClose}
+            onSaved={onSaved}
+            defaultStartDate={day.date || initialDate}
+          />
+        </div>
+      )}
 
-      {picker && options ? (
-        <ManualReportPicker
-          step={picker.step}
-          options={options}
-          clientId={rows[picker.row]?.clientId ?? ''}
-          projectId={rows[picker.row]?.projectId ?? ''}
-          taskId={rows[picker.row]?.taskId ?? ''}
-          workLocation={rows[picker.row]?.workLocation ?? ''}
-          onSelectProject={(clientId, projectId) => selectProject(picker.row, clientId, projectId)}
-          onSelectTask={(taskId) => {
-            setBanner(null)
-            clearRowFieldErrors(picker.row)
-            setValue(`rows.${picker.row}.taskId`, taskId, { shouldValidate: false, shouldDirty: true })
+      {pendingDayDelete ? (
+        <ManualReportDeleteDialog
+          title={deleteCopy.title}
+          body={deleteCopy.body}
+          confirmLabel={deleteCopy.confirmLabel}
+          onCancel={() => setPendingDayDelete(false)}
+          onConfirm={() => {
+            void deleteSavedDay()
           }}
-          onSelectLocation={(location) => {
-            setBanner(null)
-            clearRowFieldErrors(picker.row)
-            setValue(`rows.${picker.row}.workLocation`, location, { shouldValidate: false, shouldDirty: true })
-          }}
-          onBack={stepBack}
-          onContinue={advancePicker}
         />
       ) : null}
 
@@ -583,7 +735,7 @@ function ManualReport({ onClose, onSaved, initialDate, headerMeta }: Props) {
           }}
         />
       ) : null}
-    </form>
+    </div>
   )
 }
 

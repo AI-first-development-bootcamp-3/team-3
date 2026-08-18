@@ -17,8 +17,7 @@ function renderWithRoutes(initialEntries: Array<string | { pathname: string; sta
           }
         />
         <Route path="/" element={<div>Home page</div>} />
-        <Route path="/change-password" element={<div>Change password page</div>} />
-        <Route path="/absences" element={<div>Absences page</div>} />
+        <Route path="/admin" element={<div>Admin page</div>} />
       </Routes>
     </MemoryRouter>,
   )
@@ -30,7 +29,7 @@ describe('RequireGuest', () => {
     sessionStore.getState().clearSession()
   })
 
-  it('redirects away and does not render the children when a session is active', () => {
+  it('sends an employee to hours home when they hit /login while signed in', () => {
     sessionStore
       .getState()
       .setSession(
@@ -46,18 +45,11 @@ describe('RequireGuest', () => {
     expect(screen.queryByText('Login form')).not.toBeInTheDocument()
   })
 
-  it('sends a user with mustChangePassword: true to /change-password instead of /', () => {
+  it('sends an admin to /admin when they hit /login while signed in', () => {
     sessionStore
       .getState()
       .setSession(
-        {
-          id: '1',
-          fullName: 'Regular Employee',
-          email: 'e@abra.test',
-          userType: 'regular',
-          active: true,
-          mustChangePassword: true,
-        },
+        { id: '1', fullName: 'Admin', email: 'a@abra.test', userType: 'admin', active: true },
         'a-token',
         new Date(Date.now() + 60_000).toISOString(),
         false,
@@ -65,12 +57,11 @@ describe('RequireGuest', () => {
 
     renderWithRoutes(['/login'])
 
-    expect(screen.getByText('Change password page')).toBeInTheDocument()
-    expect(screen.queryByText('Home page')).not.toBeInTheDocument()
+    expect(screen.getByText('Admin page')).toBeInTheDocument()
     expect(screen.queryByText('Login form')).not.toBeInTheDocument()
   })
 
-  it('sends the user back to location.state.from.pathname instead of / when redirecting', () => {
+  it('does not send an employee to /admin even if location.state.from points there', () => {
     sessionStore
       .getState()
       .setSession(
@@ -80,10 +71,10 @@ describe('RequireGuest', () => {
         false,
       )
 
-    renderWithRoutes([{ pathname: '/login', state: { from: { pathname: '/absences' } } }])
+    renderWithRoutes([{ pathname: '/login', state: { from: { pathname: '/admin' } } }])
 
-    expect(screen.getByText('Absences page')).toBeInTheDocument()
-    expect(screen.queryByText('Home page')).not.toBeInTheDocument()
+    expect(screen.getByText('Home page')).toBeInTheDocument()
+    expect(screen.queryByText('Admin page')).not.toBeInTheDocument()
     expect(screen.queryByText('Login form')).not.toBeInTheDocument()
   })
 

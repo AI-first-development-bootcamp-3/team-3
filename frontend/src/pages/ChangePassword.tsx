@@ -3,18 +3,15 @@ import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Alert, Button, Form, Input } from 'antd'
 import { useNavigate } from 'react-router-dom'
+import AppHeader from '../components/AppHeader'
 import { changeOwnPassword } from '../services/auth'
+import { homePath } from '../services/authPaths'
 import { sessionStore } from '../services/sessionStore'
 import { changePasswordFormSchema, type ChangePasswordFormValues } from './ChangePassword.schema'
 
-/**
- * Reached after login when the session's mustChangePassword flag is set
- * (temp password from admin-created accounts, SCRUM-209/SCRUM-58). No
- * current-password field: the caller already holds a valid session token,
- * which is the only proof of identity this flow requires.
- */
 function ChangePassword() {
   const navigate = useNavigate()
+  const user = sessionStore((state) => state.user)
   const [formError, setFormError] = useState<string | null>(null)
 
   const {
@@ -31,49 +28,52 @@ function ChangePassword() {
     try {
       const updatedUser = await changeOwnPassword(values.newPassword)
       sessionStore.getState().updateUser(updatedUser)
-      navigate('/', { replace: true })
+      navigate(homePath(updatedUser), { replace: true })
     } catch {
-      setFormError('Could not update your password. Please try again.')
+      setFormError('לא ניתן לעדכן את הסיסמה. נסו שוב.')
     }
   }
 
   return (
-    <Form layout="vertical" onFinish={handleSubmit(onSubmit)}>
-      <h1>Set a new password</h1>
-      <p>You need to set a new password before continuing.</p>
+    <div>
+      <AppHeader title="שינוי סיסמה" />
+      <Form layout="vertical" onFinish={handleSubmit(onSubmit)} style={{ maxWidth: 420, margin: '32px auto', padding: '0 16px' }}>
+        <h1>שינוי סיסמה</h1>
+        <p>בחרו סיסמה חדשה לחשבון {user?.email ?? ''}.</p>
 
-      {formError && <Alert type="error" message={formError} showIcon style={{ marginBottom: 16 }} />}
+        {formError && <Alert type="error" message={formError} showIcon style={{ marginBottom: 16 }} />}
 
-      <Form.Item
-        label="New password"
-        htmlFor="newPassword"
-        validateStatus={errors.newPassword ? 'error' : ''}
-        help={errors.newPassword?.message}
-      >
-        <Controller
-          name="newPassword"
-          control={control}
-          render={({ field }) => <Input.Password {...field} id="newPassword" autoComplete="new-password" />}
-        />
-      </Form.Item>
+        <Form.Item
+          label="סיסמה חדשה"
+          htmlFor="newPassword"
+          validateStatus={errors.newPassword ? 'error' : ''}
+          help={errors.newPassword?.message}
+        >
+          <Controller
+            name="newPassword"
+            control={control}
+            render={({ field }) => <Input.Password {...field} id="newPassword" autoComplete="new-password" />}
+          />
+        </Form.Item>
 
-      <Form.Item
-        label="Confirm new password"
-        htmlFor="confirmPassword"
-        validateStatus={errors.confirmPassword ? 'error' : ''}
-        help={errors.confirmPassword?.message}
-      >
-        <Controller
-          name="confirmPassword"
-          control={control}
-          render={({ field }) => <Input.Password {...field} id="confirmPassword" autoComplete="new-password" />}
-        />
-      </Form.Item>
+        <Form.Item
+          label="אימות סיסמה"
+          htmlFor="confirmPassword"
+          validateStatus={errors.confirmPassword ? 'error' : ''}
+          help={errors.confirmPassword?.message}
+        >
+          <Controller
+            name="confirmPassword"
+            control={control}
+            render={({ field }) => <Input.Password {...field} id="confirmPassword" autoComplete="new-password" />}
+          />
+        </Form.Item>
 
-      <Button type="primary" htmlType="submit" loading={isSubmitting}>
-        Set password
-      </Button>
-    </Form>
+        <Button type="primary" htmlType="submit" loading={isSubmitting}>
+          שמירת סיסמה
+        </Button>
+      </Form>
+    </div>
   )
 }
 

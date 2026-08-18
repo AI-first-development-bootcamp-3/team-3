@@ -12,14 +12,17 @@ export interface Report {
   workLocation: WorkLocation
   startTime: string
   endTime: string
+  hours: number
   description: string
 }
 
 /** One project row of a day, as sent to `POST /reports/batch`. */
-export type ReportRowInput = Omit<Report, 'id' | 'userId' | 'date'>
+export type ReportRowInput = Omit<Report, 'id' | 'userId' | 'date' | 'startTime' | 'endTime'>
 
 export interface CreateReportBatchInput {
   date: ISODateString
+  startTime: string
+  endTime: string
   rows: ReportRowInput[]
 }
 
