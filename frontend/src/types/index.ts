@@ -5,7 +5,9 @@ export type { Project } from './project'
 export type { Task, TaskStatus } from './task'
 export type {
   Report,
+  ReportFormat,
   ReportRowInput,
+  ReportRowTimeFields,
   CreateReportBatchInput,
   CreateReportBatchResult,
   ListReportsResult,

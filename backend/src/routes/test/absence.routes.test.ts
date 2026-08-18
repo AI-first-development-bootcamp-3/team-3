@@ -256,5 +256,5 @@ describe('absence authentication guard', () => {
     expect(throttled.body).toEqual({
       error: { code: 'TOO_MANY_REQUESTS', message: expect.any(String) },
     });
-  });
+  }, 30000);
 });

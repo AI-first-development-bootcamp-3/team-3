@@ -1,6 +1,13 @@
 import { prisma } from '../config/prisma.js';
-import { allocationsFitWindow } from '../lib/attendanceWindow.js';
-import type { WorkLocation } from '../generated/prisma/enums.js';
+import {
+  allocationsFitWindow,
+  attendanceWindowMinutes,
+  derivedHoursFromMinutes,
+  intervalsOverlap,
+  rowIntervalOnDayAxis,
+  type RowInterval,
+} from '../lib/attendanceWindow.js';
+import type { ReportFormat, WorkLocation } from '../generated/prisma/enums.js';
 import { AppError, type ErrorDetail } from '../types/errors.js';
 import type {
   CreateTimeReportBatchBody,
@@ -15,8 +22,12 @@ export interface TimeReportDto {
   taskId: string;
   date: string;
   workLocation: WorkLocation;
+  /** The day's attendance window, shared by every row of the day. */
   startTime: string;
   endTime: string;
+  /** This row's own clock pair — present only on a CLOCK_IN_OUT row. */
+  rowStartTime: string | null;
+  rowEndTime: string | null;
   hours: number;
   description: string;
 }
@@ -36,6 +47,8 @@ export interface ReportingTaskOption {
 export interface ReportingProjectOption {
   id: string;
   name: string;
+  /** Decides which fields the entry form collects for rows on this project. */
+  reportFormat: ReportFormat;
   tasks: ReportingTaskOption[];
 }
 
@@ -76,6 +89,8 @@ function toDto(row: {
   workLocation: WorkLocation;
   startTime: Date;
   endTime: Date;
+  rowStartTime: Date | null;
+  rowEndTime: Date | null;
   hours: { toNumber?: () => number } | number | string;
   description: string;
 }): TimeReportDto {
@@ -89,14 +104,118 @@ function toDto(row: {
     workLocation: row.workLocation,
     startTime: dateToHhmm(row.startTime),
     endTime: dateToHhmm(row.endTime),
+    rowStartTime: row.rowStartTime ? dateToHhmm(row.rowStartTime) : null,
+    rowEndTime: row.rowEndTime ? dateToHhmm(row.rowEndTime) : null,
     hours: Number(row.hours),
     description: row.description,
   };
 }
 
 const HIERARCHY_MISMATCH = 'Client, project, and task must form one active hierarchy';
-const NOT_ASSIGNED = 'Task is not assigned to this user';
+const TASK_NOT_ASSIGNED = 'You are not assigned to this task';
 const HOURS_EXCEED_WINDOW = 'Project hours cannot exceed the attendance window';
+const HOURS_NOT_ALLOWED = 'This project reports clock-in/clock-out, so it cannot carry hours';
+const HOURS_REQUIRED = 'This project reports total hours, so hours are required';
+const TIMES_NOT_ALLOWED = 'This project reports total hours, so it cannot carry row times';
+const TIMES_REQUIRED = 'This project reports clock-in/clock-out, so both row times are required';
+const ROW_OUTSIDE_WINDOW = 'Row times must fall inside the day attendance window';
+const ROW_ZERO_LENGTH = 'Row end time must be later than its start time';
+const ROWS_OVERLAP = 'Two projects cannot be clocked over the same stretch of time';
+
+/**
+ * A row resolved against its project's format: the hours it contributes, plus
+ * its position on the day axis when it has a clock pair of its own.
+ */
+interface ResolvedRow {
+  hours: number;
+  interval: RowInterval | null;
+}
+
+interface FormatDependentRow {
+  hours?: number | undefined;
+  rowStartTime?: string | undefined;
+  rowEndTime?: string | undefined;
+}
+
+/**
+ * Validates one row against the format its project actually carries, and
+ * derives the hours a clock-in/out row contributes. Details are pushed under
+ * `fieldPrefix` so a batch names the failing row and a single report does not.
+ */
+function resolveRowForFormat(
+  row: FormatDependentRow,
+  reportFormat: ReportFormat,
+  day: { startTime: string; endTime: string },
+  fieldPrefix: string,
+  details: ErrorDetail[],
+): ResolvedRow | null {
+  const hasTimes = row.rowStartTime !== undefined && row.rowEndTime !== undefined;
+  const hasPartialTimes = row.rowStartTime !== undefined || row.rowEndTime !== undefined;
+
+  if (reportFormat === 'SUM_HOURS') {
+    if (hasPartialTimes) {
+      details.push({ field: `${fieldPrefix}rowStartTime`, message: TIMES_NOT_ALLOWED });
+      return null;
+    }
+    if (row.hours === undefined) {
+      details.push({ field: `${fieldPrefix}hours`, message: HOURS_REQUIRED });
+      return null;
+    }
+    return { hours: row.hours, interval: null };
+  }
+
+  if (row.hours !== undefined) {
+    details.push({ field: `${fieldPrefix}hours`, message: HOURS_NOT_ALLOWED });
+    return null;
+  }
+  if (!hasTimes) {
+    details.push({ field: `${fieldPrefix}rowStartTime`, message: TIMES_REQUIRED });
+    return null;
+  }
+
+  const interval = rowIntervalOnDayAxis(day.startTime, row.rowStartTime!, row.rowEndTime!);
+  const windowMinutes = attendanceWindowMinutes(day.startTime, day.endTime);
+
+  // Start is checked before length: a row that begins before the day does
+  // (08:00 on a 09:00–18:00 day) lands late on the day axis, which would
+  // otherwise surface as a backwards interval and blame the wrong field.
+  if (interval.start >= windowMinutes) {
+    details.push({ field: `${fieldPrefix}rowStartTime`, message: ROW_OUTSIDE_WINDOW });
+    return null;
+  }
+  if (interval.end <= interval.start) {
+    details.push({ field: `${fieldPrefix}rowEndTime`, message: ROW_ZERO_LENGTH });
+    return null;
+  }
+  if (interval.end > windowMinutes) {
+    details.push({ field: `${fieldPrefix}rowEndTime`, message: ROW_OUTSIDE_WINDOW });
+    return null;
+  }
+
+  return { hours: derivedHoursFromMinutes(interval.end - interval.start), interval };
+}
+
+/**
+ * You cannot be clocked into two projects at once. Every clashing row is named
+ * rather than only the first, so the form can mark all of them at once.
+ */
+function collectOverlapDetails(
+  intervals: { index: number; interval: RowInterval }[],
+  details: ErrorDetail[],
+): void {
+  const clashing = new Set<number>();
+  for (let i = 0; i < intervals.length; i += 1) {
+    for (let j = i + 1; j < intervals.length; j += 1) {
+      if (intervalsOverlap(intervals[i]!.interval, intervals[j]!.interval)) {
+        clashing.add(intervals[i]!.index);
+        clashing.add(intervals[j]!.index);
+      }
+    }
+  }
+  for (const index of [...clashing].sort((a, b) => a - b)) {
+    details.push({ field: `rows.${index}.rowStartTime`, message: ROWS_OVERLAP });
+  }
+}
 
 interface HierarchyIds {
   clientId: string;
@@ -124,35 +243,50 @@ function isOneActiveHierarchy(
   );
 }
 
-async function assertUserAssignedToTask(userId: string, taskId: string): Promise<void> {
-  const assignment = await prisma.taskAssignment.findUnique({
-    where: { userId_taskId: { userId, taskId } },
-  });
-  if (!assignment) {
-    throw AppError.badRequest(NOT_ASSIGNED, [{ field: 'taskId', message: NOT_ASSIGNED }]);
-  }
+/**
+ * True when the caller holds an assignment row for this task. The task is
+ * loaded with its assignments already narrowed to the caller, so a non-empty
+ * list means "assigned" — nothing else can appear in it.
+ */
+function isAssignedToCaller(task: { assignments: unknown[] } | undefined | null): boolean {
+  return Boolean(task && task.assignments.length > 0);
 }
 
 /**
- * Creates a time report for the authenticated caller. The task must be assigned
- * to the caller and the three ids must form one active client → project → task chain.
+ * Creates a time report for the authenticated caller. The three ids must form
+ * one active client → project → task chain, and the caller must be assigned to
+ * that task — reporting time against work you were never given is refused.
  */
 export async function createTimeReport(userId: string, input: CreateTimeReportBody): Promise<TimeReportDto> {
-  if (!allocationsFitWindow(input.startTime, input.endTime, [input.hours])) {
-    throw new AppError(400, 'HOURS_EXCEED_WINDOW', HOURS_EXCEED_WINDOW, [
-      { field: 'hours', message: HOURS_EXCEED_WINDOW },
-    ]);
-  }
-
-  await assertUserAssignedToTask(userId, input.taskId);
-
   const task = await prisma.task.findFirst({
     where: { id: input.taskId },
-    include: { project: { include: { client: true } } },
+    include: {
+      project: { include: { client: true } },
+      assignments: { where: { userId }, select: { userId: true } },
+    },
   });
 
   if (!isOneActiveHierarchy(task, input)) {
     throw AppError.badRequest(HIERARCHY_MISMATCH, [{ field: 'taskId', message: HIERARCHY_MISMATCH }]);
+  }
+
+  if (!isAssignedToCaller(task)) {
+    throw AppError.badRequest(TASK_NOT_ASSIGNED, [{ field: 'taskId', message: TASK_NOT_ASSIGNED }]);
+  }
+
+  // The hierarchy check above already proved the task, so its project's format
+  // is the authority on which fields this row had to carry — never a body field.
+  const details: ErrorDetail[] = [];
+  const resolved = resolveRowForFormat(input, task!.project.reportFormat, input, '', details);
+
+  if (!resolved) {
+    throw AppError.badRequest('The report does not match its project reporting format', details);
+  }
+
+  if (!allocationsFitWindow(input.startTime, input.endTime, [resolved.hours])) {
+    throw new AppError(400, 'HOURS_EXCEED_WINDOW', HOURS_EXCEED_WINDOW, [
+      { field: 'hours', message: HOURS_EXCEED_WINDOW },
+    ]);
   }
 
   const created = await prisma.timeReport.create({
@@ -165,12 +299,19 @@ export async function createTimeReport(userId: string, input: CreateTimeReportBo
       workLocation: input.workLocation,
       startTime: hhmmToDate(input.startTime),
       endTime: hhmmToDate(input.endTime),
-      hours: input.hours,
+      rowStartTime: input.rowStartTime ? hhmmToDate(input.rowStartTime) : null,
+      rowEndTime: input.rowEndTime ? hhmmToDate(input.rowEndTime) : null,
+      hours: resolved.hours,
       description: input.description,
     },
   });
 
   return toDto(created);
+}
+
+/** Keys a stored row by the pair that identifies it within one user's day. */
+function rowKey(ids: { projectId: string; taskId: string }): string {
+  return `${ids.projectId}:${ids.taskId}`;
 }
 
 /**
@@ -183,26 +324,49 @@ export async function createTimeReportBatch(
   userId: string,
   input: CreateTimeReportBatchBody,
 ): Promise<TimeReportDto[]> {
-  const tasks = await prisma.task.findMany({
-    where: { id: { in: input.rows.map((row) => row.taskId) } },
-    include: { project: { include: { client: true } } },
-  });
+  const date = calendarDateToDate(input.date);
+
+  const [tasks, storedRows] = await Promise.all([
+    prisma.task.findMany({
+      where: { id: { in: input.rows.map((row) => row.taskId) } },
+      include: {
+        project: { include: { client: true } },
+        assignments: { where: { userId }, select: { userId: true } },
+      },
+    }),
+    // Read before the transaction below deletes them: a row already reported
+    // keeps the format it was reported under even if its project has since been
+    // switched (design.md, D6). A row's own shape records that format — a clock
+    // pair means CLOCK_IN_OUT, its absence means SUM_HOURS — so no extra column
+    // is needed.
+    prisma.timeReport.findMany({
+      where: { userId, date },
+      select: { projectId: true, taskId: true, rowStartTime: true },
+    }),
+  ]);
   const tasksById = new Map(tasks.map((task) => [task.id, task]));
+  const storedFormats = new Map<string, ReportFormat>(
+    storedRows.map((row) => [
+      rowKey(row),
+      row.rowStartTime !== null ? 'CLOCK_IN_OUT' : 'SUM_HOURS',
+    ]),
+  );
 
   const details: ErrorDetail[] = [];
-  for (let index = 0; index < input.rows.length; index++) {
-    const row = input.rows[index]!;
-    const assignment = await prisma.taskAssignment.findUnique({
-      where: { userId_taskId: { userId, taskId: row.taskId } },
-    });
-    if (!assignment) {
-      details.push({ field: `rows.${index}.taskId`, message: NOT_ASSIGNED });
-    }
-  }
-
   input.rows.forEach((row, index) => {
-    if (!isOneActiveHierarchy(tasksById.get(row.taskId), row)) {
+    const task = tasksById.get(row.taskId);
+    if (!isOneActiveHierarchy(task, row)) {
       details.push({ field: `rows.${index}.taskId`, message: HIERARCHY_MISMATCH });
+      return;
+    }
+    // A row already stored for this caller on this date stays saveable even
+    // after its assignment is withdrawn: an admin unassigning a task must not
+    // strand a day the employee already submitted. Only a row that is new to
+    // the day needs a live assignment. `storedFormats` is keyed by exactly
+    // that — this user, this date, this project and task — so its presence is
+    // the "already reported" signal.
+    if (!isAssignedToCaller(task) && !storedFormats.has(rowKey(row))) {
+      details.push({ field: `rows.${index}.taskId`, message: TASK_NOT_ASSIGNED });
     }
   });
 
@@ -210,17 +374,45 @@ export async function createTimeReportBatch(
     throw AppError.badRequest('One or more report rows are invalid', details);
   }
 
-  if (!allocationsFitWindow(input.startTime, input.endTime, input.rows.map((row) => row.hours))) {
+  // Rows of both formats may share a day, so each is resolved against its own
+  // format before any of them is trusted: the format of the row already stored
+  // for this project and task if there is one, and otherwise — a row being
+  // added now — the project's current format.
+  const resolved = input.rows.map((row, index) =>
+    resolveRowForFormat(
+      row,
+      storedFormats.get(rowKey(row)) ?? tasksById.get(row.taskId)!.project.reportFormat,
+      input,
+      `rows.${index}.`,
+      details,
+    ),
+  );
+
+  if (details.length > 0) {
+    throw AppError.badRequest('One or more report rows are invalid', details);
+  }
+
+  collectOverlapDetails(
+    resolved.flatMap((entry, index) =>
+      entry?.interval ? [{ index, interval: entry.interval }] : [],
+    ),
+    details,
+  );
+
+  if (details.length > 0) {
+    throw AppError.badRequest('One or more report rows are invalid', details);
+  }
+
+  if (!allocationsFitWindow(input.startTime, input.endTime, resolved.map((entry) => entry!.hours))) {
     throw new AppError(400, 'HOURS_EXCEED_WINDOW', HOURS_EXCEED_WINDOW, [
       { field: 'hours', message: HOURS_EXCEED_WINDOW },
     ]);
   }
 
-  const date = calendarDateToDate(input.date);
   const created = await prisma.$transaction(async (tx) => {
     await tx.timeReport.deleteMany({ where: { userId, date } });
     return Promise.all(
-      input.rows.map((row) =>
+      input.rows.map((row, index) =>
         tx.timeReport.create({
           data: {
             userId,
@@ -231,7 +423,9 @@ export async function createTimeReportBatch(
             workLocation: row.workLocation,
             startTime: hhmmToDate(input.startTime),
             endTime: hhmmToDate(input.endTime),
-            hours: row.hours,
+            rowStartTime: row.rowStartTime ? hhmmToDate(row.rowStartTime) : null,
+            rowEndTime: row.rowEndTime ? hhmmToDate(row.rowEndTime) : null,
+            hours: resolved[index]!.hours,
             description: row.description,
           },
         }),
@@ -287,16 +481,14 @@ export async function deleteTimeReportsForDate(userId: string, date: string): Pr
   }
 }
 
+/**
+ * The client → project → task tree this caller may report against: active
+ * throughout, and narrowed to the tasks they are actually assigned to. The
+ * narrowing is uniform across roles — an admin reporting their own time is
+ * scoped by their own assignments exactly like an employee. Branches left
+ * empty by the narrowing are pruned, so the tree never offers a dead end.
+ */
 export async function listReportingOptions(userId: string): Promise<ReportingOptions> {
-  const assignments = await prisma.taskAssignment.findMany({
-    where: { userId },
-    select: { taskId: true },
-  });
-  const assignedTaskIds = assignments.map((row) => row.taskId);
-  if (assignedTaskIds.length === 0) {
-    return { clients: [] };
-  }
-
   const clients = await prisma.client.findMany({
     where: { isActive: true },
     orderBy: { name: 'asc' },
@@ -309,8 +501,9 @@ export async function listReportingOptions(userId: string): Promise<ReportingOpt
         select: {
           id: true,
           name: true,
+          reportFormat: true,
           tasks: {
-            where: { isActive: true, id: { in: assignedTaskIds } },
+            where: { isActive: true, assignments: { some: { userId } } },
             orderBy: { name: 'asc' },
             select: { id: true, name: true },
           },

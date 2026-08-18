@@ -29,7 +29,7 @@ function toIsoDate(value: Date): string {
 
 export async function createAbsence(
   userId: string,
-  input: { type: AbsenceType; startDate: string; endDate: string },
+  input: { type: AbsenceType; startDate: string; endDate: string; attachmentIds?: string[] },
 ): Promise<AbsenceDto> {
   const startLocal = parseCalendarDate(input.startDate);
   const endLocal = parseCalendarDate(input.endDate);
@@ -66,6 +66,14 @@ export async function createAbsence(
       halfDay: false,
     },
   });
+
+  // Link attachments to the absence if provided
+  if (input.attachmentIds && input.attachmentIds.length > 0) {
+    await prisma.attachment.updateMany({
+      where: { id: { in: input.attachmentIds }, uploaderId: userId },
+      data: { absenceId: created.id },
+    });
+  }
 
   return {
     id: created.id,

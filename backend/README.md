@@ -48,7 +48,9 @@ first. See `.env.example` for the full annotated list; `DATABASE_URL`,
 | `CORS_ORIGIN` | **yes** | Comma-separated list of allowed browser origins |
 | `JWT_SECRET` | **yes** | HS256 signing key, 32+ characters (`openssl rand -base64 32`) |
 | `LOG_LEVEL` | no (`info`) | pino level; `silent` disables logging (used in tests) |
-| `STORAGE_DIR` | no (`./storage/uploads`) | See [File storage](#file-storage) |
+| `SUPABASE_URL` | **yes** | Supabase project endpoint; see [File storage](#file-storage) |
+| `SUPABASE_ANON_KEY` | **yes** | Supabase anon public key |
+| `SUPABASE_SERVICE_KEY` | **yes** | Supabase service role secret (backend use only) |
 | `RATE_LIMIT_EMAIL_MAX_ATTEMPTS` | no (`5`) | See [Login rate limiting](#login-rate-limiting) |
 | `RATE_LIMIT_IP_MAX_ATTEMPTS` | no (`50`) | See [Login rate limiting](#login-rate-limiting) |
 | `RATE_LIMIT_WINDOW_SECONDS` | no (`900`) | See [Login rate limiting](#login-rate-limiting) |
@@ -268,30 +270,39 @@ exactly that. Prefer this middleware for any new route that writes.
 
 ## File storage
 
-Attachments (sick notes, reserve-duty confirmations — PDFs and photos,
-1-5 MB) are metadata in PostgreSQL plus bytes on disk, not `bytea` in the
-database: `bytea` would bloat every `pg_dump`, defeat streaming responses,
-and consume the free-tier database quota that should hold years of report
-rows instead.
+Attachments (sick notes, reserve-duty confirmations, medical certificates —
+PDFs and photos, 1-5 MB) are metadata in PostgreSQL plus bytes in Supabase
+Storage, not `bytea` in the database: `bytea` would bloat every `pg_dump`,
+defeat streaming responses, and consume the database quota that should hold
+years of report rows instead.
+
+### Architecture
 
 - `src/types/fileStorage.ts` declares the `FileStorage` interface
   (`store`/`retrieve`/`delete`) that calling code depends on — never the
   concrete implementation directly.
-- `src/services/localFileStorage.ts` is the only implementation right now:
-  bytes live under `STORAGE_DIR` (default `./storage/uploads`, a mounted
-  volume in Docker/production). The original filename is discarded on
-  write — only its extension survives — so a generated key
-  (`crypto.randomUUID() + extension`) is what actually touches the
-  filesystem. That's what makes path traversal in an uploaded filename
-  harmless: there's no user-supplied path component left to sanitise.
+- `src/services/supabaseFileStorage.ts` implements storage via Supabase:
+  - Requires `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_KEY`
+  - Files stored in the `absence-documents` bucket (private, server-only access)
+  - Original filename is discarded on write; only its extension survives
+    (e.g., `crypto.randomUUID() + '.pdf'`), preventing path traversal
+  - Service-key authentication ensures the backend alone can access files
 - `src/services/attachment.service.ts` enforces who can retrieve what
-  (owner or administrator) and streams bytes back rather than buffering a
-  whole file into memory.
+  (uploader, absence owner, or administrator) and streams bytes back rather
+  than buffering a whole file into memory.
 
-**Free-tier filesystems are ephemeral.** Render's and Railway's free tiers
-don't persist container disks — an uploaded file vanishes on redeploy. The
-`FileStorage` interface exists so this is a known, contained gap: swapping
-in an S3-compatible store (Cloudflare R2 and Backblaze B2 both have real
-free tiers) means writing a new implementation of that interface and
-pointing the app at it — no changes to `attachment.service.ts` or the
-routes/controllers that call it.
+### Setup
+
+1. Create a Supabase account at https://app.supabase.com/
+2. Create a project and note the credentials (Project URL, service role secret)
+3. Create a private storage bucket named `absence-documents`
+4. Set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_KEY` in `.env`
+
+See `SUPABASE_QUICKSTART.md` and `SUPABASE_DEPLOYMENT.md` for step-by-step instructions.
+
+### Future alternatives
+
+The `FileStorage` interface allows swapping implementations: if Supabase doesn't
+fit your constraints, writing a new implementation (S3, Cloudflare R2, local
+filesystem, etc.) means only modifying that service file — no changes to
+`attachment.service.ts` or callers.

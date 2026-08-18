@@ -10,6 +10,7 @@ export const createAbsenceBodySchema = z
     type: z.enum(AbsenceType),
     startDate: calendarDateSchema,
     endDate: calendarDateSchema.optional(),
+    attachmentIds: z.array(z.string().uuid()).optional(),
   })
   .superRefine((body, ctx) => {
     const endDate = body.endDate ?? body.startDate;
@@ -25,6 +26,7 @@ export const createAbsenceBodySchema = z
     type: body.type,
     startDate: body.startDate,
     endDate: body.endDate ?? body.startDate,
+    attachmentIds: body.attachmentIds ?? [],
   }));
 
 export type CreateAbsenceBody = z.infer<typeof createAbsenceBodySchema>;

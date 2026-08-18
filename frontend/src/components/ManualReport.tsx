@@ -5,12 +5,18 @@ import { App } from 'antd'
 import { ApiError } from '../services/apiClient'
 import dayjs from '../services/dayjs'
 import { deleteAbsence } from '../services/absences'
-import { createReportBatch, deleteReportsForDate, getReportingOptions } from '../services/reports'
+import { createReportBatch, deleteReportsForDate, getReportingOptions, toReportRow } from '../services/reports'
 import type { Absence, ReportingOptions, TimeReportListItem, WorkLocation } from '../types'
 import {
   attendanceWindowHours,
-  manualReportSchema,
+  buildManualReportSchema,
   OVERFLOW_HOURS_MESSAGE,
+  projectFormat,
+  rowAllocatedHours,
+  rowFormat,
+  ROW_OUTSIDE_WINDOW_MESSAGE,
+  ROW_ZERO_LENGTH_MESSAGE,
+  ROWS_OVERLAP_MESSAGE,
   type ManualReportValues,
   type ProjectRowValues,
 } from './ManualReport.schema'
@@ -47,9 +53,24 @@ const ZERO_HOURS = {
   title: 'שעות לא תקינות',
   detail: 'יש להזין מספר בין 0.5 ל-24, עם לכל היותר ספרה אחת אחרי הנקודה.',
 }
+const ROW_TIMES_OUTSIDE = {
+  title: 'שעות הפרויקט מחוץ לחלון היום',
+  detail: 'שעות הכניסה והיציאה של כל פרויקט חייבות להיות בתוך חלון הכניסה–יציאה של היום.',
+}
+const ROW_TIMES_OVERLAP = {
+  title: 'יש חפיפה בין הפרויקטים',
+  detail: 'לא ניתן לדווח שני פרויקטים על אותו פרק זמן. עדכנו את שעות הכניסה והיציאה של הפרויקטים המסומנים.',
+}
 const EMPTY_TREE = {
   title: 'אין פרויקטים לדיווח',
-  detail: 'אין מידע זמין כרגע, נסו שוב מאוחר יותר או פנו למנהל ישיר',
+  detail: 'עדיין לא שויכו לכם פרויקטים. פנו למנהל ישיר כדי שישייך אתכם לפרויקט.',
+}
+/** The projects area when the employee has no assignment at all — not a fault,
+ * just nobody has put them on a project yet. */
+const NO_ASSIGNED_PROJECTS = {
+  title: 'עדיין לא שויכו לכם פרויקטים',
+  hint: 'כדי לדווח שעות צריך שיוך לפרויקט. פנו למנהל ישיר ואפשר יהיה להתחיל לדווח.',
+  short: 'עדיין לא שויכו לכם פרויקטים לדיווח. פנו למנהל ישיר.',
 }
 const TOO_MANY_SAVES = {
   title: 'שמרתם יותר מדי פעמים ברצף',
@@ -88,7 +109,16 @@ const STATUS_ICONS: Record<ManualReportHeaderTone, string> = {
 }
 
 function emptyRow(): ProjectRowValues {
-  return { clientId: '', projectId: '', taskId: '', workLocation: '', hours: 0, description: '' }
+  return {
+    clientId: '',
+    projectId: '',
+    taskId: '',
+    workLocation: '',
+    hours: 0,
+    rowStartTime: '',
+    rowEndTime: '',
+    description: '',
+  }
 }
 
 function valuesFromReports(date: string, reports: TimeReportListItem[]): ManualReportValues {
@@ -103,6 +133,11 @@ function valuesFromReports(date: string, reports: TimeReportListItem[]): ManualR
       taskId: report.taskId,
       workLocation: report.workLocation,
       hours: Number(report.hours ?? report.durationHours) || 0,
+      rowStartTime: report.rowStartTime ?? '',
+      rowEndTime: report.rowEndTime ?? '',
+      // A stored clock pair is what marks a row as כניסה/יציאה, so the saved
+      // row keeps that format even if its project has since been switched.
+      savedFormat: report.rowStartTime ? 'CLOCK_IN_OUT' : 'SUM_HOURS',
       description: report.description ?? '',
     })),
   }
@@ -149,6 +184,15 @@ function translateApiMessage(message: string): string {
   }
   if (message.includes('cannot exceed the attendance window')) {
     return OVERFLOW_HOURS_MESSAGE
+  }
+  if (message.includes('clocked over the same stretch of time')) {
+    return ROWS_OVERLAP_MESSAGE
+  }
+  if (message.includes('inside the day attendance window')) {
+    return ROW_OUTSIDE_WINDOW_MESSAGE
+  }
+  if (message.includes('later than its start time')) {
+    return ROW_ZERO_LENGTH_MESSAGE
   }
   return message
 }
@@ -216,6 +260,17 @@ function overflowBanner(allocated: number, windowHours: number) {
   }
 }
 
+/** The clock-pair messages the day's cards are carrying, in row order. */
+function rowTimeMessages(rowIssues: unknown[]): string[] {
+  return rowIssues.flatMap((row) => {
+    if (!row || typeof row !== 'object') return []
+    const record = row as { rowStartTime?: { message?: string }; rowEndTime?: { message?: string } }
+    return [record.rowStartTime?.message, record.rowEndTime?.message].filter(
+      (message): message is string => typeof message === 'string' && message.length > 0,
+    )
+  })
+}
+
 function bannerForInvalid(
   formErrors: FieldErrors<ManualReportValues>,
   allocatedHours: number,
@@ -228,6 +283,11 @@ function bannerForInvalid(
   const rowIssues = Object.entries(rowList ?? {})
     .filter(([key]) => /^\d+$/.test(key))
     .map(([, value]) => value)
+  const timeMessages = rowTimeMessages(rowIssues)
+  if (timeMessages.includes(ROWS_OVERLAP_MESSAGE)) return ROW_TIMES_OVERLAP
+  if (timeMessages.includes(ROW_OUTSIDE_WINDOW_MESSAGE) || timeMessages.includes(ROW_ZERO_LENGTH_MESSAGE)) {
+    return ROW_TIMES_OUTSIDE
+  }
   const missingPick = rowIssues.some(
     (row) => row && typeof row === 'object' && ('projectId' in row || 'taskId' in row || 'workLocation' in row || 'clientId' in row),
   )
@@ -278,6 +338,8 @@ function ManualReport({
     (initialAbsences?.length ?? 0) > 0 && (initialReports?.length ?? 0) === 0 ? 'absence' : 'hours',
   )
 
+  const schema = useMemo(() => buildManualReportSchema(options), [options])
+
   const {
     control,
     register,
@@ -288,7 +350,7 @@ function ManualReport({
     reset,
     formState: { errors, isSubmitting },
   } = useForm<ManualReportValues>({
-    resolver: zodResolver(manualReportSchema),
+    resolver: zodResolver(schema),
     defaultValues: freshDay(initialDate, initialReports),
   })
 
@@ -319,8 +381,8 @@ function ManualReport({
     [day.dayStart, day.dayEnd],
   )
   const reported = useMemo(
-    () => rows.reduce((total, row) => total + Number(row.hours || 0), 0),
-    [rows],
+    () => rows.reduce((total, row) => total + rowAllocatedHours(options, day.dayStart ?? '', row), 0),
+    [options, day.dayStart, rows],
   )
   const remaining = Math.max(dayTotal - reported, 0)
   const hasHierarchy = (options?.clients.length ?? 0) > 0
@@ -329,10 +391,14 @@ function ManualReport({
   const deleteCopy = dayDeleteCopy(dayAbsences, (initialReports?.length ?? 0) > 0)
   const header = deriveHeader(headerMeta, reported, dayTotal)
   const rowsError = arrayErrorMessage(errors.rows)
+  /** Options loaded and came back empty — the employee is assigned to nothing. */
+  const noAssignments = Boolean(options) && !hasHierarchy
 
   const progressHint =
     fields.length === 0
-      ? 'הוסיפו פרויקטים כדי לדווח את השעות'
+      ? noAssignments
+        ? 'אין פרויקטים לדיווח'
+        : 'הוסיפו פרויקטים כדי לדווח את השעות'
       : remaining > 0
         ? `חסרות ${formatHours(remaining)} שעות לדיווח`
         : 'הדיווח הושלם'
@@ -346,12 +412,16 @@ function ManualReport({
       taskId: issues.taskId?.message,
       workLocation: issues.workLocation?.message,
       hours: issues.hours?.message,
+      rowStartTime: issues.rowStartTime?.message,
+      rowEndTime: issues.rowEndTime?.message,
       description: issues.description?.message,
     }
   }
 
   const clearRowFieldErrors = (index: number) => {
-    const paths = (['clientId', 'projectId', 'taskId', 'workLocation', 'hours', 'description'] as const).map(
+    const paths = (
+      ['clientId', 'projectId', 'taskId', 'workLocation', 'hours', 'rowStartTime', 'rowEndTime', 'description'] as const
+    ).map(
       (field) => `rows.${index}.${field}` as FieldPath<ManualReportValues>,
     )
     clearErrors(paths)
@@ -375,6 +445,17 @@ function ManualReport({
       shouldValidate: false,
       shouldDirty: true,
     })
+    // Picking another project makes this a new row, so it stops being the saved
+    // one and follows the chosen project's current format (design D6).
+    setValue(`rows.${index}.savedFormat`, undefined, { shouldValidate: false, shouldDirty: true })
+    // The card is about to swap its inputs, so whatever the other format left
+    // behind has to go — a hidden stale value would be submitted invisibly.
+    if (projectFormat(options, clientId, projectId) === 'CLOCK_IN_OUT') {
+      setValue(`rows.${index}.hours`, 0, { shouldValidate: false, shouldDirty: true })
+    } else {
+      setValue(`rows.${index}.rowStartTime`, '', { shouldValidate: false, shouldDirty: true })
+      setValue(`rows.${index}.rowEndTime`, '', { shouldValidate: false, shouldDirty: true })
+    }
   }
 
   const onSubmit = async (values: ManualReportValues) => {
@@ -388,14 +469,21 @@ function ManualReport({
         date: values.date,
         startTime: values.dayStart,
         endTime: values.dayEnd,
-        rows: values.rows.map((row) => ({
-          clientId: row.clientId,
-          projectId: row.projectId,
-          taskId: row.taskId,
-          workLocation: row.workLocation as WorkLocation,
-          hours: Number(row.hours),
-          description: row.description,
-        })),
+        rows: values.rows.map((row) =>
+          toReportRow(
+            {
+              clientId: row.clientId,
+              projectId: row.projectId,
+              taskId: row.taskId,
+              workLocation: row.workLocation as WorkLocation,
+              hours: row.hours,
+              rowStartTime: row.rowStartTime,
+              rowEndTime: row.rowEndTime,
+              description: row.description,
+            },
+            rowFormat(row, options),
+          ),
+        ),
       })
       message.success('הדיווח נשמר בהצלחה')
       onSaved?.()
@@ -413,8 +501,11 @@ function ManualReport({
     }
   }
 
+  // An employee with no assignment cannot add a row, so the day never validates.
+  // Saying "a detail or two is missing" would send them looking for a field that
+  // is not there — explain the missing assignment instead.
   const onInvalid = (formErrors: FieldErrors<ManualReportValues>) =>
-    setBanner(bannerForInvalid(formErrors, reported, dayTotal))
+    setBanner(noAssignments ? EMPTY_TREE : bannerForInvalid(formErrors, reported, dayTotal))
 
   const deleteSavedDay = async () => {
     setPendingDayDelete(false)
@@ -613,9 +704,13 @@ function ManualReport({
                 width={124}
                 height={124}
               />
-              <p className="manual-report__projects-empty-title">עדיין אין פרויקטים מדווחים</p>
+              <p className="manual-report__projects-empty-title">
+                {noAssignments ? NO_ASSIGNED_PROJECTS.title : 'עדיין אין פרויקטים מדווחים'}
+              </p>
               <p className="manual-report__projects-empty-hint">
-                לחצו על כפתור ״הוספת פרויקט״ ותתחילו למלא את הפרטים הרלוונטים.
+                {noAssignments
+                  ? NO_ASSIGNED_PROJECTS.hint
+                  : 'לחצו על כפתור ״הוספת פרויקט״ ותתחילו למלא את הפרטים הרלוונטים.'}
               </p>
             </div>
           ) : null}
@@ -627,6 +722,7 @@ function ManualReport({
                   index={index}
                   variant="desktop"
                   values={rows[index] ?? emptyRow()}
+                  dayStart={day.dayStart ?? ''}
                   options={options}
                   errors={rowErrors(index)}
                   register={register}
@@ -650,15 +746,21 @@ function ManualReport({
               ))
             : null}
 
-          {!hasHierarchy && options ? (
-            <p className="manual-report__empty-hierarchy">אין מידע זמין כרגע, נסו שוב מאוחר יותר או פנו למנהל ישיר</p>
+          {noAssignments && fields.length > 0 ? (
+            <p className="manual-report__empty-hierarchy">{NO_ASSIGNED_PROJECTS.short}</p>
           ) : null}
 
-          <button type="button" className="manual-report__add" onClick={addRow} disabled={!hasHierarchy}>
+          <button
+            type="button"
+            className="manual-report__add"
+            onClick={addRow}
+            disabled={!hasHierarchy}
+            title={noAssignments ? NO_ASSIGNED_PROJECTS.short : undefined}
+          >
             הוספת פרויקט
             <img src={addCircleBlue} alt="" width={24} height={24} />
           </button>
-          {rowsError ? <p className="manual-report__field-error">{rowsError}</p> : null}
+          {rowsError && !noAssignments ? <p className="manual-report__field-error">{rowsError}</p> : null}
         </section>
           </div>
           <footer className="manual-report__footer">

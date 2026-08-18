@@ -16,12 +16,25 @@ const hoursSchema = z.coerce
     message: 'Hours must be between 0 and 24 with at most one decimal place',
   });
 
+/**
+ * Which of `hours` / `rowStartTime`+`rowEndTime` a row must carry depends on
+ * its project's `reportFormat`, which lives in the database — so these schemas
+ * accept either shape and the service decides. Everything format-independent
+ * (ids, `HH:mm`, work location, one-decimal hours) is still settled here. See
+ * openspec/changes/report-format-aware-entry/design.md, D2.
+ */
+const formatDependentFields = {
+  hours: hoursSchema.optional(),
+  rowStartTime: hhmmSchema.optional(),
+  rowEndTime: hhmmSchema.optional(),
+};
+
 export const createTimeReportBodySchema = z.object({
   date: calendarDateSchema,
   workLocation: z.enum(WorkLocation),
   startTime: hhmmSchema,
   endTime: hhmmSchema,
-  hours: hoursSchema,
+  ...formatDependentFields,
   clientId: z.string().uuid(),
   projectId: z.string().uuid(),
   taskId: z.string().uuid(),
@@ -35,7 +48,7 @@ const timeReportRowSchema = z.object({
   clientId: z.string().uuid(),
   projectId: z.string().uuid(),
   taskId: z.string().uuid(),
-  hours: hoursSchema,
+  ...formatDependentFields,
   description: z.string().trim().max(2000).default(''),
 });
 
