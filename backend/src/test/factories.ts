@@ -45,7 +45,7 @@ export async function createClient(overrides: Partial<Pick<ClientModel, 'name' |
 }
 
 export async function createProject(
-  overrides: Partial<Pick<ProjectModel, 'name' | 'isActive' | 'clientId'>> = {},
+  overrides: Partial<Pick<ProjectModel, 'name' | 'isActive' | 'clientId' | 'reportFormat'>> = {},
 ): Promise<ProjectModel> {
   const clientId = overrides.clientId ?? (await createClient()).id;
 
@@ -54,12 +54,13 @@ export async function createProject(
       name: overrides.name ?? `Project ${crypto.randomUUID()}`,
       clientId,
       ...(overrides.isActive !== undefined ? { isActive: overrides.isActive } : {}),
+      ...(overrides.reportFormat !== undefined ? { reportFormat: overrides.reportFormat } : {}),
     },
   });
 }
 
 export async function createTask(
-  overrides: Partial<Pick<TaskModel, 'name' | 'isActive' | 'projectId'>> = {},
+  overrides: Partial<Pick<TaskModel, 'name' | 'isActive' | 'projectId' | 'status'>> = {},
 ): Promise<TaskModel> {
   const projectId = overrides.projectId ?? (await createProject()).id;
 
@@ -68,6 +69,7 @@ export async function createTask(
       name: overrides.name ?? `Task ${crypto.randomUUID()}`,
       projectId,
       ...(overrides.isActive !== undefined ? { isActive: overrides.isActive } : {}),
+      ...(overrides.status !== undefined ? { status: overrides.status } : {}),
     },
   });
 }
@@ -76,7 +78,16 @@ export async function createTimeReport(
   overrides: Partial<
     Pick<
       TimeReportModel,
-      'userId' | 'clientId' | 'projectId' | 'taskId' | 'date' | 'workLocation' | 'startTime' | 'endTime' | 'description'
+      | 'userId'
+      | 'clientId'
+      | 'projectId'
+      | 'taskId'
+      | 'date'
+      | 'workLocation'
+      | 'startTime'
+      | 'endTime'
+      | 'hours'
+      | 'description'
     >
   > = {},
 ): Promise<TimeReportModel> {
@@ -110,6 +121,7 @@ export async function createTimeReport(
       workLocation: overrides.workLocation ?? 'OFFICE',
       startTime: overrides.startTime ?? new Date('1970-01-01T09:00:00.000Z'),
       endTime: overrides.endTime ?? new Date('1970-01-01T18:00:00.000Z'),
+      hours: overrides.hours ?? 9,
       description: overrides.description ?? 'Test report',
     },
   });

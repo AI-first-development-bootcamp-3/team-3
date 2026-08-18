@@ -1,7 +1,8 @@
-import { render, screen, cleanup, within } from '@testing-library/react'
+import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { App, ConfigProvider } from 'antd'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 import Reports from './Reports'
 import { sessionStore } from '../services/sessionStore'
 import dayjs from '../services/dayjs'
@@ -36,6 +37,7 @@ const savedReports = {
       workLocation: 'CLIENT',
       startTime: '09:00',
       endTime: '18:00',
+      hours: 9,
       description: 'Saved',
       clientName: 'Acme',
       projectName: 'Website',
@@ -69,6 +71,7 @@ function mockReportingOptions() {
   mockFetch({
     '/me/reporting-options': options,
     '/reports?': savedReports,
+    '/absences?': { absences: [] },
   })
 }
 
@@ -76,7 +79,9 @@ function renderHome() {
   return render(
     <ConfigProvider>
       <App>
-        <Reports />
+        <MemoryRouter>
+          <Reports />
+        </MemoryRouter>
       </App>
     </ConfigProvider>,
   )
@@ -167,6 +172,49 @@ describe('Reports home shell', () => {
     expect(await screen.findByText('9 שעות')).toBeInTheDocument()
     expect(screen.getByText('1 פרויקט מדווח')).toBeInTheDocument()
     expect(screen.queryByText('אין דיווחים להצגה')).not.toBeInTheDocument()
+
+    const hoursCard = screen.getByRole('heading', { name: 'שעות חודשיות' }).closest('article')
+    expect(hoursCard).not.toBeNull()
+    expect(within(hoursCard!).getByText('9')).toBeInTheDocument()
+    expect(within(hoursCard!).getByText(/מתוך/)).toBeInTheDocument()
+    expect(screen.queryByText('אין נתונים עדיין')).not.toBeInTheDocument()
+  })
+
+  it('shows an absence type badge for each working day of a saved absence', async () => {
+    signIn()
+    mockFetch({
+      '/me/reporting-options': options,
+      '/reports?': { reports: [] },
+      '/absences?': {
+        absences: [
+          {
+            id: 'a1',
+            userId: 'u1',
+            type: 'SICK',
+            startDate: '2026-08-12',
+            endDate: '2026-08-12',
+            halfDay: false,
+            workingDayCount: 1,
+          },
+        ],
+      },
+    })
+    renderHome()
+
+    expect(await screen.findByText('מחלה 😷')).toBeInTheDocument()
+  })
+
+  it('inserts סופ״ש rows for Fridays and Saturdays that already happened this month', async () => {
+    signIn()
+    mockFetch({
+      '/me/reporting-options': options,
+      '/reports?': { reports: [] },
+      '/absences?': { absences: [] },
+    })
+    renderHome()
+
+    const weekendBadges = await screen.findAllByText('סופ״ש')
+    expect(weekendBadges.length).toBeGreaterThan(0)
   })
 
   it('opens the side panel on דיווח ידני while keeping the home shell visible and interactive', async () => {
@@ -179,14 +227,59 @@ describe('Reports home shell', () => {
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'דיווח ידני' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('heading', { name: 'דיווח שעות' })).toBeInTheDocument()
-    expect(screen.getByText('עדיין אין פרויקטים מדווחים')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'חודש הבא' }))
     expect(screen.getByRole('dialog')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'סגירה' }))
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(screen.getByText('9 שעות')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+    await user.click(screen.getByRole('button', { name: 'חודש קודם' }))
+    expect(await screen.findByText('9 שעות')).toBeInTheDocument()
+  })
+
+  it('opens a saved day filled with the reported project, task, and hours', async () => {
+    signIn()
+    mockReportingOptions()
+    const user = userEvent.setup()
+    renderHome()
+
+    await user.click(await screen.findByRole('button', { name: /17\/08\/26/ }))
+    const dialog = await screen.findByRole('dialog')
+
+    expect(within(dialog).queryByText('עדיין אין פרויקטים מדווחים')).not.toBeInTheDocument()
+    expect(within(dialog).getByLabelText('פרויקט 1')).toHaveValue('client-1:project-1')
+    expect(within(dialog).getByLabelText('משימה 1')).toHaveValue('task-1')
+    expect(within(dialog).getByLabelText('מיקום 1')).toHaveValue('CLIENT')
+    expect(within(dialog).getByLabelText('שעות 1')).toHaveValue('9')
+    expect(within(dialog).getByLabelText('פירוט 1')).toHaveValue('Saved')
+  })
+
+  it('does not stack project cards when a day is closed and opened again after deleting a card', async () => {
+    signIn()
+    mockReportingOptions()
+    const user = userEvent.setup()
+    renderHome()
+
+    await user.click(await screen.findByRole('button', { name: /17\/08\/26/ }))
+    const firstOpen = await screen.findByRole('dialog')
+    expect(within(firstOpen).getByLabelText('שעות 1')).toHaveValue('9')
+
+    await user.click(within(firstOpen).getByRole('button', { name: 'מחיקת פרויקט' }))
+    await user.click(await screen.findByRole('button', { name: 'מחק את הפרויקט' }))
+    expect(within(firstOpen).queryByLabelText('פרויקט 1')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'סגירה' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /17\/08\/26/ }))
+    const secondOpen = await screen.findByRole('dialog')
+    expect(within(secondOpen).getAllByLabelText(/פרויקט/)).toHaveLength(1)
+    expect(within(secondOpen).getByLabelText('שעות 1')).toHaveValue('9')
+    expect(within(secondOpen).getByText('סה״כ 9 שעות')).toBeInTheDocument()
   })
 
   it('opens the side panel from a demo day row with form-derived status', async () => {

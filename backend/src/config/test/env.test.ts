@@ -23,7 +23,7 @@ describe('parseEnv', () => {
       CORS_ORIGIN: ['http://localhost:5173', 'http://localhost:3000'],
       JWT_SECRET: minimalRequired.JWT_SECRET,
       JWT_EXPIRES_IN_SECONDS: 28800,
-      JWT_REMEMBER_ME_EXPIRES_IN_SECONDS: 2592000,
+      JWT_REMEMBER_ME_EXPIRES_IN_SECONDS: 604800,
       LOG_LEVEL: 'debug',
       STORAGE_DIR: './storage/uploads',
       SMTP_PORT: 587,
@@ -152,7 +152,7 @@ describe('parseEnv', () => {
     const env = parseEnv(minimalRequired);
 
     expect(env.JWT_EXPIRES_IN_SECONDS).toBe(28800);
-    expect(env.JWT_REMEMBER_ME_EXPIRES_IN_SECONDS).toBe(2592000);
+    expect(env.JWT_REMEMBER_ME_EXPIRES_IN_SECONDS).toBe(604800);
   });
 
   it('accepts explicit JWT lifetime values', () => {

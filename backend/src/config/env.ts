@@ -21,8 +21,8 @@ const envSchema = z.object({
   // Default session lifetime, in seconds. 28800 = 8 hours.
   JWT_EXPIRES_IN_SECONDS: z.coerce.number().int().positive().default(28800),
   // Lifetime, in seconds, when the caller opts into "remember me" at login.
-  // 2592000 = 30 days.
-  JWT_REMEMBER_ME_EXPIRES_IN_SECONDS: z.coerce.number().int().positive().default(2592000),
+  // 604800 = 7 days.
+  JWT_REMEMBER_ME_EXPIRES_IN_SECONDS: z.coerce.number().int().positive().default(604800),
   // Local-filesystem root for uploaded attachments — a mounted volume in
   // Docker/production. Free-tier container filesystems are ephemeral; see
   // backend/README.md -> File storage.

@@ -5,6 +5,7 @@ import { prisma, type Prisma } from '../config/prisma.js';
 import { AppError } from '../types/errors.js';
 import type { JwtPayload } from '../types/auth.js';
 import { Role } from '../generated/prisma/enums.js';
+import { readSessionCookie } from '../http/sessionCookie.js';
 
 function extractBearerToken(req: Request): string | undefined {
   const header = req.headers.authorization;
@@ -14,6 +15,10 @@ function extractBearerToken(req: Request): string | undefined {
   if (scheme !== 'Bearer' || !token) return undefined;
 
   return token;
+}
+
+function extractSessionToken(req: Request): string | undefined {
+  return extractBearerToken(req) ?? readSessionCookie(req);
 }
 
 /**
@@ -32,7 +37,7 @@ export const authenticate: RequestHandler = async (
   _res: Response,
   next: NextFunction,
 ): Promise<void> => {
-  const token = extractBearerToken(req);
+  const token = extractSessionToken(req);
   if (!token) {
     next(AppError.unauthorized('Authentication required'));
     return;

@@ -4,6 +4,7 @@ import {
   getMyTimeReports,
   postTimeReport,
   postTimeReportBatch,
+  deleteMyTimeReportsForDate,
 } from '../controllers/timeReport.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
@@ -11,6 +12,7 @@ import { readRateLimit, writeRateLimit } from '../middleware/writeRateLimit.midd
 import {
   createTimeReportBatchBodySchema,
   createTimeReportBodySchema,
+  deleteTimeReportsQuerySchema,
   listTimeReportsQuerySchema,
 } from '../types/timeReport.schema.js';
 
@@ -29,12 +31,13 @@ export const timeReportRouter = Router();
  *         application/json:
  *           schema:
  *             type: object
- *             required: [date, workLocation, startTime, endTime, clientId, projectId, taskId, description]
+ *             required: [date, workLocation, startTime, endTime, hours, clientId, projectId, taskId, description]
  *             properties:
  *               date: { type: string, format: date, example: '2026-08-16' }
  *               workLocation: { type: string, enum: [OFFICE, CLIENT, HOME] }
- *               startTime: { type: string, example: '09:00', description: 'HH:mm' }
- *               endTime: { type: string, example: '18:00', description: 'HH:mm' }
+ *               startTime: { type: string, example: '09:00', description: 'Day attendance window start (HH:mm). End earlier than or equal to start means the next calendar day (equal = 24h).' }
+ *               endTime: { type: string, example: '18:00', description: 'Day attendance window end (HH:mm)' }
+ *               hours: { type: number, example: 9, description: 'Project allocation from 0.5 to 24 with at most one decimal place; must not exceed the window' }
  *               clientId: { type: string, format: uuid }
  *               projectId: { type: string, format: uuid }
  *               taskId: { type: string, format: uuid }
@@ -43,7 +46,7 @@ export const timeReportRouter = Router();
  *       201:
  *         description: The persisted time report.
  *       400:
- *         description: Malformed body, invalid interval, or hierarchy mismatch.
+ *         description: Malformed body, hours overflow (`HOURS_EXCEED_WINDOW`), or hierarchy mismatch.
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
@@ -112,6 +115,50 @@ timeReportRouter.get(
   getMyTimeReports,
 );
 
+/**
+ * @openapi
+ * /reports:
+ *   delete:
+ *     summary: Delete every time-report row the caller saved on one calendar date
+ *     tags: [Time reports]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: query
+ *         name: date
+ *         required: true
+ *         schema: { type: string, format: date, example: '2026-08-16' }
+ *     responses:
+ *       204:
+ *         description: The caller's rows for that date were deleted.
+ *       400:
+ *         description: Missing or malformed date.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ *       401:
+ *         description: Authentication required.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ *       404:
+ *         description: The caller has no rows on that date.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ *       429:
+ *         description: Too many report writes from this caller.
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/Error' }
+ */
+timeReportRouter.delete(
+  '/reports',
+  authenticate,
+  writeRateLimit,
+  validate({ query: deleteTimeReportsQuerySchema }),
+  deleteMyTimeReportsForDate,
+);
+
 timeReportRouter.post(
   '/reports',
   authenticate,
@@ -124,7 +171,7 @@ timeReportRouter.post(
  * @openapi
  * /reports/batch:
  *   post:
- *     summary: Create every project row of one day in a single transaction
+ *     summary: Replace every project row of one day in a single transaction
  *     description: >
  *       All rows persist or none do. Row-level problems are reported as
  *       `rows.<index>.<field>` so the client can mark the failing card.
@@ -136,29 +183,30 @@ timeReportRouter.post(
  *         application/json:
  *           schema:
  *             type: object
- *             required: [date, rows]
+ *             required: [date, startTime, endTime, rows]
  *             properties:
  *               date: { type: string, format: date, example: '2026-08-16' }
+ *               startTime: { type: string, example: '09:00', description: 'Shared day window start (HH:mm). Overnight when end ≤ start.' }
+ *               endTime: { type: string, example: '18:00', description: 'Shared day window end (HH:mm)' }
  *               rows:
  *                 type: array
  *                 minItems: 1
  *                 maxItems: 20
  *                 items:
  *                   type: object
- *                   required: [workLocation, startTime, endTime, clientId, projectId, taskId]
+ *                   required: [workLocation, hours, clientId, projectId, taskId]
  *                   properties:
  *                     workLocation: { type: string, enum: [OFFICE, CLIENT, HOME] }
- *                     startTime: { type: string, example: '09:00', description: 'HH:mm' }
- *                     endTime: { type: string, example: '13:00', description: 'HH:mm' }
+ *                     hours: { type: number, example: 4, description: 'Allocation with at most one decimal place; sum of rows must not exceed the window' }
  *                     clientId: { type: string, format: uuid }
  *                     projectId: { type: string, format: uuid }
  *                     taskId: { type: string, format: uuid }
  *                     description: { type: string, description: 'Optional' }
  *     responses:
  *       201:
- *         description: The persisted rows, in submitted order.
+ *         description: The persisted rows, in submitted order, each copying the request window.
  *       400:
- *         description: Malformed body, invalid interval, or hierarchy mismatch on any row.
+ *         description: Malformed body, hours overflow (`HOURS_EXCEED_WINDOW`), or hierarchy mismatch on any row.
  *         content:
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }

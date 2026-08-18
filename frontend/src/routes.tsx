@@ -1,25 +1,23 @@
-import { createBrowserRouter } from "react-router-dom";
-import Layout from "./pages/Layout";
-import Reports from "./pages/Reports";
-import Absences from "./pages/Absences";
-import AdminOverview from "./pages/admin/AdminOverview";
-import AdminUsers from "./pages/admin/AdminUsers";
-import AdminClients from "./pages/admin/AdminClients";
-import AdminProjects from "./pages/admin/AdminProjects";
-import AdminTasks from "./pages/admin/AdminTasks";
-import AdminAssignments from "./pages/admin/AdminAssignments";
-import Login from "./pages/Login";
-import ChangePassword from "./pages/ChangePassword";
-import NotFound from "./pages/NotFound";
-import SampleForm from "./components/SampleForm";
-import AdminShell from "./components/AdminShell";
-import RequireAuth from "./components/RequireAuth";
-import RequireRole from "./components/RequireRole";
-import RequireGuest from "./components/RequireGuest";
+import { createBrowserRouter, Navigate } from 'react-router-dom'
+import Layout from './pages/Layout'
+import Reports from './pages/Reports'
+import AdminUsers from './pages/admin/AdminUsers'
+import AdminClients from './pages/admin/AdminClients'
+import AdminProjects from './pages/admin/AdminProjects'
+import AdminTasks from './pages/admin/AdminTasks'
+import AdminAssignments from './pages/admin/AdminAssignments'
+import AdminHourSettings from './pages/admin/AdminHourSettings'
+import Login from './pages/Login'
+import ChangePassword from './pages/ChangePassword'
+import NotFound from './pages/NotFound'
+import AdminShell from './components/AdminShell'
+import RequireAuth from './components/RequireAuth'
+import RequireRole from './components/RequireRole'
+import RequireGuest from './components/RequireGuest'
 
 const router = createBrowserRouter([
   {
-    path: "/",
+    path: '/',
     element: <Layout />,
     children: [
       {
@@ -31,15 +29,7 @@ const router = createBrowserRouter([
         ),
       },
       {
-        path: "absences",
-        element: (
-          <RequireAuth>
-            <Absences />
-          </RequireAuth>
-        ),
-      },
-      {
-        path: "admin",
+        path: 'admin',
         element: (
           <RequireAuth>
             <RequireRole role="admin">
@@ -48,16 +38,17 @@ const router = createBrowserRouter([
           </RequireAuth>
         ),
         children: [
-          { index: true, element: <AdminOverview /> },
-          { path: "users", element: <AdminUsers /> },
-          { path: "clients", element: <AdminClients /> },
-          { path: "projects", element: <AdminProjects /> },
-          { path: "tasks", element: <AdminTasks /> },
-          { path: "assignments", element: <AdminAssignments /> },
+          { index: true, element: <Navigate to="assignments" replace /> },
+          { path: 'assignments', element: <AdminAssignments /> },
+          { path: 'hour-settings', element: <AdminHourSettings /> },
+          { path: 'users', element: <AdminUsers /> },
+          { path: 'clients', element: <AdminClients /> },
+          { path: 'projects', element: <AdminProjects /> },
+          { path: 'tasks', element: <AdminTasks /> },
         ],
       },
       {
-        path: "login",
+        path: 'login',
         element: (
           <RequireGuest>
             <Login />
@@ -65,18 +56,16 @@ const router = createBrowserRouter([
         ),
       },
       {
-        path: "change-password",
+        path: 'change-password',
         element: (
           <RequireAuth>
             <ChangePassword />
           </RequireAuth>
         ),
       },
-      // Not in the main nav Menu - a living form-pattern reference, see SCRUM-37.
-      { path: "dev/sample-form", element: <SampleForm /> },
-      { path: "*", element: <NotFound /> },
+      { path: '*', element: <NotFound /> },
     ],
   },
-]);
+])
 
-export default router;
+export default router

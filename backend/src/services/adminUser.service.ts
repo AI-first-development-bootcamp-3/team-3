@@ -57,6 +57,18 @@ async function sendCredentialEmail(to: string, temporaryPassword: string): Promi
 }
 
 /**
+ * Admin management needs inactive users in the assign pool and user list,
+ * unlike normal app queries — same soft-delete opt-out as listClients.
+ */
+export async function listUsers(): Promise<CreatedUser[]> {
+  return prisma.user.findMany({
+    where: { isActive: undefined } as unknown as Prisma.UserWhereInput,
+    select: { id: true, email: true, displayName: true, role: true, isActive: true, mustChangePassword: true },
+    orderBy: { displayName: 'asc' },
+  });
+}
+
+/**
  * Creates a user with a temporary password the caller must change before
  * doing anything else (SCRUM-209's mustChangePassword defaults to true).
  * Duplicate email is a 409, not a 400 - it's a conflict with existing state,
@@ -64,6 +76,7 @@ async function sendCredentialEmail(to: string, temporaryPassword: string): Promi
  * a separate existence check, so two concurrent requests for the same email
  * can't both pass a check-then-create race.
  */
+
 export async function createUser(input: CreateUserInput): Promise<CreateUserResult> {
   const temporaryPassword = input.temporaryPassword ?? generateTemporaryPassword();
   const passwordHash = await bcrypt.hash(temporaryPassword, 10);

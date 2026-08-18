@@ -47,7 +47,7 @@ describe('sessionStore', () => {
 
     sessionStore.getState().rehydrateSession()
 
-    expect(sessionStore.getState().token).toBe('token-a')
+    expect(sessionStore.getState().token).toBe('cookie')
     expect(sessionStore.getState().user).toEqual(user)
   })
 
@@ -60,7 +60,7 @@ describe('sessionStore', () => {
   })
 
   it('rehydrateSession discards a malformed session', () => {
-    window.localStorage.setItem('abra.session', JSON.stringify({ user, expiresAt: future }))
+    window.localStorage.setItem('abra.session', JSON.stringify({ expiresAt: future }))
 
     sessionStore.getState().rehydrateSession()
 
@@ -106,7 +106,7 @@ describe('sessionStore expiry timer', () => {
     const redirectSpy = vi.spyOn(navigation, 'redirectToLogin').mockImplementation(() => {})
 
     sessionStore.getState().setSession(user, 'token-a', new Date(Date.now() + 5000).toISOString(), false)
-    expect(sessionStore.getState().token).toBe('token-a')
+    expect(sessionStore.getState().token).toBe('cookie')
 
     vi.advanceTimersByTime(5001)
 
@@ -125,7 +125,7 @@ describe('sessionStore expiry timer', () => {
     sessionStore.getState().setSession(user, 'token-a', new Date(Date.now() + 5000).toISOString(), false)
     vi.advanceTimersByTime(4000)
 
-    expect(sessionStore.getState().token).toBe('token-a')
+    expect(sessionStore.getState().token).toBe('cookie')
     expect(redirectSpy).not.toHaveBeenCalled()
   })
 
@@ -143,7 +143,7 @@ describe('sessionStore expiry timer', () => {
     // Past the first session's would-be expiry, well short of the second's.
     vi.advanceTimersByTime(6000)
 
-    expect(sessionStore.getState().token).toBe('token-b')
+    expect(sessionStore.getState().token).toBe('cookie')
     expect(notifySpy).not.toHaveBeenCalled()
     expect(redirectSpy).not.toHaveBeenCalled()
   })
@@ -159,7 +159,7 @@ describe('sessionStore expiry timer', () => {
 
     vi.advanceTimersByTime(0)
 
-    expect(sessionStore.getState().token).toBe('token-a')
+    expect(sessionStore.getState().token).toBe('cookie')
     expect(notifySpy).not.toHaveBeenCalled()
     expect(redirectSpy).not.toHaveBeenCalled()
   })
@@ -175,7 +175,7 @@ describe('sessionStore expiry timer', () => {
     // A naive setTimeout(delay) with this delay overflows and fires immediately
     // in Node/browsers. Advancing a little should NOT end the session.
     vi.advanceTimersByTime(1000)
-    expect(sessionStore.getState().token).toBe('token-a')
+    expect(sessionStore.getState().token).toBe('cookie')
     expect(notifySpy).not.toHaveBeenCalled()
 
     // Advancing through the remainder of the real delay should still end it.
@@ -242,7 +242,7 @@ describe('sessionStore cross-tab sync via storage events', () => {
 
     dispatchSessionStorageEvent(JSON.stringify({ user, token: 'token-from-other-tab', expiresAt: future }))
 
-    expect(sessionStore.getState().token).toBe('token-a')
+    expect(sessionStore.getState().token).toBe('cookie')
     expect(redirectSpy).not.toHaveBeenCalled()
   })
 
@@ -252,7 +252,7 @@ describe('sessionStore cross-tab sync via storage events', () => {
 
     dispatchSessionStorageEvent(null, 'some.other.key')
 
-    expect(sessionStore.getState().token).toBe('token-a')
+    expect(sessionStore.getState().token).toBe('cookie')
     expect(redirectSpy).not.toHaveBeenCalled()
   })
 })

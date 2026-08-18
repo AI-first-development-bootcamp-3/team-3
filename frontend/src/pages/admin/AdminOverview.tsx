@@ -1,71 +1,72 @@
-import { Card, Row, Col, Statistic } from 'antd'
-import { UserOutlined, ProjectOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons'
+import { Link } from 'react-router-dom'
+import kpiBriefcase from '../../assets/home/kpi-briefcase.svg'
+import kpiClock from '../../assets/home/kpi-clock.svg'
+import kpiSun from '../../assets/home/kpi-sun.svg'
+import tagBuilding from '../../assets/home/tag-building.svg'
+import tagNote from '../../assets/home/tag-note.svg'
+import tagCheck from '../../assets/home/tag-check-green.svg'
+
+const HUB = [
+  {
+    to: '/admin/users',
+    title: 'משתמשים',
+    detail: 'יצירה, עריכה והפעלה של חשבונות',
+    icon: kpiSun,
+  },
+  {
+    to: '/admin/clients',
+    title: 'לקוחות',
+    detail: 'ניהול לקוחות פעילים ולא פעילים',
+    icon: tagBuilding,
+  },
+  {
+    to: '/admin/projects',
+    title: 'פרויקטים',
+    detail: 'פרויקטים תחת לקוחות',
+    icon: kpiBriefcase,
+  },
+  {
+    to: '/admin/tasks',
+    title: 'משימות',
+    detail: 'משימות לדיווח שעות',
+    icon: tagNote,
+  },
+  {
+    to: '/admin/assignments',
+    title: 'שיוכים',
+    detail: 'שיוך עובדים למשימות',
+    icon: tagCheck,
+  },
+] as const
 
 function AdminOverview() {
   return (
-    <div dir="rtl">
-      <h2 style={{ marginBottom: 32 }}>סקירה כללית</h2>
-
-      <Row gutter={[16, 16]}>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="משתמשים פעילים"
-              value={24}
-              prefix={<UserOutlined />}
-              valueStyle={{ color: '#0c69ff' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="פרויקטים פעילים"
-              value={8}
-              prefix={<ProjectOutlined />}
-              valueStyle={{ color: '#0c69ff' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="משימות סיימות"
-              value={156}
-              prefix={<CheckCircleOutlined />}
-              valueStyle={{ color: '#22c55e' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="משימות בביצוע"
-              value={42}
-              prefix={<ClockCircleOutlined />}
-              valueStyle={{ color: '#f59e0b' }}
-            />
-          </Card>
-        </Col>
-      </Row>
-
-      <Row gutter={[16, 16]} style={{ marginTop: 32 }}>
-        <Col xs={24} lg={12}>
-          <Card title="פעילות אחרונה" style={{ height: 300 }}>
-            <div style={{ color: '#999', textAlign: 'center', paddingTop: 100 }}>
-              דיוק - פעילות תוצג כאן
+    <section className="admin-hub">
+      <h1 className="admin-hub__title">ניהול המערכת</h1>
+      <p className="admin-hub__lead">בחרו תחום לניהול. נעילת חודש תתווסף בכרטיס נפרד.</p>
+      <div className="admin-hub__grid">
+        {HUB.map((card) => (
+          <Link key={card.to} className="admin-hub__card" to={card.to}>
+            <span className="admin-hub__icon" aria-hidden="true">
+              <img src={card.icon} alt="" width={24} height={24} />
+            </span>
+            <div className="admin-hub__card-copy">
+              <h2>{card.title}</h2>
+              <p>{card.detail}</p>
             </div>
-          </Card>
-        </Col>
-        <Col xs={24} lg={12}>
-          <Card title="סטטוס פרויקטים" style={{ height: 300 }}>
-            <div style={{ color: '#999', textAlign: 'center', paddingTop: 100 }}>
-              דיוק - סטטוסים יוצגו כאן
-            </div>
-          </Card>
-        </Col>
-      </Row>
-    </div>
+          </Link>
+        ))}
+        <div className="admin-hub__card admin-hub__card--disabled">
+          <span className="admin-hub__icon" aria-hidden="true">
+            <img src={kpiClock} alt="" width={24} height={24} />
+          </span>
+          <div className="admin-hub__card-copy">
+            <h2>נעילת חודש</h2>
+            <p>יופיע כשהנעילה תהיה זמינה</p>
+          </div>
+        </div>
+      </div>
+    </section>
   )
 }
 

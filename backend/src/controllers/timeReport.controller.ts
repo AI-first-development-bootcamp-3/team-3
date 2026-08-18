@@ -2,6 +2,7 @@ import type { RequestHandler } from 'express';
 import {
   createTimeReport,
   createTimeReportBatch,
+  deleteTimeReportsForDate,
   listReportingOptions,
   listTimeReportsForMonth,
 } from '../services/timeReport.service.js';
@@ -9,6 +10,7 @@ import { AppError } from '../types/errors.js';
 import type {
   CreateTimeReportBatchBody,
   CreateTimeReportBody,
+  DeleteTimeReportsQuery,
   ListTimeReportsQuery,
 } from '../types/timeReport.schema.js';
 
@@ -65,6 +67,20 @@ export const getMyReportingOptions: RequestHandler = async (req, res, next) => {
     }
     const options = await listReportingOptions();
     res.status(200).json(options);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteMyTimeReportsForDate: RequestHandler = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      next(AppError.unauthorized());
+      return;
+    }
+    const { date } = req.query as unknown as DeleteTimeReportsQuery;
+    await deleteTimeReportsForDate(req.user.sub, date);
+    res.status(204).send();
   } catch (error) {
     next(error);
   }

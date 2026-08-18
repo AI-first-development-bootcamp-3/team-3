@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Dayjs } from 'dayjs'
 import ManualReport, { type ManualReportHeaderMeta } from '../components/ManualReport'
+import UserMenu from '../components/UserMenu'
 import ManualReportModal from '../components/ManualReportModal'
 import dayjs from '../services/dayjs'
+import { listAbsences } from '../services/absences'
 import { listReports } from '../services/reports'
 import { sessionStore } from '../services/sessionStore'
+import { rememberVisitWeekends } from '../lib/homeVisitWeekends'
+import type { Absence, TimeReportListItem } from '../types'
 import abraLogo from '../assets/home/abra-logo.svg'
 import addCircle from '../assets/home/add-circle.svg'
 import playIcon from '../assets/home/play.svg'
@@ -26,7 +30,8 @@ import {
   isHomeDemo,
   type DemoDay,
 } from './homeDemoData'
-import { mapReportsToHomeDays } from './monthlyReportDays'
+import { buildHomeDays, weekendDatesForVisibleMonth } from './monthlyReportDays'
+import { buildMonthKpis, type MonthKpis } from './monthKpis'
 import './Reports.css'
 
 const KPI_CARDS = [
@@ -39,7 +44,10 @@ const KPI_CARDS = [
 
 type ModalState = {
   isoDate: string
+  sessionKey: number
   headerMeta: ManualReportHeaderMeta
+  reports: TimeReportListItem[]
+  absences: Absence[]
 }
 
 function headerFromDay(day: DemoDay): ManualReportHeaderMeta {
@@ -50,20 +58,45 @@ function headerFromDay(day: DemoDay): ManualReportHeaderMeta {
   }
 }
 
+function absencesCoveringDate(absences: Absence[], isoDate: string): Absence[] {
+  return absences.filter((absence) => absence.startDate <= isoDate && absence.endDate >= isoDate)
+}
+
 function Reports() {
   const demo = isHomeDemo()
   const [month, setMonth] = useState<Dayjs>(() => (demo ? dayjs(DEMO_MONTH) : dayjs()))
   const [modal, setModal] = useState<ModalState | null>(null)
   const [savedDays, setSavedDays] = useState<DemoDay[]>([])
+  const [monthReports, setMonthReports] = useState<TimeReportListItem[]>([])
+  const [monthAbsences, setMonthAbsences] = useState<Absence[]>([])
+  const [monthKpis, setMonthKpis] = useState<MonthKpis | null>(null)
   const [listLoading, setListLoading] = useState(
-    () => !isHomeDemo() && Boolean(sessionStore.getState().token),
+    () => !isHomeDemo() && Boolean(sessionStore.getState().user),
   )
 
   const fetchSavedDays = useCallback(
     async (targetMonth: Dayjs) => {
-      if (demo || !sessionStore.getState().token) return [] as DemoDay[]
-      const { reports } = await listReports(targetMonth.month() + 1, targetMonth.year())
-      return mapReportsToHomeDays(reports)
+      if (demo || !sessionStore.getState().user) return [] as DemoDay[]
+      const year = targetMonth.year()
+      const monthNumber = targetMonth.month() + 1
+      const today = dayjs().format('YYYY-MM-DD')
+      const userId = sessionStore.getState().user?.id
+      const [{ reports }, absences] = await Promise.all([
+        listReports(monthNumber, year),
+        listAbsences(monthNumber, year)
+          .then((result) => result.absences)
+          .catch(() => [] as Absence[]),
+      ])
+      setMonthReports(reports)
+      setMonthAbsences(absences)
+      setMonthKpis(buildMonthKpis({ reports, absences, year, month: monthNumber, today }))
+      const remembered = userId ? rememberVisitWeekends(userId, today) : []
+      return buildHomeDays({
+        reports,
+        absences,
+        weekendDates: weekendDatesForVisibleMonth(year, monthNumber, today, remembered),
+        monthPrefix: `${year}-${String(monthNumber).padStart(2, '0')}`,
+      })
     },
     [demo],
   )
@@ -72,12 +105,15 @@ function Reports() {
     try {
       setSavedDays(await fetchSavedDays(month))
     } catch {
+      setMonthReports([])
+      setMonthAbsences([])
+      setMonthKpis(null)
       setSavedDays([])
     }
   }, [fetchSavedDays, month])
 
   useEffect(() => {
-    if (demo || !sessionStore.getState().token) return
+    if (demo || !sessionStore.getState().user) return
 
     let cancelled = false
     void fetchSavedDays(month)
@@ -85,7 +121,12 @@ function Reports() {
         if (!cancelled) setSavedDays(days)
       })
       .catch(() => {
-        if (!cancelled) setSavedDays([])
+        if (!cancelled) {
+          setMonthReports([])
+          setMonthAbsences([])
+          setMonthKpis(null)
+          setSavedDays([])
+        }
       })
       .finally(() => {
         if (!cancelled) setListLoading(false)
@@ -97,7 +138,7 @@ function Reports() {
   }, [demo, month, fetchSavedDays])
 
   const shiftMonth = (delta: number) => {
-    if (!demo && sessionStore.getState().token) setListLoading(true)
+    if (!demo && sessionStore.getState().user) setListLoading(true)
     setMonth((current) => current.add(delta, 'month'))
   }
 
@@ -105,7 +146,10 @@ function Reports() {
     const date = isoDate ?? dayjs().format('YYYY-MM-DD')
     setModal({
       isoDate: date,
+      sessionKey: Date.now(),
       headerMeta: headerMeta ?? { status: 'חסר', tone: 'missing', tags: [] },
+      reports: monthReports.filter((report) => report.date === date),
+      absences: absencesCoveringDate(monthAbsences, date),
     })
   }
 
@@ -130,7 +174,9 @@ function Reports() {
               <div className="home-shell__day-tags">
                 <span className={`home-shell__tag home-shell__tag--${day.tone}`}>
                   {day.status}
-                  <img src={DEMO_STATUS_ICONS[day.tone]} alt="" />
+                  {day.tone !== 'weekend' && day.tone !== 'absence' ? (
+                    <img src={DEMO_STATUS_ICONS[day.tone]} alt="" />
+                  ) : null}
                 </span>
                 {day.tags.length > 0 ? <span className="home-shell__tag-sep" aria-hidden="true" /> : null}
                 {day.tags.map((tag) => (
@@ -154,10 +200,13 @@ function Reports() {
     <div className={`reports-layout${modal ? ' reports-layout--panel-open' : ''}`}>
       <div className="home-shell">
         <header className="home-shell__header">
-          <div className="home-shell__brand">
-            <img src={abraLogo} alt="abra" className="home-shell__logo" width={107} height={24} />
-            <span className="home-shell__brand-divider" aria-hidden="true" />
-            <h1 className="home-shell__title">דיווח שעות</h1>
+          <div className="home-shell__toolbar">
+            <UserMenu />
+            <div className="home-shell__brand">
+              <img src={abraLogo} alt="abra" className="home-shell__logo" width={107} height={24} />
+              <span className="home-shell__brand-divider" aria-hidden="true" />
+              <h1 className="home-shell__title">דיווח שעות</h1>
+            </div>
           </div>
 
           <div className="home-shell__month" role="group" aria-label="בחירת חודש">
@@ -208,7 +257,7 @@ function Reports() {
         <div className="home-shell__body">
           <section className="home-shell__kpis" aria-label="סיכום חודשי">
             {KPI_CARDS.map((card) => {
-              const value = demo ? DEMO_KPIS[card.label] : undefined
+              const value = demo ? DEMO_KPIS[card.label] : monthKpis?.[card.label]
               return (
                 <article key={card.label} className="home-shell__kpi">
                   <div className="home-shell__kpi-top">
@@ -260,8 +309,10 @@ function Reports() {
       <ManualReportModal open={modal !== null} onClose={closeManualReport} labelId="manual-report-day-title">
         {modal ? (
           <ManualReport
-            key={modal.isoDate}
+            key={modal.sessionKey}
             initialDate={modal.isoDate}
+            initialReports={modal.reports}
+            initialAbsences={modal.absences}
             headerMeta={modal.headerMeta}
             onClose={closeManualReport}
             onSaved={refreshSavedDays}

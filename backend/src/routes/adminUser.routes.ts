@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+  getAdminUsers,
   patchAdminUserResetPassword,
   patchAdminUserRole,
   patchAdminUserStatus,
@@ -7,6 +8,7 @@ import {
 } from '../controllers/adminUser.controller.js';
 import { authenticate, requireRole } from '../middleware/auth.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
+import { readRateLimit } from '../middleware/writeRateLimit.middleware.js';
 import { Role } from '../generated/prisma/enums.js';
 import {
   changeRoleBodySchema,
@@ -16,6 +18,23 @@ import {
 } from '../types/adminUser.schema.js';
 
 export const adminUserRouter = Router();
+
+/**
+ * @openapi
+ * /admin/users:
+ *   get:
+ *     summary: List all users (admin only)
+ *     tags: [Admin]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: All users including inactive.
+ *       401:
+ *         description: Authentication required.
+ *       403:
+ *         description: Caller is authenticated but not an administrator.
+ */
+adminUserRouter.get('/admin/users', readRateLimit, authenticate, requireRole(Role.ADMIN), getAdminUsers);
 
 /**
  * @openapi
