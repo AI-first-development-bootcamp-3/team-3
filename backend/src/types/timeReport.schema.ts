@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { WorkLocation } from '../generated/prisma/enums.js';
 import { isOneDecimalHours } from '../lib/attendanceWindow.js';
 
-const calendarDateSchema = z
+export const calendarDateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD');
 

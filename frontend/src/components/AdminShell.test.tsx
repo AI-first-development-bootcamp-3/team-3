@@ -28,6 +28,7 @@ function renderAdmin(path = '/admin/assignments') {
           <Route path="assignments" element={<div>assignments page</div>} />
           <Route path="hour-settings" element={<div>hour settings page</div>} />
           <Route path="users" element={<div>users page</div>} />
+          <Route path="reports" element={<div>employee reports page</div>} />
           <Route path="month-lock" element={<div>month lock page</div>} />
         </Route>
       </Routes>
@@ -50,6 +51,7 @@ describe('AdminShell', () => {
       '/admin/hour-settings',
     )
     expect(within(nav).getByRole('link', { name: 'משתמשים' })).toHaveAttribute('href', '/admin/users')
+    expect(within(nav).getByRole('link', { name: 'דיווחי עובדים' })).toHaveAttribute('href', '/admin/reports')
     expect(within(nav).getByRole('link', { name: 'נעילת חודש' })).toHaveAttribute('href', '/admin/month-lock')
     expect(screen.getByText('דניאל מוצא')).toBeInTheDocument()
     expect(screen.getByText('מנהל מערכת')).toBeInTheDocument()

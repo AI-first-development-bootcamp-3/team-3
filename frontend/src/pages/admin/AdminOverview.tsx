@@ -51,6 +51,12 @@ const HUB = [
     detail: 'נעילה ופתיחה של חודשי דיווח',
     icon: kpiClock,
   },
+  {
+    to: '/admin/reports',
+    title: 'דיווחי עובדים',
+    detail: 'עריכת דיווחים עם יומן שינויים',
+    icon: tagNote,
+  },
 ] as const
 
 function AdminOverview() {

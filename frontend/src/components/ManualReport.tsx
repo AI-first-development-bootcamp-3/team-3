@@ -6,7 +6,14 @@ import { ApiError } from '../services/apiClient'
 import dayjs from '../services/dayjs'
 import { deleteAbsence } from '../services/absences'
 import { createReportBatch, deleteReportsForDate, getReportingOptions, toReportRow } from '../services/reports'
-import type { Absence, ReportingOptions, TimeReportListItem, WorkLocation } from '../types'
+import type {
+  Absence,
+  CreateReportBatchInput,
+  CreateReportBatchResult,
+  ReportingOptions,
+  TimeReportListItem,
+  WorkLocation,
+} from '../types'
 import { translateReportApiMessage } from '../lib/reportApiMessages'
 import {
   attendanceWindowHours,
@@ -82,6 +89,10 @@ const TOO_MANY_SAVES = {
   title: 'שמרתם יותר מדי פעמים ברצף',
   detail: 'המתינו כמה דקות ונסו לשמור את הדיווח שוב.',
 }
+const MONTH_LOCKED = {
+  title: 'החודש נעול',
+  detail: 'לא ניתן לדווח או למחוק דיווחים בחודש נעול. פנו למנהל המערכת.',
+}
 const SAVE_FAILED = {
   title: 'משהו השתבש. נסו שוב.',
   detail: 'לא הצלחנו לשמור את הדיווח. בדקו את החיבור ונסו שוב.',
@@ -104,6 +115,11 @@ interface Props {
   initialReports?: TimeReportListItem[]
   initialAbsences?: Absence[]
   headerMeta?: ManualReportHeaderMeta
+  /** Hide the absence tab when an admin is correcting hours for someone else. */
+  allowAbsenceTab?: boolean
+  loadOptions?: () => Promise<ReportingOptions>
+  saveBatch?: (body: CreateReportBatchInput) => Promise<CreateReportBatchResult>
+  deleteDay?: (date: string) => Promise<void>
 }
 
 const STATUS_ICONS: Record<ManualReportHeaderTone, string> = {
@@ -320,6 +336,10 @@ function ManualReport({
   initialReports,
   initialAbsences,
   headerMeta,
+  allowAbsenceTab = true,
+  loadOptions = getReportingOptions,
+  saveBatch = createReportBatch,
+  deleteDay = deleteReportsForDate,
 }: Props) {
   const { message } = App.useApp()
   const [options, setOptions] = useState<ReportingOptions | null>(null)
@@ -358,7 +378,7 @@ function ManualReport({
 
   useEffect(() => {
     let cancelled = false
-    getReportingOptions()
+    loadOptions()
       .then((tree) => {
         if (!cancelled) setOptions(tree)
       })
@@ -368,7 +388,7 @@ function ManualReport({
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [loadOptions])
 
   const dayTotal = useMemo(
     () => attendanceWindowHours(day.dayStart ?? '', day.dayEnd ?? ''),
@@ -468,7 +488,7 @@ function ManualReport({
       return
     }
     try {
-      await createReportBatch({
+      await saveBatch({
         date: values.date,
         startTime: values.dayStart,
         endTime: values.dayEnd,
@@ -500,6 +520,10 @@ function ManualReport({
         setBanner(code === 'HOURS_EXCEED_WINDOW' ? overflowBanner(reported, dayTotal) : MISSING_DETAILS)
         return
       }
+      if (error instanceof ApiError && error.status === 409) {
+        setBanner(MONTH_LOCKED)
+        return
+      }
       setBanner(error instanceof ApiError && error.status === 429 ? TOO_MANY_SAVES : SAVE_FAILED)
     }
   }
@@ -517,17 +541,19 @@ function ManualReport({
     if (!date) return
     try {
       if ((initialReports?.length ?? 0) > 0) {
-        await deleteReportsForDate(date)
+        await deleteDay(date)
       }
-      for (const absence of dayAbsences) {
-        await deleteAbsence(absence.id)
+      if (allowAbsenceTab) {
+        for (const absence of dayAbsences) {
+          await deleteAbsence(absence.id)
+        }
       }
       message.success('הדיווח נמחק')
       onSaved?.()
       reset(freshDay(date))
       onClose()
-    } catch {
-      setBanner(SAVE_FAILED)
+    } catch (error) {
+      setBanner(error instanceof ApiError && error.status === 409 ? MONTH_LOCKED : SAVE_FAILED)
     }
   }
 
@@ -544,7 +570,7 @@ function ManualReport({
     )
   }
 
-  const tabs = (
+  const tabs = allowAbsenceTab ? (
         <div className="manual-report__tabs" role="tablist" aria-label="סוג דיווח">
           <button
             type="button"
@@ -565,7 +591,7 @@ function ManualReport({
             דיווח העדרות
           </button>
         </div>
-  )
+  ) : null
 
   const topChrome = (
         <header className="manual-report__top">
