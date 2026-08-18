@@ -72,6 +72,7 @@ model User {
   loginAttempts      LoginAttempt[]
   taskAssignments    TaskAssignment[]
   workClockSessions  WorkClockSession[]
+  managedProjects    Project[]         @relation("ProjectManager")
 
   @@map("users")
 }
@@ -123,10 +124,16 @@ model Project {
   /// project to per-row clock pairs. See
   /// openspec/changes/report-format-aware-entry/design.md, D8.
   reportFormat ReportFormat @default(SUM_HOURS)
+  description  String       @default("")
+  /// Inclusive calendar window. Null on older rows means unbounded (no gate).
+  startDate    DateTime?    @db.Date
+  endDate      DateTime?    @db.Date
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   clientId     String
   client       Client       @relation(fields: [clientId], references: [id])
+  managerId    String?
+  manager      User?        @relation("ProjectManager", fields: [managerId], references: [id])
   tasks        Task[]
   timeReports  TimeReport[]
 

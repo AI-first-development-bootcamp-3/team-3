@@ -202,9 +202,32 @@
 }
 
 .admin-pill--more {
+  position: relative;
   background: #dce8ff;
   color: #2f6bff;
   font-weight: 700;
+  cursor: default;
+}
+
+.admin-pill__everyone {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  inset-inline-end: 0;
+  z-index: 20;
+  min-width: 200px;
+  max-width: 320px;
+  padding: 8px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(27 42 74 / 12%);
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.admin-pill--more:hover .admin-pill__everyone,
+.admin-pill--more:focus-visible .admin-pill__everyone {
+  display: flex;
 }
 
 .admin-row-menu {
@@ -323,6 +346,10 @@
   color: #fff;
 }
 
+.admin-modal__icon--tile {
+  border-radius: 12px;
+}
+
 .admin-modal__icon svg {
   width: 20px;
   height: 20px;
@@ -439,6 +466,15 @@
   font-size: 16px;
   font-weight: 700;
   cursor: not-allowed;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.admin-modal__submit svg {
+  width: 20px;
+  height: 20px;
 }
 
 .admin-modal__submit--ready {

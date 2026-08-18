@@ -54,33 +54,89 @@ describe('POST /admin/projects', () => {
 
   it('creates a project under an active client', async () => {
     const admin = await createUser({ role: Role.ADMIN });
+    const manager = await createUser({ role: Role.EMPLOYEE, displayName: 'יואב' });
     const client = await createClient({ name: 'Acme' });
 
     const response = await request(app)
       .post('/admin/projects')
       .set('Authorization', `Bearer ${tokenFor(admin)}`)
-      .send({ name: 'Atlas', clientId: client.id });
+      .send({
+        name: 'Atlas',
+        clientId: client.id,
+        managerId: manager.id,
+        startDate: '2025-09-20',
+        endDate: '2026-02-20',
+        description: 'Cargo work',
+      });
 
     expect(response.status).toBe(201);
     expect(response.body.project).toMatchObject({
       name: 'Atlas',
       clientId: client.id,
       clientName: 'Acme',
+      managerId: manager.id,
+      managerName: 'יואב',
+      startDate: '2025-09-20',
+      endDate: '2026-02-20',
+      description: 'Cargo work',
       isActive: true,
-      // Default flipped to SUM_HOURS by report-format-aware-entry (design D8):
-      // a project nobody configured keeps reporting the way it does today.
       reportFormat: ReportFormat.SUM_HOURS,
     });
   });
 
+  it('rejects an inactive manager with 400', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+    const manager = await createUser({ role: Role.EMPLOYEE, isActive: false });
+    const client = await createClient({ name: 'Acme' });
+
+    const response = await request(app)
+      .post('/admin/projects')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({
+        name: 'Atlas',
+        clientId: client.id,
+        managerId: manager.id,
+        startDate: '2025-09-20',
+        endDate: '2026-02-20',
+      });
+
+    expect(response.status).toBe(400);
+  });
+
+  it('rejects an end date before the start date with 400', async () => {
+    const admin = await createUser({ role: Role.ADMIN });
+    const manager = await createUser({ role: Role.EMPLOYEE });
+    const client = await createClient();
+
+    const response = await request(app)
+      .post('/admin/projects')
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({
+        name: 'Atlas',
+        clientId: client.id,
+        managerId: manager.id,
+        startDate: '2026-02-20',
+        endDate: '2025-09-20',
+      });
+
+    expect(response.status).toBe(400);
+  });
+
   it('rejects an inactive client with 400', async () => {
     const admin = await createUser({ role: Role.ADMIN });
+    const manager = await createUser({ role: Role.EMPLOYEE });
     const client = await createClient({ name: 'Gone', isActive: false });
 
     const response = await request(app)
       .post('/admin/projects')
       .set('Authorization', `Bearer ${tokenFor(admin)}`)
-      .send({ name: 'Atlas', clientId: client.id });
+      .send({
+        name: 'Atlas',
+        clientId: client.id,
+        managerId: manager.id,
+        startDate: '2025-09-20',
+        endDate: '2026-02-20',
+      });
 
     expect(response.status).toBe(400);
   });

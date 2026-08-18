@@ -13,7 +13,7 @@ function jsonResponse(body: unknown, status = 200) {
   }
 }
 
-const projects = [
+    const projects = [
   {
     id: 'p1',
     name: 'Cargo',
@@ -21,6 +21,11 @@ const projects = [
     reportFormat: 'CLOCK_IN_OUT',
     clientId: 'c1',
     clientName: 'EL-AL',
+    managerId: null,
+    managerName: null,
+    startDate: null,
+    endDate: null,
+    description: '',
   },
   {
     id: 'p2',
@@ -29,6 +34,11 @@ const projects = [
     reportFormat: 'SUM_HOURS',
     clientId: 'c2',
     clientName: 'Clalit',
+    managerId: null,
+    managerName: null,
+    startDate: null,
+    endDate: null,
+    description: '',
   },
 ]
 

@@ -9,6 +9,7 @@ import {
 } from '../lib/attendanceWindow.js';
 import type { ReportFormat, WorkLocation } from '../generated/prisma/enums.js';
 import { AppError, type ErrorDetail } from '../types/errors.js';
+import { assertIsoDayInProjectWindow, isIsoDayInProjectWindow, PROJECT_OUTSIDE_WINDOW } from './projectWindow.service.js';
 import type {
   CreateTimeReportBatchBody,
   CreateTimeReportBody,
@@ -274,6 +275,8 @@ export async function createTimeReport(userId: string, input: CreateTimeReportBo
     throw AppError.badRequest(TASK_NOT_ASSIGNED, [{ field: 'taskId', message: TASK_NOT_ASSIGNED }]);
   }
 
+  assertIsoDayInProjectWindow(input.date, task!.project);
+
   // The hierarchy check above already proved the task, so its project's format
   // is the authority on which fields this row had to carry — never a body field.
   const details: ErrorDetail[] = [];
@@ -367,6 +370,9 @@ export async function createTimeReportBatch(
     // the "already reported" signal.
     if (!isAssignedToCaller(task) && !storedFormats.has(rowKey(row))) {
       details.push({ field: `rows.${index}.taskId`, message: TASK_NOT_ASSIGNED });
+    }
+    if (task && !isIsoDayInProjectWindow(input.date, task.project)) {
+      details.push({ field: `rows.${index}.projectId`, message: PROJECT_OUTSIDE_WINDOW });
     }
   });
 
@@ -489,35 +495,62 @@ export async function deleteTimeReportsForDate(userId: string, date: string): Pr
  * empty by the narrowing are pruned, so the tree never offers a dead end.
  */
 export async function listReportingOptions(userId: string): Promise<ReportingOptions> {
-  const clients = await prisma.client.findMany({
-    where: { isActive: true },
-    orderBy: { name: 'asc' },
-    select: {
-      id: true,
-      name: true,
-      projects: {
-        where: { isActive: true },
-        orderBy: { name: 'asc' },
-        select: {
-          id: true,
-          name: true,
-          reportFormat: true,
-          tasks: {
-            where: { isActive: true, assignments: { some: { userId } } },
-            orderBy: { name: 'asc' },
-            select: { id: true, name: true },
+  const [clients, counts] = await Promise.all([
+    prisma.client.findMany({
+      where: { isActive: true },
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        projects: {
+          where: { isActive: true },
+          orderBy: { name: 'asc' },
+          select: {
+            id: true,
+            name: true,
+            reportFormat: true,
+            tasks: {
+              where: { isActive: true, assignments: { some: { userId } } },
+              orderBy: { name: 'asc' },
+              select: { id: true, name: true },
+            },
           },
         },
       },
-    },
-  });
+    }),
+    prisma.timeReport.groupBy({
+      by: ['clientId', 'projectId', 'taskId'],
+      where: { userId },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const taskCount = new Map<string, number>();
+  const projectCount = new Map<string, number>();
+  const clientCount = new Map<string, number>();
+  for (const row of counts) {
+    taskCount.set(row.taskId, (taskCount.get(row.taskId) ?? 0) + row._count._all);
+    projectCount.set(row.projectId, (projectCount.get(row.projectId) ?? 0) + row._count._all);
+    clientCount.set(row.clientId, (clientCount.get(row.clientId) ?? 0) + row._count._all);
+  }
+
+  const byCountThenName = (countOf: (id: string) => number) => {
+    return (left: { id: string }, right: { id: string }) => countOf(right.id) - countOf(left.id);
+  };
 
   return {
     clients: clients
       .map((client) => ({
         ...client,
-        projects: client.projects.filter((project) => project.tasks.length > 0),
+        projects: client.projects
+          .map((project) => ({
+            ...project,
+            tasks: [...project.tasks].sort(byCountThenName((id) => taskCount.get(id) ?? 0)),
+          }))
+          .filter((project) => project.tasks.length > 0)
+          .sort(byCountThenName((id) => projectCount.get(id) ?? 0)),
       }))
-      .filter((client) => client.projects.length > 0),
+      .filter((client) => client.projects.length > 0)
+      .sort(byCountThenName((id) => clientCount.get(id) ?? 0)),
   };
 }
