@@ -2,7 +2,11 @@ import { Router } from 'express';
 import { deleteMyAbsence, getMyAbsences, postAbsence } from '../controllers/absence.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
-import { readRateLimit, writeRateLimit } from '../middleware/writeRateLimit.middleware.js';
+import {
+  authGuardRateLimit,
+  readRateLimit,
+  writeRateLimit,
+} from '../middleware/writeRateLimit.middleware.js';
 import {
   absenceIdParamSchema,
   createAbsenceBodySchema,
@@ -47,6 +51,9 @@ export const absenceRouter = Router();
  */
 absenceRouter.post(
   '/absences',
+  // Address-keyed guard first so `authenticate` itself is capped, then the
+  // per-caller write budget once there is an identity to key it by.
+  authGuardRateLimit,
   authenticate,
   writeRateLimit,
   validate({ body: createAbsenceBodySchema }),
@@ -116,6 +123,7 @@ absenceRouter.get(
  */
 absenceRouter.delete(
   '/absences/:id',
+  authGuardRateLimit,
   authenticate,
   writeRateLimit,
   validate({ params: absenceIdParamSchema }),

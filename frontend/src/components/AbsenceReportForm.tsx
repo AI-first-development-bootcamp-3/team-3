@@ -9,6 +9,7 @@ import {
   ABSENCE_TYPE_LABELS,
   ABSENCE_TYPES,
   absenceReportSchema,
+  type AbsenceReportInput,
   type AbsenceReportValues,
 } from './AbsenceReport.schema'
 
@@ -40,7 +41,7 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '' }: Props) {
     handleSubmit,
     formState: { errors, isSubmitting },
     control,
-  } = useForm<AbsenceReportValues>({
+  } = useForm<AbsenceReportInput, unknown, AbsenceReportValues>({
     resolver: zodResolver(absenceReportSchema),
     defaultValues: { type: '', startDate: defaultStartDate, endDate: '' },
   })
@@ -55,7 +56,7 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '' }: Props) {
     setBanner(null)
     try {
       await createAbsence({
-        type: values.type as Exclude<AbsenceReportValues['type'], ''>,
+        type: values.type,
         startDate: values.startDate,
         endDate: values.endDate || values.startDate,
       })

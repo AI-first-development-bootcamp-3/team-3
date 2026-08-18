@@ -26,7 +26,7 @@ function isValidStoredSession(stored: StoredSession | null): stored is StoredSes
  * Zustand, not React Context - apiClient.ts is a plain module and needs to
  * read the token outside React via getState(). See SCRUM-39's design.md.
  */
-export const sessionStore = create<SessionState>((set, get) => ({
+export const sessionStore = create<SessionState>((set) => ({
   user: null,
   token: null,
   // rememberMe no longer selects the storage area (D-cross-tab: every

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { getMe, patchMyPassword, postLogin, postLogout } from '../controllers/auth.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
 import { rateLimit } from '../middleware/rateLimit.middleware.js';
-import { logoutRateLimit } from '../middleware/writeRateLimit.middleware.js';
+import { authGuardRateLimit, logoutRateLimit } from '../middleware/writeRateLimit.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
 import { changePasswordBodySchema, loginBodySchema, type LoginBody } from '../types/auth.schema.js';
 
@@ -92,7 +92,10 @@ authRouter.post(
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
  */
-authRouter.get('/me', authenticate, getMe);
+// Guard ahead of `authenticate`, which is all this route does besides reading
+// one row: the client polls it to notice a deactivated session, so nothing else
+// bounds how often an unauthenticated caller can make the server verify a token.
+authRouter.get('/me', authGuardRateLimit, authenticate, getMe);
 
 /**
  * @openapi

@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { app } from '../../app.js';
 import { env } from '../../config/env.js';
 import { prisma } from '../../config/prisma.js';
+import { authGuardRateLimitStore } from '../../middleware/writeRateLimit.middleware.js';
 import { Role } from '../../generated/prisma/enums.js';
 import { createAbsence, createTimeReport, createUser } from '../../test/factories.js';
 import { resetDatabase } from '../../test/resetDatabase.js';
@@ -221,5 +222,39 @@ describe('DELETE /absences/:id', () => {
     const response = await request(app).delete(`/absences/${randomUUID()}`);
 
     expect(response.status).toBe(401);
+  });
+});
+
+describe('absence authentication guard', () => {
+  const MAX = env.RATE_LIMIT_AUTH_GUARD_MAX_REQUESTS;
+
+  beforeEach(async () => {
+    await authGuardRateLimitStore.resetAll();
+  });
+
+  afterEach(async () => {
+    await authGuardRateLimitStore.resetAll();
+    await resetDatabase();
+  });
+
+  it('answers 429 once an address exhausts the quota without ever authenticating', async () => {
+    // No token on any of these: the guard sits ahead of `authenticate`, so a
+    // caller that never authenticates still spends quota - which is the whole
+    // point of having it there. Issued in batches to keep the number of
+    // concurrent sockets bounded.
+    for (let sent = 0; sent < MAX; sent += 60) {
+      const batch = Math.min(60, MAX - sent);
+      await Promise.all(
+        Array.from({ length: batch }, () => request(app).post('/absences').send({}).expect(401)),
+      );
+    }
+
+    const throttled = await request(app).post('/absences').send({});
+
+    expect(throttled.status).toBe(429);
+    expect(Number(throttled.headers['retry-after'])).toBeGreaterThan(0);
+    expect(throttled.body).toEqual({
+      error: { code: 'TOO_MANY_REQUESTS', message: expect.any(String) },
+    });
   });
 });

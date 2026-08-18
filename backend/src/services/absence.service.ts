@@ -15,8 +15,8 @@ export interface AbsenceDto {
 }
 
 function parseCalendarDate(isoDate: string): Date {
-  const [year, month, day] = isoDate.split('-').map(Number);
-  return new Date(year, month - 1, day);
+  const [year, month, day] = isoDate.split('-');
+  return new Date(Number(year), Number(month) - 1, Number(day));
 }
 
 function calendarDateToUtc(isoDate: string): Date {

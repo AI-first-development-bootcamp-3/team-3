@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Dayjs } from 'dayjs'
 import ManualReport, { type ManualReportHeaderMeta } from '../components/ManualReport'
 import UserMenu from '../components/UserMenu'
-import ManualReportModal from '../components/ManualReportModal'
+import ManualReportModal, { SLIDE_MS } from '../components/ManualReportModal'
 import dayjs from '../services/dayjs'
 import { listAbsences } from '../services/absences'
 import { listReports } from '../services/reports'
@@ -50,6 +50,17 @@ type ModalState = {
   absences: Absence[]
 }
 
+/** Everything one month's fetch produces, so the fetch itself can stay free of
+ * setState and the caller can apply it all at once. */
+type MonthSnapshot = {
+  reports: TimeReportListItem[]
+  absences: Absence[]
+  kpis: MonthKpis | null
+  days: DemoDay[]
+}
+
+const EMPTY_MONTH: MonthSnapshot = { reports: [], absences: [], kpis: null, days: [] }
+
 function headerFromDay(day: DemoDay): ManualReportHeaderMeta {
   return {
     status: day.status,
@@ -66,6 +77,7 @@ function Reports() {
   const demo = isHomeDemo()
   const [month, setMonth] = useState<Dayjs>(() => (demo ? dayjs(DEMO_MONTH) : dayjs()))
   const [modal, setModal] = useState<ModalState | null>(null)
+  const [panelOpen, setPanelOpen] = useState(false)
   const [savedDays, setSavedDays] = useState<DemoDay[]>([])
   const [monthReports, setMonthReports] = useState<TimeReportListItem[]>([])
   const [monthAbsences, setMonthAbsences] = useState<Absence[]>([])
@@ -73,10 +85,19 @@ function Reports() {
   const [listLoading, setListLoading] = useState(
     () => !isHomeDemo() && Boolean(sessionStore.getState().user),
   )
+  const unmountTimerRef = useRef<number | null>(null)
 
-  const fetchSavedDays = useCallback(
-    async (targetMonth: Dayjs) => {
-      if (demo || !sessionStore.getState().user) return [] as DemoDay[]
+  const cancelPendingUnmount = () => {
+    if (unmountTimerRef.current === null) return
+    window.clearTimeout(unmountTimerRef.current)
+    unmountTimerRef.current = null
+  }
+
+  useEffect(() => cancelPendingUnmount, [])
+
+  const fetchMonth = useCallback(
+    async (targetMonth: Dayjs): Promise<MonthSnapshot> => {
+      if (demo || !sessionStore.getState().user) return EMPTY_MONTH
       const year = targetMonth.year()
       const monthNumber = targetMonth.month() + 1
       const today = dayjs().format('YYYY-MM-DD')
@@ -87,46 +108,50 @@ function Reports() {
           .then((result) => result.absences)
           .catch(() => [] as Absence[]),
       ])
-      setMonthReports(reports)
-      setMonthAbsences(absences)
-      setMonthKpis(buildMonthKpis({ reports, absences, year, month: monthNumber, today }))
       const remembered = userId ? rememberVisitWeekends(userId, today) : []
-      return buildHomeDays({
+      return {
         reports,
         absences,
-        weekendDates: weekendDatesForVisibleMonth(year, monthNumber, today, remembered),
-        monthPrefix: `${year}-${String(monthNumber).padStart(2, '0')}`,
-      })
+        kpis: buildMonthKpis({ reports, absences, year, month: monthNumber, today }),
+        days: buildHomeDays({
+          reports,
+          absences,
+          weekendDates: weekendDatesForVisibleMonth(year, monthNumber, today, remembered),
+          monthPrefix: `${year}-${String(monthNumber).padStart(2, '0')}`,
+        }),
+      }
     },
     [demo],
   )
 
+  // Kept out of fetchMonth so that every setState below happens in a resolved
+  // continuation. A fetch that set state itself would be a synchronous setState
+  // the moment the effect called it, which cascades renders.
+  const applyMonth = useCallback((snapshot: MonthSnapshot) => {
+    setMonthReports(snapshot.reports)
+    setMonthAbsences(snapshot.absences)
+    setMonthKpis(snapshot.kpis)
+    setSavedDays(snapshot.days)
+  }, [])
+
   const refreshSavedDays = useCallback(async () => {
     try {
-      setSavedDays(await fetchSavedDays(month))
+      applyMonth(await fetchMonth(month))
     } catch {
-      setMonthReports([])
-      setMonthAbsences([])
-      setMonthKpis(null)
-      setSavedDays([])
+      applyMonth(EMPTY_MONTH)
     }
-  }, [fetchSavedDays, month])
+  }, [applyMonth, fetchMonth, month])
 
   useEffect(() => {
     if (demo || !sessionStore.getState().user) return
 
     let cancelled = false
-    void fetchSavedDays(month)
-      .then((days) => {
-        if (!cancelled) setSavedDays(days)
+    void fetchMonth(month)
+      .then((snapshot) => {
+        if (!cancelled) applyMonth(snapshot)
       })
       .catch(() => {
-        if (!cancelled) {
-          setMonthReports([])
-          setMonthAbsences([])
-          setMonthKpis(null)
-          setSavedDays([])
-        }
+        if (!cancelled) applyMonth(EMPTY_MONTH)
       })
       .finally(() => {
         if (!cancelled) setListLoading(false)
@@ -135,7 +160,7 @@ function Reports() {
     return () => {
       cancelled = true
     }
-  }, [demo, month, fetchSavedDays])
+  }, [applyMonth, demo, month, fetchMonth])
 
   const shiftMonth = (delta: number) => {
     if (!demo && sessionStore.getState().user) setListLoading(true)
@@ -144,16 +169,32 @@ function Reports() {
 
   const openManualReport = (isoDate?: string, headerMeta?: ManualReportHeaderMeta) => {
     const date = isoDate ?? dayjs().format('YYYY-MM-DD')
-    setModal({
+    // Reopening during a slide-out would otherwise be undone by the pending
+    // unmount from the close that is still animating.
+    cancelPendingUnmount()
+    setPanelOpen(true)
+    setModal((current) => ({
       isoDate: date,
-      sessionKey: Date.now(),
+      // A counter, not a clock: the panel is keyed on this so it remounts when
+      // the user picks a different day while it is already open, and two opens
+      // can easily land within the same millisecond.
+      sessionKey: (current?.sessionKey ?? 0) + 1,
       headerMeta: headerMeta ?? { status: 'חסר', tone: 'missing', tags: [] },
       reports: monthReports.filter((report) => report.date === date),
       absences: absencesCoveringDate(monthAbsences, date),
-    })
+    }))
   }
 
-  const closeManualReport = () => setModal(null)
+  // The panel's content has to stay rendered while it slides out, so closing
+  // flips the panel shut now and drops the content once the animation is over.
+  const closeManualReport = () => {
+    setPanelOpen(false)
+    cancelPendingUnmount()
+    unmountTimerRef.current = window.setTimeout(() => {
+      unmountTimerRef.current = null
+      setModal(null)
+    }, SLIDE_MS)
+  }
 
   const renderDayRows = (days: DemoDay[]) => (
     <ul className="home-shell__days">
@@ -197,7 +238,7 @@ function Reports() {
   )
 
   return (
-    <div className={`reports-layout${modal ? ' reports-layout--panel-open' : ''}`}>
+    <div className={`reports-layout${panelOpen ? ' reports-layout--panel-open' : ''}`}>
       <div className="home-shell">
         <header className="home-shell__header">
           <div className="home-shell__toolbar">
@@ -306,8 +347,12 @@ function Reports() {
         </div>
       </div>
 
-      <ManualReportModal open={modal !== null} onClose={closeManualReport} labelId="manual-report-day-title">
-        {modal ? (
+      {modal ? (
+        <ManualReportModal
+          open={panelOpen}
+          onClose={closeManualReport}
+          labelId="manual-report-day-title"
+        >
           <ManualReport
             key={modal.sessionKey}
             initialDate={modal.isoDate}
@@ -317,8 +362,8 @@ function Reports() {
             onClose={closeManualReport}
             onSaved={refreshSavedDays}
           />
-        ) : null}
-      </ManualReportModal>
+        </ManualReportModal>
+      ) : null}
     </div>
   )
 }

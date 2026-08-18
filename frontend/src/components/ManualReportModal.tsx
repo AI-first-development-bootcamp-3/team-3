@@ -1,8 +1,11 @@
-import { useEffect, useRef, useState, type ReactNode, type TransitionEvent } from 'react'
 import { createPortal } from 'react-dom'
+import type { ReactNode } from 'react'
 import './ManualReportModal.css'
 
-const SLIDE_MS = 280
+/** Length of the slide, matching the animations in ManualReportModal.css. The
+ * owner needs it to know how long to keep the panel's content rendered for the
+ * way out. */
+export const SLIDE_MS = 280
 
 interface Props {
   open: boolean
@@ -11,45 +14,26 @@ interface Props {
   labelId?: string
 }
 
-/** Overlay drawer that slides in from off-screen and back out on close. */
+/**
+ * Overlay drawer that slides in when mounted and back out when `open` turns
+ * false.
+ *
+ * Deliberately holds no state of its own. The slide-out has to outlive the
+ * panel's content, and the owner is the only place that can keep that content
+ * rendered for it — so the owner mounts this only while it has something to
+ * show and unmounts it SLIDE_MS after closing. That is what lets the entrance
+ * be a plain CSS keyframe that runs on mount, instead of mounting first and
+ * then flipping a class from an effect a frame later.
+ */
 function ManualReportModal({ open, onClose, children, labelId }: Props) {
-  const [mounted, setMounted] = useState(open)
-  const [entered, setEntered] = useState(false)
-  const heldChildren = useRef(children)
-
-  if (open) heldChildren.current = children
-  if (!mounted && !open) heldChildren.current = null
-
-  useEffect(() => {
-    if (open) {
-      setMounted(true)
-      const frame = window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => setEntered(true))
-      })
-      return () => window.cancelAnimationFrame(frame)
-    }
-
-    setEntered(false)
-    const timeout = window.setTimeout(() => setMounted(false), SLIDE_MS)
-    return () => window.clearTimeout(timeout)
-  }, [open])
-
-  const finishExit = (event: TransitionEvent<HTMLElement>) => {
-    if (event.propertyName !== 'transform') return
-    if (!open) setMounted(false)
-  }
-
-  if (!mounted) return null
-
   return createPortal(
     <aside
-      className={`mr-side-panel${entered ? ' mr-side-panel--open' : ''}`}
+      className={`mr-side-panel${open ? '' : ' mr-side-panel--closing'}`}
       role="dialog"
       aria-modal="false"
       aria-labelledby={labelId}
-      onTransitionEnd={finishExit}
     >
-      <div className="mr-side-panel__inner">{heldChildren.current}</div>
+      <div className="mr-side-panel__inner">{children}</div>
       <button type="button" className="mr-side-panel__sr-close" onClick={onClose}>
         סגירת דיווח ידני
       </button>

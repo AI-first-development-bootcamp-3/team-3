@@ -25,4 +25,11 @@ export const absenceReportSchema = z
     }
   })
 
-export type AbsenceReportValues = z.infer<typeof absenceReportSchema>
+/**
+ * The two halves of this schema differ and the form needs both: the select
+ * starts on the empty placeholder option, which only the input side admits,
+ * while a submitted form has been through the refine and so carries a real
+ * absence type.
+ */
+export type AbsenceReportInput = z.input<typeof absenceReportSchema>
+export type AbsenceReportValues = z.output<typeof absenceReportSchema>

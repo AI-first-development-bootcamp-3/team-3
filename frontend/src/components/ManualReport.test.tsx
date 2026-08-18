@@ -508,7 +508,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     await user.click(screen.getByRole('button', { name: 'הוספת פרויקט' }))
     await fillCard(user, 1, 'client-1:project-1', 'task-2', '3.5')
 
-    const summary = screen.getByText('סיכום').closest('.manual-report__summary')
+    const summary = screen.getByText('סיכום').closest<HTMLElement>('.manual-report__summary')
     expect(summary).not.toBeNull()
     expect(within(summary!).getByText('סה״כ 3.5 שעות')).toBeInTheDocument()
     expect(within(summary!).getByText('חסר')).toBeInTheDocument()
@@ -527,7 +527,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     await user.click(screen.getByRole('button', { name: 'הוספת פרויקט' }))
     await fillCard(user, 1, 'client-1:project-1', 'task-2', '9')
 
-    const summary = screen.getByText('סיכום').closest('.manual-report__summary')
+    const summary = screen.getByText('סיכום').closest<HTMLElement>('.manual-report__summary')
     expect(summary).not.toBeNull()
     expect(within(summary!).queryByText('חסר')).not.toBeInTheDocument()
     expect(screen.getByText('מלא')).toBeInTheDocument()
@@ -545,7 +545,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     await user.click(screen.getByRole('button', { name: 'הוספת פרויקט' }))
     await fillCard(user, 1, 'client-1:project-1', 'task-2', '9.5')
 
-    const summary = screen.getByText('סיכום').closest('.manual-report__summary')
+    const summary = screen.getByText('סיכום').closest<HTMLElement>('.manual-report__summary')
     expect(summary).not.toBeNull()
     expect(within(summary!).queryByText('חסר')).not.toBeInTheDocument()
   })

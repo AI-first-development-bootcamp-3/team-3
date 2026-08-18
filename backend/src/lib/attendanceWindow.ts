@@ -1,7 +1,8 @@
-/** `HH:mm` → minutes from midnight. */
+/** `HH:mm` → minutes from midnight. Converted after splitting rather than with
+ * `.map(Number)` so a short string yields NaN instead of a silent 0. */
 export function minutesFromHhmm(hhmm: string): number {
-  const [hours, minutes] = hhmm.split(':').map(Number);
-  return hours * 60 + minutes;
+  const [hours, minutes] = hhmm.split(':');
+  return Number(hours) * 60 + Number(minutes);
 }
 
 /**
