@@ -40,7 +40,7 @@ The service SHALL let an authenticated caller update one of their own absences b
 
 The home daily drawer SHALL enable **דיווח העדרות** next to **דיווח ידני**. That tab SHALL show a Hebrew RTL form: type (חופשה / מחלה / מילואים / אחר), a single date field shown by default, the working-day count for the current selection, and שמירה. Below the date field, a link ("דיווח על היעדרות ליותר מיום אחד") SHALL reveal an end-date field so the employee can enter a range. Once revealed, the end-date field SHALL remain visible for the rest of that open form session (no control collapses it back). Submitting while the end-date field is hidden SHALL send `endDate` equal to `startDate`.
 
-When the selected day already has a saved absence, the form SHALL open pre-filled with that absence's type, date(s), and attached documents instead of a blank form. If the saved absence's `startDate` and `endDate` differ, the form SHALL open with the end-date field already revealed (multi-day mode), and the "more days" link SHALL NOT be shown. Saving from this pre-filled state SHALL update the existing absence (same id) rather than create a new one.
+When the drawer is opened for a specific day that already has a saved absence, the form SHALL open pre-filled with that absence's type, date(s), and attached documents instead of a blank form. If the saved absence's `startDate` and `endDate` differ, the form SHALL open with the end-date field already revealed (multi-day mode), and the "more days" link SHALL NOT be shown. Saving from this pre-filled state SHALL update the existing absence (same id) rather than create a new one. This pre-fill SHALL happen only when the drawer was opened for that specific day (e.g. by clicking that day's own row); the general **דיווח ידני** entry point, which is not scoped to any one day, SHALL always open **דיווח העדרות** blank, even when the date it defaults to already has a saved absence elsewhere.
 
 #### Scenario: Default form shows one day only
 
@@ -76,6 +76,11 @@ When the selected day already has a saved absence, the form SHALL open pre-fille
 
 - **WHEN** the user changes the type or dates of a pre-filled absence and saves
 - **THEN** the client sends `PATCH /absences/:id` for that absence's id, not `POST /absences`, and no new absence is created
+
+#### Scenario: The general דיווח ידני entry point never pre-fills, even on a day with a saved absence
+
+- **WHEN** the user opens the drawer via the general **דיווח ידני** button (not a specific day's row) and switches to **דיווח העדרות**, and the date it defaults to already has a saved absence
+- **THEN** the form shows blank (no type, no pre-filled date, no attached documents, and the "more days" link visible), and saving sends `POST /absences`, not `PATCH`
 
 #### Scenario: Conflict errors name the dates
 

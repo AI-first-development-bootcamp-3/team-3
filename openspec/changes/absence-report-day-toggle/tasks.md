@@ -46,3 +46,8 @@
 
 - [x] 9.1 Update/extend `ManualReport.test.tsx` (or a dedicated `AbsenceReportForm.test.tsx`): opening the absence tab for a day with a saved one-day absence pre-fills type/date with no "more days" link; opening it for a saved range pre-fills both dates already expanded; editing and saving calls `PATCH /absences/:id` (not `POST /absences`) with the edited values; conflict/validation banners still work in edit mode
 - [x] 9.2 Run the frontend and backend test suites and confirm nothing else broke
+
+## 10. Fix: general דיווח ידני entry point pre-filled the wrong day's absence
+
+- [x] 10.1 In `Reports.tsx`, `openManualReport` computed `absences: absencesCoveringDate(monthAbsences, date)` unconditionally, even when called with no `isoDate` (the general button, which defaults to today) — so if today already had a saved absence, opening **דיווח העדרות** from the general button silently loaded it in edit mode instead of a blank form. Fixed by only computing `absences` when the call is for an explicit, specific day (`isoDate !== undefined`); the general entry point now always passes `absences: []`
+- [x] 10.2 Add regression tests in `Reports.test.tsx`: the general button opens a blank absence form even when today already has a saved absence; clicking that day's own row still opens it in edit mode (unaffected)

@@ -178,6 +178,12 @@ function Reports() {
 
   const openManualReport = (isoDate?: string, headerMeta?: ManualReportHeaderMeta) => {
     const date = isoDate ?? dayjs().format('YYYY-MM-DD')
+    // The generic "דיווח ידני" button (no isoDate) always starts a fresh
+    // report - it must not silently drop the caller into editing whatever
+    // absence happens to already be saved for today. Editing an absence is
+    // reachable only by opening that specific day's own row, which always
+    // passes an isoDate.
+    const isSpecificDay = isoDate !== undefined
     // Reopening during a slide-out would otherwise be undone by the pending
     // unmount from the close that is still animating.
     cancelPendingUnmount()
@@ -190,7 +196,7 @@ function Reports() {
       sessionKey: (current?.sessionKey ?? 0) + 1,
       headerMeta: headerMeta ?? { status: 'חסר', tone: 'missing', tags: [] },
       reports: monthReports.filter((report) => report.date === date),
-      absences: absencesCoveringDate(monthAbsences, date),
+      absences: isSpecificDay ? absencesCoveringDate(monthAbsences, date) : [],
     }))
   }
 
