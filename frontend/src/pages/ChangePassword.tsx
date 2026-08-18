@@ -69,9 +69,14 @@ function ChangePassword() {
           />
         </Form.Item>
 
-        <Button type="primary" htmlType="submit" loading={isSubmitting}>
-          שמירת סיסמה
-        </Button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Button type="primary" htmlType="submit" loading={isSubmitting}>
+            שמירת סיסמה
+          </Button>
+          <Button htmlType="button" onClick={() => navigate(homePath(user))}>
+            חזרה
+          </Button>
+        </div>
       </Form>
     </div>
   )

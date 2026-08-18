@@ -2,7 +2,8 @@
  * Local preview fixtures for the hours home.
  *
  * KPI and monthly-list APIs are still stubbed in demo mode. These rows exist only so we can eyeball
- * every badge tone during development. Gated behind `?demo=1` in a dev build.
+ * every badge tone during development. They are not a copy of the Figma sample numbers.
+ * Gated behind `?demo=1` in a dev build; MUST NOT ship as the source of dashboard numbers.
  */
 import tagAlertRed from '../assets/home/tag-alert-red.svg'
 import tagAlertOrange from '../assets/home/tag-alert-orange.svg'
