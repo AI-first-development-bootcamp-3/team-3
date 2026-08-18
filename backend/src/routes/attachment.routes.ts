@@ -4,6 +4,7 @@ import multer from 'multer';
 import { upload } from '../config/multer.js';
 import { getAttachment, postAttachment } from '../controllers/attachment.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
+import { readRateLimit, writeRateLimit } from '../middleware/writeRateLimit.middleware.js';
 import { AppError } from '../types/errors.js';
 
 export const attachmentRouter = Router();
@@ -65,7 +66,7 @@ function handleUpload(req: Request, res: Response, next: NextFunction): void {
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
  */
-attachmentRouter.post('/attachments', authenticate, handleUpload, postAttachment);
+attachmentRouter.post('/attachments', authenticate, writeRateLimit, handleUpload, postAttachment);
 
 /**
  * @openapi
@@ -98,4 +99,4 @@ attachmentRouter.post('/attachments', authenticate, handleUpload, postAttachment
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
  */
-attachmentRouter.get('/attachments/:id', authenticate, getAttachment);
+attachmentRouter.get('/attachments/:id', readRateLimit, authenticate, getAttachment);
