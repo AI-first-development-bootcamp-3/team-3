@@ -29,14 +29,6 @@ const envSchema = z.object({
   STORAGE_DIR: z.string().min(1).default('./storage/uploads'),
   // 'silent' is a real pino level that disables logging entirely (used in tests).
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
-  // SMTP is entirely optional: unset SMTP_HOST means "log credential emails
-  // instead of sending them", the default in every environment until a real
-  // mail provider is configured. When set, all four are required together.
-  SMTP_HOST: z.string().min(1).optional(),
-  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
-  SMTP_USER: z.string().min(1).optional(),
-  SMTP_PASSWORD: z.string().min(1).optional(),
-  EMAIL_FROM: z.string().email().default('no-reply@abra-timesheet.test'),
   // Failed-attempt throttle on /login and /me/password. Both thresholds count
   // failures within the same rolling window; the address threshold assumes
   // ~10 people can plausibly share one office NAT address (5 * 10 = 50), so
