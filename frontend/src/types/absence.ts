@@ -16,4 +16,5 @@ export interface CreateAbsenceInput {
   type: AbsenceType
   startDate: ISODateString
   endDate?: ISODateString
+  attachmentIds?: string[]
 }

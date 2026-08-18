@@ -37,6 +37,7 @@ export const absenceRouter = Router();
  *               type: { type: string, enum: [VACATION, SICK, RESERVE_DUTY, OTHER] }
  *               startDate: { type: string, format: date, example: '2026-08-09' }
  *               endDate: { type: string, format: date, example: '2026-08-13', description: 'Inclusive; defaults to startDate' }
+ *               attachmentIds: { type: array, items: { type: string, format: uuid }, description: 'UUIDs of previously uploaded attachments to link to this absence' }
  *     responses:
  *       201:
  *         description: The persisted absence including workingDayCount.
