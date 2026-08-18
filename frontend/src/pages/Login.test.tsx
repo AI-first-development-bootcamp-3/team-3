@@ -5,11 +5,11 @@ import { MemoryRouter } from 'react-router-dom'
 import Login from './Login'
 import { sessionStore } from '../services/sessionStore'
 
-function mockFetchOnce(response: { ok: boolean; status: number; json: unknown }) {
+function mockFetchOnce(response: { ok: boolean; status: number; json: unknown; headers?: Record<string, string> }) {
   const fetchMock = vi.fn().mockResolvedValue({
     ok: response.ok,
     status: response.status,
-    headers: new Headers({ 'content-type': 'application/json' }),
+    headers: new Headers({ 'content-type': 'application/json', ...response.headers }),
     json: async () => response.json,
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -66,7 +66,7 @@ describe('Login page', () => {
       ok: true,
       status: 200,
       json: {
-        token: 'a-jwt-token',
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
         user: { id: '1', email: 'admin@abra.test', displayName: 'Admin', role: 'ADMIN', mustChangePassword: false },
       },
     })
@@ -83,7 +83,7 @@ describe('Login page', () => {
     await user.click(screen.getByRole('button', { name: /התחבר/ }))
 
     await waitFor(() => {
-      expect(sessionStore.getState().token).toBe('a-jwt-token')
+      expect(sessionStore.getState().token).toBe('cookie')
     })
     expect(sessionStore.getState().user).toMatchObject({ userType: 'admin', mustChangePassword: false })
   })
@@ -145,6 +145,90 @@ describe('Login page', () => {
     expect(screen.getByRole('button', { name: /התחבר/ })).toBeEnabled()
   })
 
+  it('shows a locked message with the remaining time, distinct from the other failure messages', async () => {
+    mockFetchOnce({
+      ok: false,
+      status: 423,
+      json: { error: { code: 'LOCKED', message: 'Locked' } },
+      headers: { 'retry-after': '125' },
+    })
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter>
+        <Login />
+      </MemoryRouter>,
+    )
+
+    await user.type(screen.getByLabelText(/אימייל/), 'admin@abra.test')
+    await user.type(screen.getByLabelText(/סיסמה/), 'wrong-password')
+    await user.click(screen.getByRole('button', { name: /התחבר/ }))
+
+    expect(await screen.findByText(/ננעל זמנית/)).toBeInTheDocument()
+    // 125 seconds -> 2:05
+    expect(screen.getByText(/2:05/)).toBeInTheDocument()
+    expect(screen.queryByText(/אימייל או סיסמה שגויים/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/יותר מדי ניסיונות/)).not.toBeInTheDocument()
+    expect(sessionStore.getState().token).toBeNull()
+  })
+
+  it('counts the locked message down and re-enables the form once it reaches zero', async () => {
+    mockFetchOnce({
+      ok: false,
+      status: 423,
+      json: { error: { code: 'LOCKED', message: 'Locked' } },
+      headers: { 'retry-after': '2' },
+    })
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter>
+        <Login />
+      </MemoryRouter>,
+    )
+
+    await user.type(screen.getByLabelText(/אימייל/), 'admin@abra.test')
+    await user.type(screen.getByLabelText(/סיסמה/), 'wrong-password')
+    await user.click(screen.getByRole('button', { name: /התחבר/ }))
+
+    expect(await screen.findByText(/0:02/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /התחבר/ })).toBeDisabled()
+
+    expect(await screen.findByText(/0:01/, {}, { timeout: 2000 })).toBeInTheDocument()
+
+    await waitFor(
+      () => {
+        expect(screen.getByRole('button', { name: /התחבר/ })).toBeEnabled()
+        expect(screen.queryByText(/ננעל זמנית/)).not.toBeInTheDocument()
+      },
+      { timeout: 2000 },
+    )
+  })
+
+  it('keeps the typed email and password after a 423', async () => {
+    mockFetchOnce({
+      ok: false,
+      status: 423,
+      json: { error: { code: 'LOCKED', message: 'Locked' } },
+      headers: { 'retry-after': '600' },
+    })
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter>
+        <Login />
+      </MemoryRouter>,
+    )
+
+    await user.type(screen.getByLabelText(/אימייל/), 'admin@abra.test')
+    await user.type(screen.getByLabelText(/סיסמה/), 'wrong-password')
+    await user.click(screen.getByRole('button', { name: /התחבר/ }))
+
+    expect(await screen.findByText(/ננעל זמנית/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/אימייל/)).toHaveValue('admin@abra.test')
+    expect(screen.getByLabelText(/סיסמה/)).toHaveValue('wrong-password')
+  })
+
   it('shows a generic error on an unmapped server error without redirecting or clearing session state', async () => {
     mockFetchOnce({ ok: false, status: 500, json: { error: { code: 'INTERNAL_SERVER_ERROR', message: 'Something went wrong' } } })
     const user = userEvent.setup()
@@ -165,7 +249,7 @@ describe('Login page', () => {
     expect(sessionStore.getState().token).toBeNull()
   })
 
-  it('sends rememberMe: false and stores the session in sessionStorage when left unchecked', async () => {
+  it('sends rememberMe: false and still stores the session in localStorage when left unchecked', async () => {
     const fetchMock = mockFetchOnce({
       ok: true,
       status: 200,
@@ -188,12 +272,15 @@ describe('Login page', () => {
     await user.click(screen.getByRole('button', { name: /התחבר/ }))
 
     await waitFor(() => {
-      expect(sessionStore.getState().token).toBe('a-jwt-token')
+      expect(sessionStore.getState().token).toBe('cookie')
     })
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(JSON.parse(requestInit.body as string)).toMatchObject({ rememberMe: false })
-    expect(window.sessionStorage.getItem('abra.session')).not.toBeNull()
-    expect(window.localStorage.getItem('abra.session')).toBeNull()
+    expect(requestInit.credentials).toBe('include')
+    expect(window.localStorage.getItem('abra.session')).not.toBeNull()
+    expect(window.sessionStorage.getItem('abra.session')).toBeNull()
+    expect(JSON.parse(window.localStorage.getItem('abra.session') ?? '{}').token).toBeUndefined()
+    expect(window.localStorage.getItem('abra.lastEmail')).toBe('admin@abra.test')
   })
 
   it('sends rememberMe: true and stores the session in localStorage when checked', async () => {
@@ -220,11 +307,33 @@ describe('Login page', () => {
     await user.click(screen.getByRole('button', { name: /התחבר/ }))
 
     await waitFor(() => {
-      expect(sessionStore.getState().token).toBe('a-jwt-token')
+      expect(sessionStore.getState().token).toBe('cookie')
     })
     const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(JSON.parse(requestInit.body as string)).toMatchObject({ rememberMe: true })
     expect(window.localStorage.getItem('abra.session')).not.toBeNull()
     expect(window.sessionStorage.getItem('abra.session')).toBeNull()
+  })
+
+  it('explains that an inactive account should contact an admin', async () => {
+    mockFetchOnce({
+      ok: false,
+      status: 403,
+      json: { error: { code: 'ACCOUNT_INACTIVE', message: 'This account is inactive. Contact an administrator.' } },
+    })
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter>
+        <Login />
+      </MemoryRouter>,
+    )
+
+    await user.type(screen.getByLabelText(/אימייל/), 'admin@abra.test')
+    await user.type(screen.getByLabelText(/סיסמה/), 'password123')
+    await user.click(screen.getByRole('button', { name: /התחבר/ }))
+
+    expect(await screen.findByText(/החשבון אינו פעיל/)).toBeInTheDocument()
+    expect(sessionStore.getState().token).toBeNull()
   })
 })

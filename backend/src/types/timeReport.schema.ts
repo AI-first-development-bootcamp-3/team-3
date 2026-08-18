@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { WorkLocation } from '../generated/prisma/enums.js';
+import { isOneDecimalHours } from '../lib/attendanceWindow.js';
 
 const calendarDateSchema = z
   .string()
@@ -9,20 +10,59 @@ const hhmmSchema = z
   .string()
   .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Time must be HH:mm');
 
-export const createTimeReportBodySchema = z
-  .object({
-    date: calendarDateSchema,
-    workLocation: z.enum(WorkLocation),
-    startTime: hhmmSchema,
-    endTime: hhmmSchema,
-    clientId: z.string().uuid(),
-    projectId: z.string().uuid(),
-    taskId: z.string().uuid(),
-    description: z.string().trim().min(1, 'Description is required').max(2000),
-  })
-  .refine((data) => data.endTime >= data.startTime, {
-    message: 'End time must not be before start time',
-    path: ['endTime'],
+const hoursSchema = z.coerce
+  .number()
+  .refine((value) => value >= 0.5 && value <= 24 && isOneDecimalHours(value), {
+    message: 'Hours must be between 0.5 and 24 with at most one decimal place',
   });
 
+export const createTimeReportBodySchema = z.object({
+  date: calendarDateSchema,
+  workLocation: z.enum(WorkLocation),
+  startTime: hhmmSchema,
+  endTime: hhmmSchema,
+  hours: hoursSchema,
+  clientId: z.string().uuid(),
+  projectId: z.string().uuid(),
+  taskId: z.string().uuid(),
+  description: z.string().trim().min(1, 'Description is required').max(2000),
+});
+
 export type CreateTimeReportBody = z.infer<typeof createTimeReportBodySchema>;
+
+const timeReportRowSchema = z.object({
+  workLocation: z.enum(WorkLocation),
+  clientId: z.string().uuid(),
+  projectId: z.string().uuid(),
+  taskId: z.string().uuid(),
+  hours: hoursSchema,
+  description: z.string().trim().max(2000).default(''),
+});
+
+export const MAX_ROWS_PER_DAY = 20;
+
+export const createTimeReportBatchBodySchema = z.object({
+  date: calendarDateSchema,
+  startTime: hhmmSchema,
+  endTime: hhmmSchema,
+  rows: z
+    .array(timeReportRowSchema)
+    .min(1, 'At least one project row is required')
+    .max(MAX_ROWS_PER_DAY, `A day cannot hold more than ${MAX_ROWS_PER_DAY} rows`),
+});
+
+export type CreateTimeReportBatchBody = z.infer<typeof createTimeReportBatchBodySchema>;
+export type TimeReportRow = z.infer<typeof timeReportRowSchema>;
+
+export const listTimeReportsQuerySchema = z.object({
+  month: z.coerce.number().int().min(1, 'Month must be 1–12').max(12, 'Month must be 1–12'),
+  year: z.coerce.number().int().min(2000, 'Year out of range').max(2100, 'Year out of range'),
+});
+
+export type ListTimeReportsQuery = z.infer<typeof listTimeReportsQuerySchema>;
+
+export const deleteTimeReportsQuerySchema = z.object({
+  date: calendarDateSchema,
+});
+
+export type DeleteTimeReportsQuery = z.infer<typeof deleteTimeReportsQuerySchema>;

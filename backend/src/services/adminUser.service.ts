@@ -4,8 +4,6 @@ import { prisma } from '../config/prisma.js';
 import { Prisma } from '../generated/prisma/client.js';
 import type { Role } from '../generated/prisma/enums.js';
 import { AppError } from '../types/errors.js';
-import { logger } from '../config/logger.js';
-import { emailSender } from './emailSender.js';
 
 export interface CreateUserInput {
   email: string;
@@ -27,8 +25,7 @@ export interface CreateUserResult {
   user: CreatedUser;
   /**
    * Plaintext, returned once at creation time only - never stored, never
-   * retrievable again. Also emailed automatically (SCRUM-208); kept in the
-   * response too as a fallback if that email fails to send.
+   * retrievable again. The admin relays this to the new user.
    */
   temporaryPassword: string;
 }
@@ -39,21 +36,15 @@ function generateTemporaryPassword(): string {
 }
 
 /**
- * A flaky mail provider must not undo an otherwise-successful account
- * creation - the temporary password is still returned in the API response
- * as a fallback delivery channel either way, so a logged failure here is
- * recoverable, not silent data loss.
+ * Admin management needs inactive users in the assign pool and user list,
+ * unlike normal app queries — same soft-delete opt-out as listClients.
  */
-async function sendCredentialEmail(to: string, temporaryPassword: string): Promise<void> {
-  try {
-    await emailSender.send({
-      to,
-      subject: 'Your Abra Timesheet account',
-      text: `An account was created for you.\n\nEmail: ${to}\nTemporary password: ${temporaryPassword}\n\nYou will be asked to set a new password the first time you log in.`,
-    });
-  } catch (error) {
-    logger.warn({ err: error, to }, 'Failed to send credential email; user was still created');
-  }
+export async function listUsers(): Promise<CreatedUser[]> {
+  return prisma.user.findMany({
+    where: { isActive: undefined } as unknown as Prisma.UserWhereInput,
+    select: { id: true, email: true, displayName: true, role: true, isActive: true, mustChangePassword: true },
+    orderBy: { displayName: 'asc' },
+  });
 }
 
 /**
@@ -64,6 +55,7 @@ async function sendCredentialEmail(to: string, temporaryPassword: string): Promi
  * a separate existence check, so two concurrent requests for the same email
  * can't both pass a check-then-create race.
  */
+
 export async function createUser(input: CreateUserInput): Promise<CreateUserResult> {
   const temporaryPassword = input.temporaryPassword ?? generateTemporaryPassword();
   const passwordHash = await bcrypt.hash(temporaryPassword, 10);
@@ -79,8 +71,6 @@ export async function createUser(input: CreateUserInput): Promise<CreateUserResu
       },
       select: { id: true, email: true, displayName: true, role: true, isActive: true, mustChangePassword: true },
     });
-
-    await sendCredentialEmail(user.email, temporaryPassword);
 
     return { user, temporaryPassword };
   } catch (error) {
@@ -114,6 +104,16 @@ export async function resetUserPassword(id: string): Promise<ResetPasswordResult
 /** Changes a user's role. No self-demotion or last-admin restriction (see SCRUM-83 design - YAGNI, not required by spec). */
 export async function changeUserRole(id: string, role: Role): Promise<CreatedUser> {
   return updateUserOrNotFound(id, { role });
+}
+
+/**
+ * Deactivates or reactivates a user. No self-deactivation or last-admin
+ * restriction (see design.md D6 - consistent with changeUserRole above).
+ * `update` is not intercepted by the soft-delete extension, so this reaches
+ * and reactivates an already-deactivated row with no opt-out needed.
+ */
+export async function setUserActive(id: string, isActive: boolean): Promise<CreatedUser> {
+  return updateUserOrNotFound(id, { isActive });
 }
 
 async function updateUserOrNotFound(id: string, data: Prisma.UserUpdateInput): Promise<CreatedUser> {

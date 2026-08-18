@@ -25,29 +25,81 @@ enum AbsenceType {
   OTHER
 }
 
+enum TaskStatus {
+  OPEN
+  CLOSED
+}
+
+enum ReportFormat {
+  CLOCK_IN_OUT
+  SUM_HOURS
+}
+
+enum LoginAttemptOutcome {
+  CREDENTIAL_REJECTED
+  THROTTLED
+  LOCKED
+  SUCCESS
+}
+
 model User {
-  id                 String       @id @default(uuid())
-  email              String       @unique
+  id                 String        @id @default(uuid())
+  email              String        @unique
   passwordHash       String
   displayName        String
   role               Role
-  isActive           Boolean      @default(true)
-  mustChangePassword Boolean      @default(true)
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
+  isActive           Boolean       @default(true)
+  mustChangePassword Boolean       @default(true)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  /// Session-validity boundary (see openspec/changes/user-logout/design.md,
+  /// D1): a token whose `iat` predates this moment is refused by
+  /// `authenticate`. Only an explicit logout moves this forward - logging in
+  /// leaves it untouched, so signing in on one device never ends another
+  /// device's session. `@default(now())` is correct for newly created users;
+  /// existing rows at migration time are backfilled to a timestamp older
+  /// than any live token (see the migration itself), not to `now()`.
+  sessionsValidFrom  DateTime      @default(now())
   attachments        Attachment[]
   timeReports        TimeReport[]
   absences           Absence[]
-  
+  loginAttempts      LoginAttempt[]
+  taskAssignments    TaskAssignment[]
+
   @@map("users")
 }
 
+/**
+ * Durable, append-only audit trail of failed and successful credential
+ * attempts. The account-lockout tier (see openspec/changes/login-account-lockout)
+ * derives its decisions by counting rows here rather than storing a lock
+ * flag, so this table is both the audit log and the lock mechanism.
+ *
+ * emailNormalised is the lock/audit key, not userId - a lock keyed on the
+ * user row could never fire for an unregistered email, which would turn
+ * lock behavior into an account-existence oracle. userId is recorded only
+ * to make the trail joinable for review.
+ */
+model LoginAttempt {
+  id               String               @id @default(uuid())
+  emailNormalised  String
+  userId           String?
+  user             User?                @relation(fields: [userId], references: [id])
+  ipAddress        String
+  outcome          LoginAttemptOutcome
+  createdAt        DateTime             @default(now())
+
+  @@index([emailNormalised, createdAt])
+  @@map("login_attempts")
+}
+
 model Client {
-  id        String    @id @default(uuid())
-  name      String
-  isActive  Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id             String    @id @default(uuid())
+  name           String
+  contactDetails String?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
   projects    Project[]
   timeReports TimeReport[]
 
@@ -55,30 +107,48 @@ model Client {
 }
 
 model Project {
-  id        String   @id @default(uuid())
-  name      String
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  clientId  String
-  client    Client   @relation(fields: [clientId], references: [id])
-  tasks       Task[]
-  timeReports TimeReport[]
+  id           String       @id @default(uuid())
+  name         String
+  isActive     Boolean      @default(true)
+  reportFormat ReportFormat @default(CLOCK_IN_OUT)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  clientId     String
+  client       Client       @relation(fields: [clientId], references: [id])
+  tasks        Task[]
+  timeReports  TimeReport[]
 
   @@map("projects")
 }
 
 model Task {
-  id        String   @id @default(uuid())
+  id        String     @id @default(uuid())
   name      String
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isActive  Boolean    @default(true)
+  status    TaskStatus @default(OPEN)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
   projectId String
-  project     Project      @relation(fields: [projectId], references: [id])
+  project     Project          @relation(fields: [projectId], references: [id])
   timeReports TimeReport[]
+  assignments TaskAssignment[]
 
   @@map("tasks")
+}
+
+/// Current-state assignment only — no soft-delete flag, no history row.
+/// Presence of the row means assigned; removal means not assigned. See
+/// openspec/changes/admin-data-model/design.md for why this differs from
+/// every other model's isActive soft-delete convention.
+model TaskAssignment {
+  userId    String
+  taskId    String
+  user      User     @relation(fields: [userId], references: [id])
+  task      Task     @relation(fields: [taskId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@id([userId, taskId])
+  @@map("task_assignments")
 }
 
 /// One row per absence, spanning startDate..endDate (never one row per day —
@@ -139,6 +209,7 @@ model TimeReport {
   workLocation WorkLocation
   startTime    DateTime     @db.Time
   endTime      DateTime     @db.Time
+  hours        Decimal      @db.Decimal(4, 1)
   description  String
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt

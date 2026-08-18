@@ -12,9 +12,22 @@
     0 3px 6px rgb(139 138 183 / 10%), 0 11px 11px rgb(139 138 183 / 9%),
     0 25px 15px rgb(139 138 183 / 5%);
 
+  flex: 1;
+  min-width: 0;
   margin: -16px;
   color: var(--home-text);
   background: var(--home-bg);
+  min-height: 100svh;
+}
+
+.reports-layout {
+  display: flex;
+  flex-direction: row;
+  min-height: 100svh;
+  background: var(--home-bg);
+}
+
+.reports-layout--panel-open .home-shell {
   min-height: 100svh;
 }
 
@@ -34,6 +47,12 @@
   padding: 16px;
   background: var(--home-card);
   border-bottom: 1px solid var(--home-divider);
+}
+
+.home-shell__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .home-shell__brand {
@@ -287,6 +306,10 @@
   color: var(--home-muted);
 }
 
+.home-shell__filter-wrap {
+  position: relative;
+}
+
 .home-shell__filter {
   display: inline-flex;
   align-items: center;
@@ -300,7 +323,11 @@
   font-weight: 500;
   line-height: 1;
   color: var(--home-muted);
-  cursor: not-allowed;
+  cursor: pointer;
+}
+
+.home-shell__filter:hover {
+  color: var(--home-text);
 }
 
 .home-shell__filter-icon {
@@ -315,6 +342,49 @@
   width: 6px;
   height: 12px;
   rotate: 90deg;
+}
+
+.home-shell__filter-icon--open img {
+  rotate: 270deg;
+}
+
+.home-shell__filter-panel {
+  position: absolute;
+  z-index: 5;
+  inset-inline-start: 0;
+  top: calc(100% + 6px);
+  min-width: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border: 1px solid var(--home-divider);
+  border-radius: 12px;
+  background: var(--home-card);
+  box-shadow: var(--home-shadow);
+}
+
+.home-shell__filter-option {
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  text-align: start;
+  color: var(--home-text);
+  cursor: pointer;
+}
+
+.home-shell__filter-option:hover,
+.home-shell__filter-option:focus-visible {
+  background: var(--home-bg);
+}
+
+.home-shell__filter-option--active {
+  font-weight: 700;
 }
 
 .home-shell__kpi-value {
@@ -347,13 +417,28 @@
   list-style: none;
 }
 
+.home-shell__days > li {
+  margin: 0;
+  padding: 0;
+}
+
 .home-shell__day {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   padding: 16px 24px;
+  border: 0;
   background: var(--home-card);
   border-radius: var(--home-radius);
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+.home-shell__day:hover {
+  box-shadow: var(--home-shadow);
 }
 
 .home-shell__day-main {
@@ -401,12 +486,13 @@
   flex-direction: row-reverse;
   align-items: center;
   gap: 4px;
-  padding: 2px 8px 6px;
+  padding: 5px 10px;
   border-radius: 100px;
   background: var(--home-bg);
   font-size: 15px;
   font-weight: 500;
-  line-height: 1;
+  line-height: 1.35;
+  white-space: nowrap;
   color: #696f76;
 }
 
@@ -425,7 +511,8 @@
   color: #945312;
 }
 
-.home-shell__tag--weekend {
+.home-shell__tag--weekend,
+.home-shell__tag--absence {
   background: #f0f4fa;
   color: #0c3058;
 }

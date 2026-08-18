@@ -7,6 +7,11 @@ import { openApiSpec } from './config/swagger.js';
 import { errorHandler } from './middleware/error.middleware.js';
 import { notFoundHandler } from './middleware/notFound.middleware.js';
 import { requestLogger } from './middleware/requestLogger.middleware.js';
+import { absenceRouter } from './routes/absence.routes.js';
+import { adminClientRouter } from './routes/adminClient.routes.js';
+import { adminProjectRouter } from './routes/adminProject.routes.js';
+import { adminTaskRouter } from './routes/adminTask.routes.js';
+import { adminAssignmentRouter } from './routes/adminAssignment.routes.js';
 import { adminUserRouter } from './routes/adminUser.routes.js';
 import { attachmentRouter } from './routes/attachment.routes.js';
 import { authRouter } from './routes/auth.routes.js';
@@ -44,7 +49,12 @@ app.use(sampleRouter);
 app.use(attachmentRouter);
 app.use(authRouter);
 app.use(adminUserRouter);
+app.use(adminClientRouter);
+app.use(adminProjectRouter);
+app.use(adminTaskRouter);
+app.use(adminAssignmentRouter);
 app.use(timeReportRouter);
+app.use(absenceRouter);
 
 // Interactive docs leak endpoint shapes and are dev/QA tooling, not a
 // production surface — disabled there by configuration.

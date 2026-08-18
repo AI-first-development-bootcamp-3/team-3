@@ -3,13 +3,16 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it } from 'vitest'
 import Layout from './Layout'
 
+afterEach(() => {
+  cleanup()
+})
+
 function renderAt(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<div>home</div>} />
-          <Route path="absences" element={<div>absences</div>} />
           <Route path="admin" element={<div>admin</div>} />
         </Route>
       </Routes>
@@ -18,23 +21,20 @@ function renderAt(path: string) {
 }
 
 describe('Layout', () => {
-  afterEach(() => {
-    cleanup()
-  })
-
-  it('hides דיווח שעות / היעדרויות / ניהול on the hours home', () => {
+  it('renders the child route without a global Ant Design menu', () => {
     renderAt('/')
 
+    expect(screen.getByText('home')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'דיווח שעות' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'היעדרויות' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'ניהול' })).not.toBeInTheDocument()
+    expect(screen.queryByText('התנתקות')).not.toBeInTheDocument()
   })
 
-  it('shows the app menu on absences', () => {
-    renderAt('/absences')
+  it('still renders nested routes such as admin', () => {
+    renderAt('/admin')
 
-    expect(screen.getByRole('link', { name: 'דיווח שעות' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'היעדרויות' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'ניהול' })).toBeInTheDocument()
+    expect(screen.getByText('admin')).toBeInTheDocument()
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
   })
 })

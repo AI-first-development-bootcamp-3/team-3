@@ -1,7 +1,7 @@
 /**
  * Local preview fixtures for the hours home.
  *
- * The real KPI and monthly-list APIs do not exist yet. These rows exist only so we can eyeball
+ * KPI and monthly-list APIs are still stubbed in demo mode. These rows exist only so we can eyeball
  * every badge tone during development. They are not a copy of the Figma sample numbers.
  * Gated behind `?demo=1` in a dev build; MUST NOT ship as the source of dashboard numbers.
  */
@@ -13,17 +13,22 @@ import tagBuilding from '../assets/home/tag-building.svg'
 import tagNote from '../assets/home/tag-note.svg'
 import dayJobs from '../assets/home/day-jobs.svg'
 import dayWeekend from '../assets/home/day-weekend.svg'
+import type { AbsenceType } from '../types'
 
-export type DemoStatusTone = 'missing' | 'full' | 'partial' | 'weekend'
+export type DemoStatusTone = 'missing' | 'full' | 'partial' | 'weekend' | 'absence'
 
 export type DemoTag = { text: string; icon: string }
 
 export type DemoDay = {
+  isoDate: string
   date: string
   tone: DemoStatusTone
   status: string
   tags: DemoTag[]
   weekend?: boolean
+  /** Set on `absence` rows so the day list can be filtered by type without
+   * matching on the display label. */
+  absenceType?: AbsenceType
 }
 
 export const DEMO_MONTH = '2026-08-01'
@@ -33,6 +38,7 @@ export const DEMO_STATUS_ICONS: Record<DemoStatusTone, string> = {
   full: tagCheckGreen,
   partial: tagAlertOrange,
   weekend: tagCloseBlue,
+  absence: tagCloseBlue,
 }
 
 export const DEMO_KPIS: Record<string, { value: string; caption: string }> = {
@@ -47,6 +53,7 @@ export const DEMO_DAY_ICONS = { workday: dayJobs, weekend: dayWeekend }
 
 export const DEMO_DAYS: DemoDay[] = [
   {
+    isoDate: '2026-08-17',
     date: '17/08/26, יום ב׳',
     tone: 'partial',
     status: '5.5 שעות',
@@ -56,6 +63,7 @@ export const DEMO_DAYS: DemoDay[] = [
     ],
   },
   {
+    isoDate: '2026-08-16',
     date: '16/08/26, יום א׳',
     tone: 'full',
     status: '9 שעות',
@@ -64,15 +72,17 @@ export const DEMO_DAYS: DemoDay[] = [
       { text: '1 פרויקט מדווח', icon: tagNote },
     ],
   },
-  { date: '15/08/26, יום ש׳', tone: 'weekend', status: 'סופ״ש', tags: [], weekend: true },
-  { date: '14/08/26, יום ו׳', tone: 'weekend', status: 'סופ״ש', tags: [], weekend: true },
+  { isoDate: '2026-08-15', date: '15/08/26, יום ש׳', tone: 'weekend', status: 'סופ״ש', tags: [], weekend: true },
+  { isoDate: '2026-08-14', date: '14/08/26, יום ו׳', tone: 'weekend', status: 'סופ״ש', tags: [], weekend: true },
   {
+    isoDate: '2026-08-13',
     date: '13/08/26, יום ה׳',
     tone: 'missing',
     status: 'חסר',
     tags: [{ text: '3 מקומות עבודה', icon: tagBuilding }],
   },
   {
+    isoDate: '2026-08-12',
     date: '12/08/26, יום ד׳',
     tone: 'full',
     status: '9 שעות',
@@ -82,6 +92,7 @@ export const DEMO_DAYS: DemoDay[] = [
     ],
   },
   {
+    isoDate: '2026-08-11',
     date: '11/08/26, יום ג׳',
     tone: 'partial',
     status: '4 שעות',
@@ -91,6 +102,7 @@ export const DEMO_DAYS: DemoDay[] = [
     ],
   },
   {
+    isoDate: '2026-08-10',
     date: '10/08/26, יום ב׳',
     tone: 'missing',
     status: 'חסר',

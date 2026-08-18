@@ -1,0 +1,73 @@
+import { Link } from 'react-router-dom'
+import kpiBriefcase from '../../assets/home/kpi-briefcase.svg'
+import kpiClock from '../../assets/home/kpi-clock.svg'
+import kpiSun from '../../assets/home/kpi-sun.svg'
+import tagBuilding from '../../assets/home/tag-building.svg'
+import tagNote from '../../assets/home/tag-note.svg'
+import tagCheck from '../../assets/home/tag-check-green.svg'
+
+const HUB = [
+  {
+    to: '/admin/users',
+    title: 'משתמשים',
+    detail: 'יצירה, עריכה והפעלה של חשבונות',
+    icon: kpiSun,
+  },
+  {
+    to: '/admin/clients',
+    title: 'לקוחות',
+    detail: 'ניהול לקוחות פעילים ולא פעילים',
+    icon: tagBuilding,
+  },
+  {
+    to: '/admin/projects',
+    title: 'פרויקטים',
+    detail: 'פרויקטים תחת לקוחות',
+    icon: kpiBriefcase,
+  },
+  {
+    to: '/admin/tasks',
+    title: 'משימות',
+    detail: 'משימות לדיווח שעות',
+    icon: tagNote,
+  },
+  {
+    to: '/admin/assignments',
+    title: 'שיוכים',
+    detail: 'שיוך עובדים למשימות',
+    icon: tagCheck,
+  },
+] as const
+
+function AdminOverview() {
+  return (
+    <section className="admin-hub">
+      <h1 className="admin-hub__title">ניהול המערכת</h1>
+      <p className="admin-hub__lead">בחרו תחום לניהול. נעילת חודש תתווסף בכרטיס נפרד.</p>
+      <div className="admin-hub__grid">
+        {HUB.map((card) => (
+          <Link key={card.to} className="admin-hub__card" to={card.to}>
+            <span className="admin-hub__icon" aria-hidden="true">
+              <img src={card.icon} alt="" width={24} height={24} />
+            </span>
+            <div className="admin-hub__card-copy">
+              <h2>{card.title}</h2>
+              <p>{card.detail}</p>
+            </div>
+          </Link>
+        ))}
+        <div className="admin-hub__card admin-hub__card--disabled">
+          <span className="admin-hub__icon" aria-hidden="true">
+            <img src={kpiClock} alt="" width={24} height={24} />
+          </span>
+          <div className="admin-hub__card-copy">
+            <h2>נעילת חודש</h2>
+            <p>יופיע כשהנעילה תהיה זמינה</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+export default AdminOverview

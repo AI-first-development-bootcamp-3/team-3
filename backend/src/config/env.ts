@@ -21,22 +21,14 @@ const envSchema = z.object({
   // Default session lifetime, in seconds. 28800 = 8 hours.
   JWT_EXPIRES_IN_SECONDS: z.coerce.number().int().positive().default(28800),
   // Lifetime, in seconds, when the caller opts into "remember me" at login.
-  // 2592000 = 30 days.
-  JWT_REMEMBER_ME_EXPIRES_IN_SECONDS: z.coerce.number().int().positive().default(2592000),
+  // 604800 = 7 days.
+  JWT_REMEMBER_ME_EXPIRES_IN_SECONDS: z.coerce.number().int().positive().default(604800),
   // Local-filesystem root for uploaded attachments — a mounted volume in
   // Docker/production. Free-tier container filesystems are ephemeral; see
   // backend/README.md -> File storage.
   STORAGE_DIR: z.string().min(1).default('./storage/uploads'),
   // 'silent' is a real pino level that disables logging entirely (used in tests).
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
-  // SMTP is entirely optional: unset SMTP_HOST means "log credential emails
-  // instead of sending them", the default in every environment until a real
-  // mail provider is configured. When set, all four are required together.
-  SMTP_HOST: z.string().min(1).optional(),
-  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
-  SMTP_USER: z.string().min(1).optional(),
-  SMTP_PASSWORD: z.string().min(1).optional(),
-  EMAIL_FROM: z.string().email().default('no-reply@abra-timesheet.test'),
   // Failed-attempt throttle on /login and /me/password. Both thresholds count
   // failures within the same rolling window; the address threshold assumes
   // ~10 people can plausibly share one office NAT address (5 * 10 = 50), so
@@ -45,6 +37,40 @@ const envSchema = z.object({
   RATE_LIMIT_EMAIL_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
   RATE_LIMIT_IP_MAX_ATTEMPTS: z.coerce.number().int().positive().default(50),
   RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(900),
+  // Requests one authenticated caller may make to the report write routes
+  // within that same window — every request counts, not just failures. A
+  // person saves a day of work a handful of times; 60 per 15 minutes leaves
+  // room for retries and an impatient reload while still bounding how fast one
+  // token can drive multi-row inserts.
+  RATE_LIMIT_WRITE_MAX_REQUESTS: z.coerce.number().int().positive().default(60),
+  // Requests to the report read routes (the monthly list) one *address* may
+  // make within that same window. Address-keyed, not subject-keyed, because
+  // this limiter runs ahead of `authenticate` (see writeRateLimit.middleware.ts)
+  // so there is no verified identity yet. Sized as a generous per-person read
+  // budget — a page load plus heavy month navigation is well under 60 — times
+  // the same ~10-people-per-office-NAT assumption as RATE_LIMIT_IP_MAX_ATTEMPTS.
+  RATE_LIMIT_READ_MAX_REQUESTS: z.coerce.number().int().positive().default(600),
+  // Requests one *address* may make to routes that guard `authenticate` with an
+  // address-keyed limiter while still applying a per-caller one afterwards (see
+  // authGuardRateLimit). Deliberately the loosest of these caps: it is the outer
+  // limit on a key a whole office can share, so it is there to stop an
+  // unauthenticated flood, not to shape one caller's traffic.
+  RATE_LIMIT_AUTH_GUARD_MAX_REQUESTS: z.coerce.number().int().positive().default(1200),
+  // Requests to POST /logout one *address* may make within that same window.
+  // Address-keyed, not subject-keyed, because this limiter deliberately runs
+  // ahead of `authenticate` (see writeRateLimit.middleware.ts), so there is no
+  // verified identity yet. Sized on the same ~10-people-per-office-NAT
+  // assumption as RATE_LIMIT_IP_MAX_ATTEMPTS: logging out is a handful of
+  // requests per person per window, so 60 leaves ample headroom.
+  RATE_LIMIT_LOGOUT_MAX_REQUESTS: z.coerce.number().int().positive().default(60),
+  // Durable lockout tier above the in-memory throttle: derived from
+  // login_attempts rows rather than a stored flag, so it survives restart
+  // and is shared across replicas. Threshold and window must sit above the
+  // throttle's so ordinary mistyping never reaches this tier - see
+  // openspec/changes/login-account-lockout/design.md.
+  LOCKOUT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(10),
+  LOCKOUT_WINDOW_HOURS: z.coerce.number().int().positive().default(24),
+  LOCKOUT_DURATION_MINUTES: z.coerce.number().int().positive().default(30),
   // How many reverse-proxy hops in front of this service to trust when
   // resolving a client's address from X-Forwarded-For. Passed straight to
   // Express's `trust proxy` setting. Disabled by default: trusting a proxy
@@ -59,6 +85,12 @@ const envSchema = z.object({
 }).refine((data) => data.RATE_LIMIT_IP_MAX_ATTEMPTS >= data.RATE_LIMIT_EMAIL_MAX_ATTEMPTS, {
   message: 'RATE_LIMIT_IP_MAX_ATTEMPTS must be >= RATE_LIMIT_EMAIL_MAX_ATTEMPTS',
   path: ['RATE_LIMIT_IP_MAX_ATTEMPTS'],
+}).refine((data) => data.LOCKOUT_MAX_ATTEMPTS > data.RATE_LIMIT_EMAIL_MAX_ATTEMPTS, {
+  message: 'LOCKOUT_MAX_ATTEMPTS must be > RATE_LIMIT_EMAIL_MAX_ATTEMPTS, so the throttle catches ordinary mistyping before the lock does',
+  path: ['LOCKOUT_MAX_ATTEMPTS'],
+}).refine((data) => data.LOCKOUT_WINDOW_HOURS * 3600 > data.RATE_LIMIT_WINDOW_SECONDS, {
+  message: 'LOCKOUT_WINDOW_HOURS must be longer than RATE_LIMIT_WINDOW_SECONDS',
+  path: ['LOCKOUT_WINDOW_HOURS'],
 });
 
 export type Env = z.infer<typeof envSchema>;
