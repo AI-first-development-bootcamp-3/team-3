@@ -5,9 +5,10 @@ import { completeClock } from '../services/clock'
 import { createReport, getReportingOptions } from '../services/reports'
 import type { ClockSession } from '../types/clock'
 import type { ReportingOptions, WorkLocation } from '../types'
-import { OVERFLOW_HOURS_MESSAGE } from './ManualReport.schema'
+import { projectFormat } from './ManualReport.schema'
 import { LOCATION_OPTIONS } from './ManualReport.constants'
-import { segmentHours, totalSessionMinutes } from '../lib/workClock'
+import { translateReportApiMessage } from '../lib/reportApiMessages'
+import { attendanceTimesForSegment, clockReportTimeFields, totalSessionMinutes } from '../lib/workClock'
 import './WorkClockStopModal.css'
 
 interface Props {
@@ -20,13 +21,6 @@ interface Props {
 
 function hasAssignments(options: ReportingOptions | null): boolean {
   return Boolean(options?.clients.some((client) => client.projects.some((project) => project.tasks.length > 0)))
-}
-
-function translateApiMessage(message: string): string {
-  if (message.includes('cannot exceed the attendance window')) {
-    return OVERFLOW_HOURS_MESSAGE
-  }
-  return message
 }
 
 function formatDurationLabel(totalMinutes: number): string {
@@ -111,17 +105,22 @@ function WorkClockStopModal({ open, session, loading = false, onCancel, onConfir
     setSubmitting(true)
     setSubmitError(null)
     try {
+      const reportFormat = projectFormat(options, clientId, projectId)
       for (const segment of session.segments) {
+        const window =
+          reportFormat === 'CLOCK_IN_OUT'
+            ? attendanceTimesForSegment(segment)
+            : { startTime: segment.startTime, endTime: segment.endTime }
         await createReport({
           clientId,
           projectId,
           taskId,
           date: segment.date,
           workLocation,
-          startTime: segment.startTime,
-          endTime: segment.endTime,
-          hours: segmentHours(segment),
+          startTime: window.startTime,
+          endTime: window.endTime,
           description: description.trim(),
+          ...clockReportTimeFields(segment, reportFormat),
         })
       }
       await completeClock()
@@ -129,10 +128,9 @@ function WorkClockStopModal({ open, session, loading = false, onCancel, onConfir
       onConfirmed()
     } catch (error) {
       if (error instanceof ApiError) {
-        const details = (error.body as { error?: { details?: { message?: string }[] } } | undefined)
-          ?.error?.details
-        const message = translateApiMessage(details?.[0]?.message ?? 'לא ניתן לשמור את הדיווח')
-        setSubmitError(message)
+        const body = error.body as { error?: { message?: string; details?: { message?: string }[] } } | undefined
+        const raw = body?.error?.details?.[0]?.message ?? body?.error?.message ?? 'לא ניתן לשמור את הדיווח'
+        setSubmitError(translateReportApiMessage(raw))
       } else {
         setSubmitError('לא ניתן לשמור את הדיווח')
       }
