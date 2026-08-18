@@ -37,6 +37,9 @@ describe('parseEnv', () => {
       LOCKOUT_WINDOW_HOURS: 24,
       LOCKOUT_DURATION_MINUTES: 30,
       TRUST_PROXY: 'false',
+      SUPABASE_URL: 'https://test.supabase.co',
+      SUPABASE_ANON_KEY: 'test-anon-key',
+      SUPABASE_SERVICE_KEY: 'test-service-key',
     });
   });
 
