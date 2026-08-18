@@ -8,7 +8,7 @@ import {
 } from '../controllers/adminUser.controller.js';
 import { authenticate, requireRole } from '../middleware/auth.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
-import { readRateLimit } from '../middleware/writeRateLimit.middleware.js';
+import { readRateLimit, writeRateLimit } from '../middleware/writeRateLimit.middleware.js';
 import { Role } from '../generated/prisma/enums.js';
 import {
   changeRoleBodySchema,
@@ -82,6 +82,7 @@ adminUserRouter.get('/admin/users', readRateLimit, authenticate, requireRole(Rol
 adminUserRouter.post(
   '/admin/users',
   authenticate,
+  writeRateLimit,
   requireRole(Role.ADMIN),
   validate({ body: createUserBodySchema }),
   postAdminUser,
@@ -126,6 +127,7 @@ adminUserRouter.post(
 adminUserRouter.patch(
   '/admin/users/:id/reset-password',
   authenticate,
+  writeRateLimit,
   requireRole(Role.ADMIN),
   validate({ params: userIdParamSchema }),
   patchAdminUserResetPassword,
@@ -179,6 +181,7 @@ adminUserRouter.patch(
 adminUserRouter.patch(
   '/admin/users/:id/role',
   authenticate,
+  writeRateLimit,
   requireRole(Role.ADMIN),
   validate({ params: userIdParamSchema, body: changeRoleBodySchema }),
   patchAdminUserRole,
@@ -232,6 +235,7 @@ adminUserRouter.patch(
 adminUserRouter.patch(
   '/admin/users/:id/status',
   authenticate,
+  writeRateLimit,
   requireRole(Role.ADMIN),
   validate({ params: userIdParamSchema, body: setUserActiveBodySchema }),
   patchAdminUserStatus,

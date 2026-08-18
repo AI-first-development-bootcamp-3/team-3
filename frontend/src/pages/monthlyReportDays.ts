@@ -2,6 +2,7 @@ import { ABSENCE_TYPE_LABELS } from '../components/AbsenceReport.schema'
 import { attendanceWindowHours } from '../components/ManualReport.schema'
 import tagBuilding from '../assets/home/tag-building.svg'
 import tagNote from '../assets/home/tag-note.svg'
+import { DAY_STATUS_LABELS } from '../lib/dayStatusLabels'
 import { expandWorkingDayIsos, monthEndIso, weekendDatesInclusive } from '../lib/workingDays'
 import dayjs from '../services/dayjs'
 import type { Absence, TimeReportListItem, WorkLocation } from '../types'
@@ -60,10 +61,10 @@ function hoursDay(isoDate: string, rows: TimeReportListItem[]): DemoDay {
   let status: string
   if (weekend) {
     tone = 'weekend'
-    status = 'סופ״ש'
+    status = DAY_STATUS_LABELS.weekend
   } else if (hoursShortOfWindow(allocatedHours, windowHours)) {
     tone = 'missing'
-    status = 'חסר'
+    status = DAY_STATUS_LABELS.missing
   } else if (windowHours >= STANDARD_HOURS) {
     tone = 'full'
     status = formatHoursLabel(windowHours)
@@ -72,7 +73,7 @@ function hoursDay(isoDate: string, rows: TimeReportListItem[]): DemoDay {
     status = formatHoursLabel(windowHours)
   } else {
     tone = 'missing'
-    status = 'חסר'
+    status = DAY_STATUS_LABELS.missing
   }
 
   return {
@@ -98,6 +99,7 @@ function absenceDay(isoDate: string, type: Absence['type']): DemoDay {
     tone: 'absence',
     status: ABSENCE_TYPE_LABELS[type],
     tags: [],
+    absenceType: type,
   }
 }
 
@@ -106,7 +108,7 @@ function weekendDay(isoDate: string): DemoDay {
     isoDate,
     date: dayjs(isoDate).format('DD/MM/YY, ddd'),
     tone: 'weekend',
-    status: 'סופ״ש',
+    status: DAY_STATUS_LABELS.weekend,
     tags: [],
     weekend: true,
   }

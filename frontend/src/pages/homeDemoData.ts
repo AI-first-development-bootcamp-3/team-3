@@ -2,7 +2,8 @@
  * Local preview fixtures for the hours home.
  *
  * KPI and monthly-list APIs are still stubbed in demo mode. These rows exist only so we can eyeball
- * every badge tone during development. Gated behind `?demo=1` in a dev build.
+ * every badge tone during development. They are not a copy of the Figma sample numbers.
+ * Gated behind `?demo=1` in a dev build; MUST NOT ship as the source of dashboard numbers.
  */
 import tagAlertRed from '../assets/home/tag-alert-red.svg'
 import tagAlertOrange from '../assets/home/tag-alert-orange.svg'
@@ -12,6 +13,7 @@ import tagBuilding from '../assets/home/tag-building.svg'
 import tagNote from '../assets/home/tag-note.svg'
 import dayJobs from '../assets/home/day-jobs.svg'
 import dayWeekend from '../assets/home/day-weekend.svg'
+import type { AbsenceType } from '../types'
 
 export type DemoStatusTone = 'missing' | 'full' | 'partial' | 'weekend' | 'absence'
 
@@ -24,6 +26,9 @@ export type DemoDay = {
   status: string
   tags: DemoTag[]
   weekend?: boolean
+  /** Set on `absence` rows so the day list can be filtered by type without
+   * matching on the display label. */
+  absenceType?: AbsenceType
 }
 
 export const DEMO_MONTH = '2026-08-01'
