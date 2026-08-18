@@ -1,100 +1,4 @@
-# frontend-employee-home Specification
-
-## Purpose
-Defines the authenticated employee hours home screen: Figma chrome, month control, manual-report entry, the daily list and its day-status filter, and honest empty states wherever an API is still missing.
-## Requirements
-### Requirement: Home shows Figma chrome for authenticated employees
-
-The authenticated `/` route SHALL present a Hebrew RTL home with the title **דיווח שעות**, the abra wordmark, a month control showing the displayed month name, and an orange **דיווח ידני** control. Unauthenticated callers SHALL continue to be sent to login by the existing auth gate.
-
-#### Scenario: Signed-in employee opens hours home
-
-- **WHEN** an authenticated employee opens `/`
-- **THEN** they see **דיווח שעות**, the abra wordmark, the current month name, and **דיווח ידני**
-
-#### Scenario: Unauthenticated visitor
-
-- **WHEN** an unauthenticated visitor opens `/`
-- **THEN** they are redirected to login and do not see the home shell
-
-### Requirement: Month control is visual only
-
-The home SHALL show previous/next month controls. Changing the month SHALL update the displayed month label and SHALL NOT load reports, KPIs, or any new API. Empty KPI and list states SHALL remain empty. Changing the month SHALL NOT change the date default of the manual entry form (that form SHALL still default to today).
-
-#### Scenario: User taps next month
-
-- **WHEN** the user activates the next-month control
-- **THEN** the month label advances one calendar month and the KPI and daily-list empty states are unchanged
-
-#### Scenario: User taps previous month
-
-- **WHEN** the user activates the previous-month control
-- **THEN** the month label goes back one calendar month and the KPI and daily-list empty states are unchanged
-
-### Requirement: Manual report opens the existing entry form
-
-Activating **דיווח ידני** SHALL show the existing daily time-report entry form (date, location, times, client/project/task, description, save). Save, validation, and reset behavior SHALL remain as in SCRUM-114. The home chrome (title, month, CTAs) SHALL remain visible.
-
-#### Scenario: User starts a manual report
-
-- **WHEN** the user activates **דיווח ידני**
-- **THEN** the daily entry form is visible and can be submitted as today
-
-#### Scenario: User returns to the empty home
-
-- **WHEN** the user dismisses the entry form
-- **THEN** the KPI and daily-list empty states are visible again
-
-### Requirement: Clock is not a working timer
-
-The home SHALL show **הפעלת שעון** to match Figma density. It SHALL NOT start a timer, SHALL NOT open a stop modal, and SHALL NOT persist time. It MUST be disabled, MUST be visually dimmed, and MUST carry **בקרוב** as accessible text and tooltip. Figma has no **בקרוב** badge, so the hint SHALL NOT be printed as visible chrome.
-
-#### Scenario: User cannot start the clock
-
-- **WHEN** the home is shown
-- **THEN** activating **הפעלת שעון** does not start a timer or create a report
-
-### Requirement: KPI row is an empty state, not fake data
-
-The home SHALL show five labeled summary cards matching the mock: **שעות חודשיות**, **ימי חופשה**, **ימי מחלה**, **דיווחים חסרים**, **פרויקטים מדווחים**, each with its Figma-exported icon. Until the summary API exists, each card SHALL show **אין נתונים עדיין**. The UI MUST NOT display invented figures (for example 142.5, 180, 2 vacation days).
-
-#### Scenario: Home with no summary API
-
-- **WHEN** an employee opens `/` and no dashboard summary has been loaded
-- **THEN** all five cards are visible by label and none shows a fabricated numeric summary
-
-### Requirement: Figma preview data is dev-only and opt-in
-
-A development build MAY render the populated Figma frame (KPI figures, day rows, status tags) from local fixtures so the design can be reviewed before the APIs exist. It SHALL require an explicit `?demo=1` opt-in, SHALL be unreachable from a production build, and SHALL NOT be wired to any API or user data.
-
-#### Scenario: Reviewer opens the preview
-
-- **WHEN** a developer opens `/?demo=1` in a dev build
-- **THEN** the Figma day rows and status tags are shown from fixtures
-
-#### Scenario: Employee opens the home normally
-
-- **WHEN** an employee opens `/` without the flag, in any build
-- **THEN** the empty KPI and daily-list states are shown and no fixture figure appears
-
-### Requirement: Daily list shows the visible month's days
-
-The home SHALL include a **פירוט יומי** section listing one row per calendar day
-of the visible month, built from the reports and absences loaded for that month.
-Each row SHALL carry a status derived from that day's own data — **חסר**, an
-hours label, **סופ״ש**, or the absence type — and SHALL NOT display invented
-figures. When the visible month yields no day rows, the section SHALL show
-**אין דיווחים להצגה**.
-
-#### Scenario: Month with saved reports
-
-- **WHEN** an employee opens `/` for a month holding saved reports
-- **THEN** **פירוט יומי** lists those days with statuses derived from the loaded data
-
-#### Scenario: Month with nothing to show
-
-- **WHEN** an employee opens `/` for a month yielding no day rows
-- **THEN** **פירוט יומי** is visible and shows **אין דיווחים להצגה**
+## ADDED Requirements
 
 ### Requirement: Daily list can be filtered by day status
 
@@ -212,12 +116,36 @@ filter control SHALL remain usable so the employee can clear or change it.
 - **WHEN** the visible month holds no day rows at all and no filter is applied
 - **THEN** **אין דיווחים להצגה** is shown, exactly as before this change
 
-### Requirement: Empty, not loading-as-success
+### Requirement: Daily list shows the visible month's days
 
-The shell SHALL NOT present a loading spinner that then reveals fake content. There is no home-summary fetch in this change. A future fetch failure on later tickets MUST NOT be pre-solved here.
+The home SHALL include a **פירוט יומי** section listing one row per calendar day
+of the visible month, built from the reports and absences loaded for that month.
+Each row SHALL carry a status derived from that day's own data — **חסר**, an
+hours label, **סופ״ש**, or the absence type — and SHALL NOT display invented
+figures. When the visible month yields no day rows, the section SHALL show
+**אין דיווחים להצגה**.
 
-#### Scenario: First paint of home
+#### Scenario: Month with saved reports
 
-- **WHEN** the authenticated home first renders
-- **THEN** empty KPI and list states are shown immediately without a success-looking populated dashboard
+- **WHEN** an employee opens `/` for a month holding saved reports
+- **THEN** **פירוט יומי** lists those days with statuses derived from the loaded data
 
+#### Scenario: Month with nothing to show
+
+- **WHEN** an employee opens `/` for a month yielding no day rows
+- **THEN** **פירוט יומי** is visible and shows **אין דיווחים להצגה**
+
+## REMOVED Requirements
+
+### Requirement: Daily list is an empty state, not fake days
+
+**Reason**: Describes a state the product left behind. The requirement held the
+list to **אין דיווחים להצגה** "until the monthly list API exists" — that API
+(`GET /reports?month&year`) shipped and the list has been populated since, so the
+requirement has been contradicted by shipped behavior rather than by this change.
+Left standing it would also contradict the filter requirements above.
+
+**Migration**: None — no consumer behavior changes. The requirement is replaced
+by **Daily list shows the visible month's days** above, which keeps the same
+**אין דיווחים להצגה** empty state for a month that yields no rows and keeps the
+same prohibition on invented figures.
