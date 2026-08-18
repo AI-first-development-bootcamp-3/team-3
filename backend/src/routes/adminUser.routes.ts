@@ -8,7 +8,7 @@ import {
 } from '../controllers/adminUser.controller.js';
 import { authenticate, requireRole } from '../middleware/auth.middleware.js';
 import { validate } from '../middleware/validate.middleware.js';
-import { readRateLimit } from '../middleware/writeRateLimit.middleware.js';
+import { authGuardRateLimit, readRateLimit, writeRateLimit } from '../middleware/writeRateLimit.middleware.js';
 import { Role } from '../generated/prisma/enums.js';
 import {
   changeRoleBodySchema,
@@ -81,7 +81,12 @@ adminUserRouter.get('/admin/users', readRateLimit, authenticate, requireRole(Rol
  */
 adminUserRouter.post(
   '/admin/users',
+  // Address-keyed guard first so `authenticate` itself is capped, then the
+  // per-caller write budget once there is an identity to key it by - same
+  // pattern as absence.routes.ts's write routes.
+  authGuardRateLimit,
   authenticate,
+  writeRateLimit,
   requireRole(Role.ADMIN),
   validate({ body: createUserBodySchema }),
   postAdminUser,
@@ -125,7 +130,9 @@ adminUserRouter.post(
  */
 adminUserRouter.patch(
   '/admin/users/:id/reset-password',
+  authGuardRateLimit,
   authenticate,
+  writeRateLimit,
   requireRole(Role.ADMIN),
   validate({ params: userIdParamSchema }),
   patchAdminUserResetPassword,
@@ -178,7 +185,9 @@ adminUserRouter.patch(
  */
 adminUserRouter.patch(
   '/admin/users/:id/role',
+  authGuardRateLimit,
   authenticate,
+  writeRateLimit,
   requireRole(Role.ADMIN),
   validate({ params: userIdParamSchema, body: changeRoleBodySchema }),
   patchAdminUserRole,
@@ -231,7 +240,9 @@ adminUserRouter.patch(
  */
 adminUserRouter.patch(
   '/admin/users/:id/status',
+  authGuardRateLimit,
   authenticate,
+  writeRateLimit,
   requireRole(Role.ADMIN),
   validate({ params: userIdParamSchema, body: setUserActiveBodySchema }),
   patchAdminUserStatus,
