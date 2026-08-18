@@ -32,6 +32,7 @@ function absence(overrides: Partial<Absence> = {}): Absence {
     endDate: '2026-08-19',
     halfDay: false,
     workingDayCount: 3,
+    attachments: [],
     ...overrides,
   }
 }
