@@ -30,3 +30,7 @@ Current example: `epic-admin` (SCRUM-5).
 ## Local run
 
 See [DOCKER.md](DOCKER.md).
+
+## Hosting
+
+Production is Railway, deployed from `main`. Setup: [RAILWAY.md](RAILWAY.md).

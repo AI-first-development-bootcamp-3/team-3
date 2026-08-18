@@ -26,5 +26,8 @@ COPY --from=build /app/package*.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
+COPY --from=build /app/prisma.config.ts ./
+# Railway injects PORT. Migrate is idempotent; running it on boot covers
+# hosts that ignore pre-deploy commands as well as those that run them.
 EXPOSE 3000
-CMD ["node", "dist/server.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && exec node dist/server.js"]

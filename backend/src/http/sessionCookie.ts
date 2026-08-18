@@ -6,7 +6,9 @@ export const SESSION_COOKIE_NAME = 'abra_session';
 const cookieBase = {
   httpOnly: true,
   secure: env.NODE_ENV === 'production',
-  sameSite: 'lax' as const,
+  // Split frontend/API hosts (e.g. two *.up.railway.app URLs) are cross-site.
+  // Lax cookies are not sent on those credentialed fetches; None + Secure are.
+  sameSite: (env.NODE_ENV === 'production' ? 'none' : 'lax') as 'none' | 'lax',
   path: '/',
 };
 
