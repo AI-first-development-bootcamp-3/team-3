@@ -26,8 +26,6 @@ describe('parseEnv', () => {
       JWT_REMEMBER_ME_EXPIRES_IN_SECONDS: 2592000,
       LOG_LEVEL: 'debug',
       STORAGE_DIR: './storage/uploads',
-      SMTP_PORT: 587,
-      EMAIL_FROM: 'no-reply@abra-timesheet.test',
       RATE_LIMIT_EMAIL_MAX_ATTEMPTS: 5,
       RATE_LIMIT_IP_MAX_ATTEMPTS: 50,
       RATE_LIMIT_WINDOW_SECONDS: 900,
@@ -35,37 +33,17 @@ describe('parseEnv', () => {
     });
   });
 
-  it('applies defaults for NODE_ENV, PORT, LOG_LEVEL, STORAGE_DIR, SMTP_PORT, EMAIL_FROM, rate-limit, and trust-proxy settings when omitted', () => {
+  it('applies defaults for NODE_ENV, PORT, LOG_LEVEL, STORAGE_DIR, rate-limit, and trust-proxy settings when omitted', () => {
     const env = parseEnv(minimalRequired);
 
     expect(env.NODE_ENV).toBe('development');
     expect(env.PORT).toBe(3000);
     expect(env.LOG_LEVEL).toBe('info');
     expect(env.STORAGE_DIR).toBe('./storage/uploads');
-    expect(env.SMTP_HOST).toBeUndefined();
-    expect(env.SMTP_PORT).toBe(587);
-    expect(env.EMAIL_FROM).toBe('no-reply@abra-timesheet.test');
     expect(env.RATE_LIMIT_EMAIL_MAX_ATTEMPTS).toBe(5);
     expect(env.RATE_LIMIT_IP_MAX_ATTEMPTS).toBe(50);
     expect(env.RATE_LIMIT_WINDOW_SECONDS).toBe(900);
     expect(env.TRUST_PROXY).toBe('false');
-  });
-
-  it('accepts SMTP configuration when provided', () => {
-    const env = parseEnv({
-      ...minimalRequired,
-      SMTP_HOST: 'smtp.example.test',
-      SMTP_PORT: '2525',
-      SMTP_USER: 'user',
-      SMTP_PASSWORD: 'pass',
-      EMAIL_FROM: 'admin@example.test',
-    });
-
-    expect(env.SMTP_HOST).toBe('smtp.example.test');
-    expect(env.SMTP_PORT).toBe(2525);
-    expect(env.SMTP_USER).toBe('user');
-    expect(env.SMTP_PASSWORD).toBe('pass');
-    expect(env.EMAIL_FROM).toBe('admin@example.test');
   });
 
   it('accepts explicit rate-limit values', () => {
