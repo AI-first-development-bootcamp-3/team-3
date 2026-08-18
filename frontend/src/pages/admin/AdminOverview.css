@@ -1,0 +1,61 @@
+.admin-hub {
+  max-width: 960px;
+}
+
+.admin-hub__title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  color: #1b2a4a;
+}
+
+.admin-hub__lead {
+  margin: 8px 0 24px;
+  font-size: 14px;
+  color: #8a8f99;
+}
+
+.admin-hub__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.admin-hub__card {
+  display: flex;
+  gap: 14px;
+  padding: 18px 16px;
+  border-radius: 14px;
+  background: #fff;
+  text-decoration: none;
+  color: inherit;
+  box-shadow: 0 8px 24px rgb(27 42 74 / 6%);
+}
+
+.admin-hub__card:hover {
+  outline: 2px solid #2f6bff;
+}
+
+.admin-hub__icon {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: #eef3ff;
+}
+
+.admin-hub__card-copy h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1b2a4a;
+}
+
+.admin-hub__card-copy p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #8a8f99;
+}

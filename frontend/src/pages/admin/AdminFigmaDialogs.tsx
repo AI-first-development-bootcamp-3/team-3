@@ -76,14 +76,6 @@ function PersonIcon() {
   )
 }
 
-function FolderIcon() {
-  return (
-    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-      <path d="M3.5 6.5h4l1.2 1.5H16.5v7.5h-13V6.5Z" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  )
-}
-
 function GearIcon() {
   return (
     <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -123,6 +115,15 @@ function PencilIcon() {
   )
 }
 
+function PlusInCircleIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <circle cx="10" cy="10" r="7.25" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M10 6.5v7M6.5 10h7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 export function CreateEntityDialog({
   kind,
   clients,
@@ -138,12 +139,15 @@ export function CreateEntityDialog({
 }) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [clientId, setClientId] = useState(clients[0]?.id ?? '')
+  const [clientId, setClientId] = useState(kind === 'project' ? '' : (clients[0]?.id ?? ''))
   const [projectId, setProjectId] = useState('')
+  const [managerId, setManagerId] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const usersQuery = useQuery({ queryKey: ['adminUsers'], queryFn: listUsers })
+  const managers = (usersQuery.data ?? []).filter((user: AdminUser) => user.isActive)
 
   const clientProjects = projects.filter((item) => item.clientId === clientId)
   const title = kind === 'client' ? 'יצירת לקוח' : kind === 'project' ? 'יצירת פרויקט' : 'יצירת משימה'
@@ -152,7 +156,12 @@ export function CreateEntityDialog({
     kind === 'client'
       ? name.trim().length > 0
       : kind === 'project'
-        ? name.trim().length > 0 && clientId.length > 0
+        ? name.trim().length > 0 &&
+          clientId.length > 0 &&
+          managerId.length > 0 &&
+          startDate.length > 0 &&
+          endDate.length > 0 &&
+          endDate >= startDate
         : name.trim().length > 0 && clientId.length > 0 && projectId.length > 0
 
   const save = async () => {
@@ -163,7 +172,14 @@ export function CreateEntityDialog({
       if (kind === 'client') {
         await createClient({ name: name.trim(), contactDetails: description.trim() || undefined })
       } else if (kind === 'project') {
-        await createProject({ name: name.trim(), clientId })
+        await createProject({
+          name: name.trim(),
+          clientId,
+          managerId,
+          startDate,
+          endDate,
+          description: description.trim(),
+        })
       } else {
         await createTask({ name: name.trim(), projectId })
       }
@@ -180,11 +196,14 @@ export function CreateEntityDialog({
     <Overlay labelledBy="admin-create-title" onClose={onClose}>
       <div className="admin-modal__top">
         <div className="admin-modal__heading">
-          <span className="admin-modal__icon">
-            {kind === 'client' ? <PersonIcon /> : kind === 'project' ? <FolderIcon /> : <GearIcon />}
+          <span className={kind === 'project' ? 'admin-modal__icon admin-modal__icon--tile' : 'admin-modal__icon'}>
+            {kind === 'client' ? <PersonIcon /> : kind === 'project' ? <PlusInCircleIcon /> : <GearIcon />}
           </span>
           <div>
             <h2 id="admin-create-title">{title}</h2>
+            {kind === 'project' ? (
+              <p className="admin-modal__hint">כאן תיצור את הפרויקט החדש שיופיע במערכת</p>
+            ) : null}
           </div>
         </div>
         <CloseX onClick={onClose} />
@@ -197,24 +216,40 @@ export function CreateEntityDialog({
         <input
           value={name}
           onChange={(event) => setName(event.target.value)}
+          placeholder={kind === 'project' ? 'צור שם לפרויקט' : undefined}
           aria-label={kind === 'client' ? 'שם הלקוח' : kind === 'project' ? 'שם הפרויקט' : 'שם המשימה'}
         />
       </label>
 
       {kind !== 'client' ? (
         <label className="admin-field">
-          <span>בחר לקוח</span>
+          <span>{kind === 'project' ? 'שם הלקוח' : 'בחר לקוח'}</span>
           <select
-            aria-label="בחר לקוח"
+            aria-label={kind === 'project' ? 'שם הלקוח' : 'בחר לקוח'}
             value={clientId}
             onChange={(event) => {
               setClientId(event.target.value)
               setProjectId('')
             }}
           >
+            <option value="">{kind === 'project' ? 'מה שם הלקוח' : 'בחירה'}</option>
             {clients.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
+      {kind === 'project' ? (
+        <label className="admin-field">
+          <span>שייך מנהל ראשי לפרויקט</span>
+          <select aria-label="שייך מנהל ראשי לפרויקט" value={managerId} onChange={(event) => setManagerId(event.target.value)}>
+            <option value="">בחר מנהל</option>
+            {managers.map((user) => (
+              <option key={user.id} value={user.id}>
+                {user.displayName}
               </option>
             ))}
           </select>
@@ -235,7 +270,7 @@ export function CreateEntityDialog({
         </label>
       ) : null}
 
-      {kind !== 'client' ? (
+      {kind === 'project' ? (
         <div className="admin-field__row">
           <label className="admin-field">
             <span>תאריך התחלה</span>
@@ -252,7 +287,11 @@ export function CreateEntityDialog({
         <span>
           {kind === 'client' ? 'תיאור הלקוח' : kind === 'project' ? 'תיאור הפרויקט' : 'תיאור המשימה'}
         </span>
-        <textarea value={description} onChange={(event) => setDescription(event.target.value)} />
+        <textarea
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          placeholder={kind === 'project' ? 'תאר בקצרה את הפרויקט' : undefined}
+        />
       </label>
 
       <button
@@ -263,6 +302,7 @@ export function CreateEntityDialog({
           void save()
         }}
       >
+        {kind === 'project' ? <PlusInCircleIcon /> : null}
         {submitLabel}
       </button>
     </Overlay>

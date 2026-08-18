@@ -1,40 +1,112 @@
-import AdminListPage from '../../components/AdminListPage'
-import { actionsColumn } from '../../components/adminActionsColumn'
-
-interface ProjectRecord {
-  key: string
-  name: string
-  client: string
-  status: string
-  manager: string
-}
-
-const mockData: ProjectRecord[] = [
-  { key: '1', name: 'Cargo', client: 'EL-AL', status: 'Active', manager: 'יואב ישראלי' },
-  { key: '2', name: 'Crew-hub', client: 'EL-AL', status: 'Active', manager: 'אריאל מזרחי' },
-  { key: '3', name: 'Globally', client: 'Global Solutions', status: 'Planning', manager: 'גבריאל רון' },
-]
-
-const columns = [
-  actionsColumn,
-  { title: 'Manager', dataIndex: 'manager', key: 'manager', width: 150 },
-  { title: 'Status', dataIndex: 'status', key: 'status', width: 120 },
-  { title: 'Client', dataIndex: 'client', key: 'client', width: 150 },
-  { title: 'Project Name', dataIndex: 'name', key: 'name' },
-]
-
-const matchesName = (project: ProjectRecord, query: string) => project.name.toLowerCase().includes(query)
+import { useMemo, useState } from 'react'
+import { Button, Tag } from 'antd'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import AdminEntityTable from '../../components/AdminEntityTable'
+import { listClients } from '../../services/adminClients'
+import { listProjects, updateProject, type AdminProject } from '../../services/adminProjects'
+import { CreateEntityDialog, EditEntityDialog } from './AdminFigmaDialogs'
+import './AdminAssignments.css'
 
 function AdminProjects() {
+  const queryClient = useQueryClient()
+  const projectsQuery = useQuery({ queryKey: ['adminProjects'], queryFn: listProjects })
+  const clientsQuery = useQuery({ queryKey: ['adminClients'], queryFn: listClients })
+  const [query, setQuery] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [editing, setEditing] = useState<AdminProject | null>(null)
+
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    const rows = projectsQuery.data ?? []
+    if (!needle) return rows
+    return rows.filter(
+      (row) =>
+        row.name.toLowerCase().includes(needle) ||
+        row.clientName.toLowerCase().includes(needle) ||
+        (row.managerName ?? '').toLowerCase().includes(needle),
+    )
+  }, [projectsQuery.data, query])
+
+  const columns = [
+    { title: 'פרויקט', dataIndex: 'name', key: 'name' },
+    { title: 'לקוח', dataIndex: 'clientName', key: 'clientName' },
+    { title: 'מנהל', dataIndex: 'managerName', key: 'managerName', render: (value: string | null) => value ?? '—' },
+    {
+      title: 'סוג דיווח',
+      dataIndex: 'reportFormat',
+      key: 'reportFormat',
+      render: (format: AdminProject['reportFormat']) => (format === 'CLOCK_IN_OUT' ? 'כניסה/יציאה' : 'סיכום שעות'),
+    },
+    {
+      title: 'סטטוס',
+      dataIndex: 'isActive',
+      key: 'isActive',
+      render: (isActive: boolean) => (
+        <Tag color={isActive ? 'green' : 'default'}>{isActive ? 'פעיל' : 'לא פעיל'}</Tag>
+      ),
+    },
+    {
+      title: '',
+      key: 'actions',
+      render: (_: unknown, project: AdminProject) => (
+        <Button type="link" onClick={() => setEditing(project)}>
+          עריכה
+        </Button>
+      ),
+    },
+  ]
+
   return (
-    <AdminListPage
-      title="פרויקטים"
-      description="ניהול פרויקטים. יצירה, עריכה והסרה של פרויקטים."
-      searchPlaceholder="חיפוש לפי שם פרויקט"
-      data={mockData}
-      columns={columns}
-      filter={matchesName}
-    />
+    <section>
+      <div className="admin-page__head">
+        <div className="admin-page__titles">
+          <h1 className="admin-page__title">פרויקטים</h1>
+          <p className="admin-page__lead">פרויקטים תחת לקוחות, כולל מנהל וחלון דיווח.</p>
+        </div>
+        <div className="admin-page__tools">
+          <label className="admin-search">
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="חיפוש לפי פרויקט, לקוח או מנהל"
+            />
+          </label>
+          <button type="button" className="admin-create__btn" onClick={() => setCreating(true)}>
+            פרויקט חדש
+          </button>
+        </div>
+      </div>
+      {creating ? (
+        <CreateEntityDialog
+          kind="project"
+          clients={(clientsQuery.data ?? []).map((client) => ({ id: client.id, name: client.name }))}
+          projects={[]}
+          onClose={() => setCreating(false)}
+          onCreated={() => {
+            void queryClient.invalidateQueries({ queryKey: ['adminProjects'] })
+          }}
+        />
+      ) : null}
+      {editing ? (
+        <EditEntityDialog
+          kind="project"
+          initialName={editing.name}
+          onClose={() => setEditing(null)}
+          onSave={async (name) => {
+            await updateProject(editing.id, { name })
+            await queryClient.invalidateQueries({ queryKey: ['adminProjects'] })
+            setEditing(null)
+          }}
+        />
+      ) : null}
+      <AdminEntityTable
+        columns={columns}
+        dataSource={filtered}
+        rowKey="id"
+        loading={projectsQuery.isLoading}
+      />
+    </section>
   )
 }
 

@@ -60,9 +60,10 @@ type MonthSnapshot = {
   absences: Absence[]
   kpis: MonthKpis | null
   days: DemoDay[]
+  monthLocked: boolean
 }
 
-const EMPTY_MONTH: MonthSnapshot = { reports: [], absences: [], kpis: null, days: [] }
+const EMPTY_MONTH: MonthSnapshot = { reports: [], absences: [], kpis: null, days: [], monthLocked: false }
 
 function headerFromDay(day: DemoDay): ManualReportHeaderMeta {
   return {
@@ -85,6 +86,7 @@ function Reports() {
   const [monthReports, setMonthReports] = useState<TimeReportListItem[]>([])
   const [monthAbsences, setMonthAbsences] = useState<Absence[]>([])
   const [monthKpis, setMonthKpis] = useState<MonthKpis | null>(null)
+  const [monthLocked, setMonthLocked] = useState(false)
   const [listLoading, setListLoading] = useState(
     () => !isHomeDemo() && Boolean(sessionStore.getState().user),
   )
@@ -110,7 +112,7 @@ function Reports() {
       const monthNumber = targetMonth.month() + 1
       const today = dayjs().format('YYYY-MM-DD')
       const userId = sessionStore.getState().user?.id
-      const [{ reports }, absences] = await Promise.all([
+      const [{ reports, monthLocked = false }, absences] = await Promise.all([
         listReports(monthNumber, year),
         listAbsences(monthNumber, year)
           .then((result) => result.absences)
@@ -120,6 +122,7 @@ function Reports() {
       return {
         reports,
         absences,
+        monthLocked,
         kpis: buildMonthKpis({ reports, absences, year, month: monthNumber, today }),
         days: buildHomeDays({
           reports,
@@ -140,6 +143,7 @@ function Reports() {
     setMonthAbsences(snapshot.absences)
     setMonthKpis(snapshot.kpis)
     setSavedDays(snapshot.days)
+    setMonthLocked(snapshot.monthLocked)
   }, [])
 
   const refreshSavedDays = useCallback(async () => {
@@ -211,7 +215,7 @@ function Reports() {
         <li key={day.isoDate}>
           <button
             type="button"
-            className="home-shell__day"
+            className={`home-shell__day${monthLocked ? ' home-shell__day--locked' : ''}`}
             onClick={() => openManualReport(day.isoDate, headerFromDay(day))}
           >
             <div className="home-shell__day-main">

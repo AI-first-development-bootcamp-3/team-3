@@ -60,6 +60,7 @@ function renderScreen(
     initialDate?: string
     initialReports?: Parameters<typeof ManualReport>[0]['initialReports']
     initialAbsences?: Parameters<typeof ManualReport>[0]['initialAbsences']
+    allowAbsenceTab?: boolean
   } = {},
 ) {
   return render(
@@ -590,6 +591,30 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('שמרתם יותר מדי פעמים ברצף')
   })
 
+  it('tells the user the month is locked when save returns 409', async () => {
+    signIn()
+    mockFetch((url) =>
+      url.includes('/reports/batch')
+        ? {
+            ok: false,
+            status: 409,
+            json: { error: { code: 'CONFLICT', message: 'החודש נעול — לא ניתן לדווח' } },
+          }
+        : { ok: true, status: 200, json: options },
+    )
+    const user = userEvent.setup()
+
+    renderScreen()
+    await screen.findByRole('button', { name: 'הוספת פרויקט' })
+    fireEvent.change(screen.getByLabelText('שעת כניסה'), { target: { value: '09:00' } })
+    fireEvent.change(screen.getByLabelText('שעת יציאה'), { target: { value: '18:00' } })
+    await user.click(screen.getByRole('button', { name: 'הוספת פרויקט' }))
+    await fillCard(user, 1, 'client-1:project-1', 'task-2', '9')
+    await user.click(screen.getByRole('button', { name: 'שמירה' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('החודש נעול')
+  })
+
   it('shows a red חסר badge when project hours are less than the attendance window', async () => {
     signIn()
     mockFetch(() => ({ ok: true, status: 200, json: options }))
@@ -1052,5 +1077,14 @@ describe('ManualReport', { timeout: 20_000 }, () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('2026-08-13')
     expect(screen.getByRole('alert')).toHaveTextContent('התאריכים מתנגשים עם דיווח קיים')
+  })
+
+  it('hides the absence tab when an admin is editing another employee', async () => {
+    signIn()
+    mockFetch(() => ({ ok: true, status: 200, json: options }))
+    renderScreen(vi.fn(), { allowAbsenceTab: false })
+
+    expect(await screen.findByRole('button', { name: 'הוספת פרויקט' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'דיווח העדרות' })).not.toBeInTheDocument()
   })
 })

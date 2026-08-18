@@ -1,13 +1,13 @@
 import { z } from 'zod'
 
 export const createUserFormSchema = z.object({
-  displayName: z.string().min(1, 'Name is required'),
-  email: z.string().min(1, 'Email is required').email('Enter a valid email address'),
-  role: z.enum(['ADMIN', 'EMPLOYEE'], { message: 'Select a role' }),
+  displayName: z.string().min(1, 'יש למלא שם'),
+  email: z.string().min(1, 'יש למלא אימייל').email('יש להזין כתובת אימייל תקינה'),
+  role: z.enum(['ADMIN', 'EMPLOYEE'], { message: 'יש לבחור תפקיד' }),
   temporaryPassword: z
     .string()
     .refine((value) => value.length === 0 || value.length >= 8, {
-      message: 'Password must be at least 8 characters',
+      message: 'הסיסמה חייבת להכיל לפחות 8 תווים',
     }),
 })
 

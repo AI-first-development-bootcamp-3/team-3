@@ -24,8 +24,12 @@ function renderAdmin(path = '/admin/assignments') {
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/admin" element={<AdminShell />}>
+          <Route index element={<div>overview page</div>} />
           <Route path="assignments" element={<div>assignments page</div>} />
           <Route path="hour-settings" element={<div>hour settings page</div>} />
+          <Route path="users" element={<div>users page</div>} />
+          <Route path="reports" element={<div>employee reports page</div>} />
+          <Route path="month-lock" element={<div>month lock page</div>} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -37,6 +41,7 @@ describe('AdminShell', () => {
     renderAdmin()
 
     const nav = screen.getByRole('navigation', { name: 'ניהול' })
+    expect(within(nav).getByRole('link', { name: 'סקירה' })).toHaveAttribute('href', '/admin')
     expect(within(nav).getByRole('link', { name: 'ניהול לקוחות/פרויקטים' })).toHaveAttribute(
       'href',
       '/admin/assignments',
@@ -45,7 +50,9 @@ describe('AdminShell', () => {
       'href',
       '/admin/hour-settings',
     )
-    expect(within(nav).queryByRole('link', { name: 'משתמשים' })).not.toBeInTheDocument()
+    expect(within(nav).getByRole('link', { name: 'משתמשים' })).toHaveAttribute('href', '/admin/users')
+    expect(within(nav).getByRole('link', { name: 'דיווחי עובדים' })).toHaveAttribute('href', '/admin/reports')
+    expect(within(nav).getByRole('link', { name: 'נעילת חודש' })).toHaveAttribute('href', '/admin/month-lock')
     expect(screen.getByText('דניאל מוצא')).toBeInTheDocument()
     expect(screen.getByText('מנהל מערכת')).toBeInTheDocument()
   })

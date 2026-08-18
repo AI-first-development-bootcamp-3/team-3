@@ -87,6 +87,65 @@ describe('POST /reports', () => {
     expect(row?.userId).toBe(employee.id);
   });
 
+  it('rejects a report dated outside the project window', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    const client = await createClient({ name: 'Acme' });
+    const project = await createProject({
+      name: 'Website',
+      clientId: client.id,
+      startDate: new Date('2026-01-01T00:00:00.000Z'),
+      endDate: new Date('2026-01-31T00:00:00.000Z'),
+    });
+    const task = await createTask({ name: 'Design', projectId: project.id });
+    await assign(employee, task);
+
+    const response = await request(app)
+      .post('/reports')
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({
+        date: '2026-08-16',
+        workLocation: 'OFFICE',
+        startTime: '09:00',
+        endTime: '18:00',
+        hours: 9,
+        clientId: client.id,
+        projectId: project.id,
+        taskId: task.id,
+        description: 'Too late',
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.message).toBe('התאריך מחוץ לטווח הפרויקט');
+  });
+
+  it('rejects a report in a locked month with 409', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    const client = await createClient({ name: 'Acme' });
+    const project = await createProject({ name: 'Website', clientId: client.id });
+    const task = await createTask({ name: 'Design', projectId: project.id });
+    await assign(employee, task);
+    await prisma.monthLock.create({ data: { year: 2026, month: 8, lockedById: employee.id } });
+
+    const response = await request(app)
+      .post('/reports')
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({
+        date: '2026-08-16',
+        workLocation: 'OFFICE',
+        startTime: '09:00',
+        endTime: '18:00',
+        hours: 9,
+        clientId: client.id,
+        projectId: project.id,
+        taskId: task.id,
+        description: 'Locked',
+      });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error.message).toBe('החודש נעול — לא ניתן לדווח');
+    expect(await prisma.timeReport.count()).toBe(0);
+  });
+
   it('rejects an unauthenticated caller with 401 and creates no row', async () => {
     const response = await request(app).post('/reports').send({
       date: '2026-08-16',
@@ -426,6 +485,20 @@ describe('POST /reports/batch', () => {
   function dayBody(rows: Record<string, unknown>[]) {
     return { date: '2026-08-17', startTime: '09:00', endTime: '18:00', rows };
   }
+
+  it('rejects a batch in a locked month with 409', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    const hierarchy = await aHierarchy(employee);
+    await prisma.monthLock.create({ data: { year: 2026, month: 8, lockedById: employee.id } });
+
+    const response = await request(app)
+      .post('/reports/batch')
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send(dayBody([rowFor(hierarchy, { hours: 9 })]));
+
+    expect(response.status).toBe(409);
+    expect(await prisma.timeReport.count()).toBe(0);
+  });
 
   it('creates every row of the day and stamps them with the caller and date', async () => {
     const employee = await createUser({ role: Role.EMPLOYEE });
@@ -1193,6 +1266,20 @@ describe('GET /reports', () => {
       durationHours: 9,
       description: 'Manual test',
     });
+    expect(response.body.monthLocked).toBe(false);
+  });
+
+  it('marks the month as locked when an admin has closed it', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    await prisma.monthLock.create({ data: { year: 2026, month: 8, lockedById: employee.id } });
+
+    const response = await request(app)
+      .get('/reports')
+      .query({ month: 8, year: 2026 })
+      .set('Authorization', `Bearer ${tokenFor(employee)}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.monthLocked).toBe(true);
   });
 
   it('rejects missing month or year with 400', async () => {
@@ -1281,6 +1368,23 @@ describe('DELETE /reports', () => {
 
     expect(response.status).toBe(401);
   });
+
+  it('rejects deleting a day in a locked month with 409', async () => {
+    const employee = await createUser();
+    await createTimeReport({
+      userId: employee.id,
+      date: new Date('2026-08-17T00:00:00.000Z'),
+    });
+    await prisma.monthLock.create({ data: { year: 2026, month: 8, lockedById: employee.id } });
+
+    const response = await request(app)
+      .delete('/reports')
+      .query({ date: '2026-08-17' })
+      .set('Authorization', `Bearer ${tokenFor(employee)}`);
+
+    expect(response.status).toBe(409);
+    expect(await prisma.timeReport.count()).toBe(1);
+  });
 });
 
 describe('report read rate limiting', () => {
@@ -1334,7 +1438,7 @@ describe('GET /me/reporting-options', () => {
     await resetDatabase();
   });
 
-  it('returns the nested active assigned tree sorted by name', async () => {
+  it('returns the nested active assigned tree sorted by name when unused', async () => {
     const employee = await createUser();
     const zebra = await createClient({ name: 'זברה' });
     const acme = await createClient({ name: 'Acme' });
@@ -1356,6 +1460,38 @@ describe('GET /me/reporting-options', () => {
     expect(response.body.clients.map((c: { name: string }) => c.name)).toEqual(['Acme', 'זברה']);
     expect(response.body.clients[0].projects[0].tasks.map((t: { name: string }) => t.name)).toEqual([
       'Design',
+      'QA',
+    ]);
+  });
+
+  it('sorts clients, projects, and tasks by how often the caller has reported them', async () => {
+    const employee = await createUser();
+    const rare = await createClient({ name: 'Acme' });
+    const frequent = await createClient({ name: 'זברה' });
+    const rareProject = await createProject({ name: 'Website', clientId: rare.id });
+    const frequentProject = await createProject({ name: 'App', clientId: frequent.id });
+    const rareTask = await createTask({ name: 'Design', projectId: rareProject.id });
+    const frequentTask = await createTask({ name: 'Build', projectId: frequentProject.id });
+    const otherTask = await createTask({ name: 'QA', projectId: frequentProject.id });
+    await assign(employee, rareTask, frequentTask, otherTask);
+
+    await createTimeReport({ userId: employee.id, taskId: frequentTask.id, hours: 2 });
+    await createTimeReport({
+      userId: employee.id,
+      taskId: frequentTask.id,
+      date: new Date('2026-08-17T00:00:00.000Z'),
+      hours: 2,
+    });
+    await createTimeReport({ userId: employee.id, taskId: otherTask.id, hours: 1 });
+
+    const response = await request(app)
+      .get('/me/reporting-options')
+      .set('Authorization', `Bearer ${tokenFor(employee)}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.clients.map((c: { name: string }) => c.name)).toEqual(['זברה', 'Acme']);
+    expect(response.body.clients[0].projects[0].tasks.map((t: { name: string }) => t.name)).toEqual([
+      'Build',
       'QA',
     ]);
   });

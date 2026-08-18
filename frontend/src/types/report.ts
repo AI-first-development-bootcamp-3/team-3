@@ -57,6 +57,7 @@ export interface TimeReportListItem extends Report {
 
 export interface ListReportsResult {
   reports: TimeReportListItem[]
+  monthLocked?: boolean
 }
 
 export interface ReportingTaskOption {
