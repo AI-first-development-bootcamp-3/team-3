@@ -4,7 +4,7 @@ import multer from 'multer';
 import { upload } from '../config/multer.js';
 import { getAttachment, postAttachment } from '../controllers/attachment.controller.js';
 import { authenticate } from '../middleware/auth.middleware.js';
-import { readRateLimit, writeRateLimit } from '../middleware/writeRateLimit.middleware.js';
+import { authGuardRateLimit, readRateLimit, writeRateLimit } from '../middleware/writeRateLimit.middleware.js';
 import { AppError } from '../types/errors.js';
 
 export const attachmentRouter = Router();
@@ -66,7 +66,17 @@ function handleUpload(req: Request, res: Response, next: NextFunction): void {
  *           application/json:
  *             schema: { $ref: '#/components/schemas/Error' }
  */
-attachmentRouter.post('/attachments', authenticate, writeRateLimit, handleUpload, postAttachment);
+attachmentRouter.post(
+  '/attachments',
+  // Address-keyed guard first so `authenticate` itself is capped, then the
+  // per-caller write budget once there is an identity to key it by - same
+  // pattern as absence.routes.ts's write routes.
+  authGuardRateLimit,
+  authenticate,
+  writeRateLimit,
+  handleUpload,
+  postAttachment,
+);
 
 /**
  * @openapi
