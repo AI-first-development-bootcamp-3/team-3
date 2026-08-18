@@ -12,7 +12,9 @@ function tokenFor(user: { id: string; role: string }): string {
   return jwt.sign({ sub: user.id, role: user.role }, env.JWT_SECRET, { expiresIn: '1h' });
 }
 
-describe('Absence with Attachments Integration', () => {
+const isUsingMockCredentials = env.SUPABASE_URL?.includes('test.supabase.co');
+
+describe.skipIf(isUsingMockCredentials)('Absence with Attachments Integration', () => {
   afterEach(async () => {
     await resetDatabase();
   });

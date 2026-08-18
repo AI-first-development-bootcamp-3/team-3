@@ -66,7 +66,7 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '' }: Props) {
       try {
         const metadata = await uploadAttachment(file)
         newUploadedFiles.push(metadata)
-      } catch (error) {
+      } catch {
         message.error(`Failed to upload ${file.name}`)
       }
     }

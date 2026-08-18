@@ -1,7 +1,9 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { supabaseFileStorage } from '../supabaseFileStorage.js';
 
-describe('supabaseFileStorage', () => {
+const isUsingMockCredentials = process.env.SUPABASE_URL?.includes('test.supabase.co');
+
+describe.skipIf(isUsingMockCredentials)('supabaseFileStorage', () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
