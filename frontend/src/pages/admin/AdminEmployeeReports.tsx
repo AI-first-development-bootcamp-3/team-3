@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from '../../services/dayjs'
 import { listUsers } from '../../services/adminUsers'
@@ -71,6 +71,7 @@ function AdminEmployeeReports() {
   const [newDate, setNewDate] = useState(`${today.year()}-${String(today.month() + 1).padStart(2, '0')}-01`)
   const [editor, setEditor] = useState<Editor | null>(null)
   const [panelOpen, setPanelOpen] = useState(false)
+  const closeTimerRef = useRef<number>(undefined)
 
   const usersQuery = useQuery({ queryKey: ['adminUsers'], queryFn: listUsers })
   const reportsQuery = useQuery({
@@ -103,13 +104,15 @@ function AdminEmployeeReports() {
   )
 
   const openDay = (isoDate: string, reports: TimeReportListItem[]) => {
+    window.clearTimeout(closeTimerRef.current)
     setEditor({ isoDate, reports, sessionKey: Date.now() })
     setPanelOpen(true)
   }
 
   const closeEditor = () => {
     setPanelOpen(false)
-    window.setTimeout(() => setEditor(null), SLIDE_MS)
+    window.clearTimeout(closeTimerRef.current)
+    closeTimerRef.current = window.setTimeout(() => setEditor(null), SLIDE_MS)
   }
 
   const refreshEmployeeMonth = () => {
