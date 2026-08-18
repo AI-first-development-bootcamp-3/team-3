@@ -6,7 +6,7 @@
 export const testEnv = {
   NODE_ENV: 'test',
   PORT: '4000',
-  DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/abra_test',
+  DATABASE_URL: process.env.TEST_DATABASE_URL ?? 'postgresql://postgres:postgres@localhost:5432/abra_test',
   CORS_ORIGIN: 'http://localhost:5173',
   JWT_SECRET: 'test-only-secret-at-least-32-characters-long',
   LOG_LEVEL: 'silent',

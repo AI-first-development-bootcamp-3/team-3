@@ -1,48 +1,123 @@
-import { useState } from 'react'
-import AdminListPage from '../../components/AdminListPage'
-import { actionsColumn } from '../../components/adminActionsColumn'
+import { useMemo, useState } from 'react'
+import { App, Button, Select, Tag } from 'antd'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import AdminEntityTable from '../../components/AdminEntityTable'
 import CreateUserForm from '../../components/CreateUserForm'
-
-interface UserRecord {
-  key: string
-  email: string
-  displayName: string
-  role: string
-  status: string
-}
-
-const mockData: UserRecord[] = [
-  { key: '1', email: 'user1@example.com', displayName: 'יואב ישראלי', role: 'EMPLOYEE', status: 'Active' },
-  { key: '2', email: 'user2@example.com', displayName: 'אריאל מזרחי', role: 'ADMIN', status: 'Active' },
-  { key: '3', email: 'user3@example.com', displayName: 'גבריאל רון', role: 'EMPLOYEE', status: 'Active' },
-  { key: '4', email: 'user4@example.com', displayName: 'לי כהן', role: 'EMPLOYEE', status: 'Inactive' },
-]
-
-const columns = [
-  actionsColumn,
-  { title: 'Status', dataIndex: 'status', key: 'status', width: 120 },
-  { title: 'Role', dataIndex: 'role', key: 'role', width: 120 },
-  { title: 'Full Name', dataIndex: 'displayName', key: 'displayName', width: 180 },
-  { title: 'Email', dataIndex: 'email', key: 'email' },
-]
-
-const matchesDisplayName = (user: UserRecord, query: string) => user.displayName.toLowerCase().includes(query)
+import {
+  listUsers,
+  resetUserPassword,
+  updateUserRole,
+  updateUserStatus,
+  type AdminUser,
+  type BackendRole,
+} from '../../services/adminUsers'
+import './AdminAssignments.css'
 
 function AdminUsers() {
-  const [showForm, setShowForm] = useState(false)
+  const { notification } = App.useApp()
+  const queryClient = useQueryClient()
+  const { data: users = [], isLoading } = useQuery({ queryKey: ['adminUsers'], queryFn: listUsers })
+  const [query, setQuery] = useState('')
+  const [showCreate, setShowCreate] = useState(false)
+
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    if (!needle) return users
+    return users.filter(
+      (user) =>
+        user.displayName.toLowerCase().includes(needle) || user.email.toLowerCase().includes(needle),
+    )
+  }, [query, users])
+
+  const statusMutation = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => updateUserStatus(id, isActive),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminUsers'] }),
+  })
+  const roleMutation = useMutation({
+    mutationFn: ({ id, role }: { id: string; role: BackendRole }) => updateUserRole(id, role),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminUsers'] }),
+  })
+
+  const columns = [
+    { title: 'שם', dataIndex: 'displayName', key: 'displayName' },
+    { title: 'אימייל', dataIndex: 'email', key: 'email' },
+    {
+      title: 'תפקיד',
+      key: 'role',
+      render: (_: unknown, user: AdminUser) => (
+        <Select
+          aria-label={`תפקיד ${user.displayName}`}
+          value={user.role}
+          options={[
+            { value: 'EMPLOYEE', label: 'עובד' },
+            { value: 'ADMIN', label: 'מנהל' },
+          ]}
+          onChange={(role) => roleMutation.mutate({ id: user.id, role })}
+          style={{ minWidth: 110 }}
+        />
+      ),
+    },
+    {
+      title: 'סטטוס',
+      dataIndex: 'isActive',
+      key: 'isActive',
+      render: (isActive: boolean) => (
+        <Tag color={isActive ? 'green' : 'default'}>{isActive ? 'פעיל' : 'לא פעיל'}</Tag>
+      ),
+    },
+    {
+      title: '',
+      key: 'actions',
+      render: (_: unknown, user: AdminUser) => (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Button
+            type="link"
+            onClick={() => statusMutation.mutate({ id: user.id, isActive: !user.isActive })}
+          >
+            {user.isActive ? 'השבתה' : 'הפעלה'}
+          </Button>
+          <Button
+            type="link"
+            onClick={async () => {
+              const result = await resetUserPassword(user.id)
+              notification.success({
+                message: 'סיסמה זמנית חדשה',
+                description: `${user.email}: ${result.temporaryPassword}`,
+                duration: 0,
+              })
+            }}
+          >
+            איפוס סיסמה
+          </Button>
+        </div>
+      ),
+    },
+  ]
 
   return (
-    <AdminListPage
-      title="משתמשים"
-      description="ניהול משתמשים במערכת. יצירה, עריכה והסרה של משתמשים."
-      searchPlaceholder="חיפוש לפי שם משתמש"
-      data={mockData}
-      columns={columns}
-      filter={matchesDisplayName}
-      onCreate={() => setShowForm(!showForm)}
-    >
-      {showForm && <CreateUserForm />}
-    </AdminListPage>
+    <section>
+      <div className="admin-page__head">
+        <div className="admin-page__titles">
+          <h1 className="admin-page__title">משתמשים</h1>
+          <p className="admin-page__lead">יצירה, שינוי תפקיד, הפעלה ואיפוס סיסמה.</p>
+        </div>
+        <div className="admin-page__tools">
+          <label className="admin-search">
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="חיפוש לפי שם או אימייל"
+            />
+          </label>
+          <button type="button" className="admin-create__btn" onClick={() => setShowCreate((open) => !open)}>
+            משתמש חדש
+          </button>
+        </div>
+      </div>
+      {showCreate ? <CreateUserForm /> : null}
+      <AdminEntityTable columns={columns} dataSource={filtered} rowKey="id" loading={isLoading} />
+    </section>
   )
 }
 
