@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from '../../services/dayjs'
 import { listUsers } from '../../services/adminUsers'
@@ -71,8 +71,6 @@ function AdminEmployeeReports() {
   const [newDate, setNewDate] = useState(`${today.year()}-${String(today.month() + 1).padStart(2, '0')}-01`)
   const [editor, setEditor] = useState<Editor | null>(null)
   const [panelOpen, setPanelOpen] = useState(false)
-  const reasonRef = useRef(reason)
-  reasonRef.current = reason
 
   const usersQuery = useQuery({ queryKey: ['adminUsers'], queryFn: listUsers })
   const reportsQuery = useQuery({
@@ -95,13 +93,13 @@ function AdminEmployeeReports() {
       saveAdminEmployeeReportBatch({
         userId: employeeId,
         ...body,
-        reason: reasonRef.current.trim() || undefined,
+        reason: reason.trim() || undefined,
       }),
-    [employeeId],
+    [employeeId, reason],
   )
   const deleteDay = useCallback(
-    (date: string) => deleteAdminEmployeeReports(employeeId, date, reasonRef.current.trim() || undefined),
-    [employeeId],
+    (date: string) => deleteAdminEmployeeReports(employeeId, date, reason.trim() || undefined),
+    [employeeId, reason],
   )
 
   const openDay = (isoDate: string, reports: TimeReportListItem[]) => {
