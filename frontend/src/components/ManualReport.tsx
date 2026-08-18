@@ -7,10 +7,12 @@ import dayjs from '../services/dayjs'
 import { deleteAbsence } from '../services/absences'
 import { createReportBatch, deleteReportsForDate, getReportingOptions, toReportRow } from '../services/reports'
 import type { Absence, ReportingOptions, TimeReportListItem, WorkLocation } from '../types'
+import { translateReportApiMessage } from '../lib/reportApiMessages'
 import {
   attendanceWindowHours,
   buildManualReportSchema,
   OVERFLOW_HOURS_MESSAGE,
+  UNDERFILL_HOURS_MESSAGE,
   projectFormat,
   rowAllocatedHours,
   rowFormat,
@@ -48,6 +50,10 @@ const STANDARD_HOURS = 9
 const MISSING_DETAILS = {
   title: 'חסר לנו פרט או שניים',
   detail: 'מלא את כל הנתונים הדרושים כדי שנוכל לשמור את הדיווח בהצלחה.',
+}
+const UNDERFILL = {
+  title: 'חסרות שעות בפרויקטים',
+  detail: 'יש לחלק את כל שעות חלון הכניסה–יציאה לפרויקטים לפני השמירה.',
 }
 const ZERO_HOURS = {
   title: 'שעות לא תקינות',
@@ -179,22 +185,7 @@ function apiFieldErrors(body: unknown): { field: string; message: string }[] {
 }
 
 function translateApiMessage(message: string): string {
-  if (/invalid uuid/i.test(message)) {
-    return 'ערך לא תקין — בחרו שוב מהרשימה'
-  }
-  if (message.includes('cannot exceed the attendance window')) {
-    return OVERFLOW_HOURS_MESSAGE
-  }
-  if (message.includes('clocked over the same stretch of time')) {
-    return ROWS_OVERLAP_MESSAGE
-  }
-  if (message.includes('inside the day attendance window')) {
-    return ROW_OUTSIDE_WINDOW_MESSAGE
-  }
-  if (message.includes('later than its start time')) {
-    return ROW_ZERO_LENGTH_MESSAGE
-  }
-  return message
+  return translateReportApiMessage(message)
 }
 
 function applyApiFieldErrors(
@@ -279,6 +270,9 @@ function bannerForInvalid(
   const rowList = formErrors.rows
   if (arrayErrorMessage(rowList) === OVERFLOW_HOURS_MESSAGE) {
     return overflowBanner(allocatedHours, windowHours)
+  }
+  if (arrayErrorMessage(rowList) === UNDERFILL_HOURS_MESSAGE) {
+    return UNDERFILL
   }
   const rowIssues = Object.entries(rowList ?? {})
     .filter(([key]) => /^\d+$/.test(key))
@@ -462,6 +456,15 @@ function ManualReport({
     setBanner(null)
     if (!hasHierarchy) {
       setBanner(EMPTY_TREE)
+      return
+    }
+    const windowHours = attendanceWindowHours(values.dayStart, values.dayEnd)
+    const allocated = values.rows.reduce(
+      (sum, row) => sum + rowAllocatedHours(options, values.dayStart, row),
+      0,
+    )
+    if (hoursShortOfWindow(allocated, windowHours)) {
+      setBanner(UNDERFILL)
       return
     }
     try {

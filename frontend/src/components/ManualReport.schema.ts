@@ -82,6 +82,7 @@ const projectRowSchema = z.object({
 })
 
 export const OVERFLOW_HOURS_MESSAGE = 'סכום שעות הפרויקטים גדול מחלון הכניסה–יציאה'
+export const UNDERFILL_HOURS_MESSAGE = 'יש לחלק את כל שעות חלון הכניסה–יציאה לפרויקטים לפני השמירה'
 export const HOURS_RANGE_MESSAGE = 'יש להזין מספר בין 0.5 ל-24, עם לכל היותר ספרה אחת אחרי הנקודה'
 export const ROW_START_REQUIRED_MESSAGE = 'יש לבחור שעת כניסה לפרויקט'
 export const ROW_END_REQUIRED_MESSAGE = 'יש לבחור שעת יציאה לפרויקט'
