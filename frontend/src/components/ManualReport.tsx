@@ -34,6 +34,7 @@ import cactusIllustration from '../assets/manual-report/desktop/cactus-illustrat
 import tagCheckGreen from '../assets/home/tag-check-green.svg'
 import tagAlertOrange from '../assets/home/tag-alert-orange.svg'
 import tagCloseBlue from '../assets/home/tag-close-blue.svg'
+import { DAY_STATUS_LABELS } from '../lib/dayStatusLabels'
 import './ManualReport.css'
 
 const STANDARD_HOURS = 9
@@ -185,12 +186,12 @@ function deriveHeader(
     return { status: headerMeta.status, tone: 'absence', tags: [] }
   }
   if (hoursShortOfWindow(reportedHours, windowHours) || reportedHours <= 0) {
-    return { status: 'חסר', tone: 'missing', tags: [] }
+    return { status: DAY_STATUS_LABELS.missing, tone: 'missing', tags: [] }
   }
   if (windowHours >= STANDARD_HOURS || reportedHours >= STANDARD_HOURS) {
-    return { status: 'מלא', tone: 'full', tags: [] }
+    return { status: DAY_STATUS_LABELS.full, tone: 'full', tags: [] }
   }
-  return { status: 'חלקי', tone: 'partial', tags: [] }
+  return { status: DAY_STATUS_LABELS.partial, tone: 'partial', tags: [] }
 }
 
 function arrayErrorMessage(error: unknown): string | undefined {
