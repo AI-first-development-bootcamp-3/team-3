@@ -306,6 +306,10 @@
   color: var(--home-muted);
 }
 
+.home-shell__filter-wrap {
+  position: relative;
+}
+
 .home-shell__filter {
   display: inline-flex;
   align-items: center;
@@ -319,7 +323,11 @@
   font-weight: 500;
   line-height: 1;
   color: var(--home-muted);
-  cursor: not-allowed;
+  cursor: pointer;
+}
+
+.home-shell__filter:hover {
+  color: var(--home-text);
 }
 
 .home-shell__filter-icon {
@@ -334,6 +342,49 @@
   width: 6px;
   height: 12px;
   rotate: 90deg;
+}
+
+.home-shell__filter-icon--open img {
+  rotate: 270deg;
+}
+
+.home-shell__filter-panel {
+  position: absolute;
+  z-index: 5;
+  inset-inline-start: 0;
+  top: calc(100% + 6px);
+  min-width: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  border: 1px solid var(--home-divider);
+  border-radius: 12px;
+  background: var(--home-card);
+  box-shadow: var(--home-shadow);
+}
+
+.home-shell__filter-option {
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  text-align: start;
+  color: var(--home-text);
+  cursor: pointer;
+}
+
+.home-shell__filter-option:hover,
+.home-shell__filter-option:focus-visible {
+  background: var(--home-bg);
+}
+
+.home-shell__filter-option--active {
+  font-weight: 700;
 }
 
 .home-shell__kpi-value {
