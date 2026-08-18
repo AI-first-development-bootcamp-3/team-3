@@ -12,8 +12,8 @@ const hhmmSchema = z
 
 const hoursSchema = z.coerce
   .number()
-  .refine((value) => value >= 0.5 && value <= 24 && isOneDecimalHours(value), {
-    message: 'Hours must be between 0.5 and 24 with at most one decimal place',
+  .refine((value) => value >= 0 && value <= 24 && isOneDecimalHours(value), {
+    message: 'Hours must be between 0 and 24 with at most one decimal place',
   });
 
 export const createTimeReportBodySchema = z.object({
@@ -25,7 +25,7 @@ export const createTimeReportBodySchema = z.object({
   clientId: z.string().uuid(),
   projectId: z.string().uuid(),
   taskId: z.string().uuid(),
-  description: z.string().trim().min(1, 'Description is required').max(2000),
+  description: z.string().trim().max(2000).default(''),
 });
 
 export type CreateTimeReportBody = z.infer<typeof createTimeReportBodySchema>;

@@ -10,7 +10,8 @@ describe('attendanceWindowHours', () => {
     expect(attendanceWindowHours('22:00', '06:00')).toBe(8);
   });
 
-  it('treats equal clocks as a twenty-four hour window', () => {
-    expect(attendanceWindowHours('09:00', '09:00')).toBe(24);
+  it('treats equal clocks as zero hours', () => {
+    expect(attendanceWindowHours('09:00', '09:00')).toBe(0);
+    expect(attendanceWindowHours('15:52', '15:52')).toBe(0);
   });
 });

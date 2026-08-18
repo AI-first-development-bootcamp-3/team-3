@@ -65,7 +65,7 @@ export const getMyReportingOptions: RequestHandler = async (req, res, next) => {
       next(AppError.unauthorized());
       return;
     }
-    const options = await listReportingOptions();
+    const options = await listReportingOptions(req.user.sub);
     res.status(200).json(options);
   } catch (error) {
     next(error);

@@ -95,6 +95,7 @@ function toDto(row: {
 }
 
 const HIERARCHY_MISMATCH = 'Client, project, and task must form one active hierarchy';
+const NOT_ASSIGNED = 'Task is not assigned to this user';
 const HOURS_EXCEED_WINDOW = 'Project hours cannot exceed the attendance window';
 
 interface HierarchyIds {
@@ -123,10 +124,18 @@ function isOneActiveHierarchy(
   );
 }
 
+async function assertUserAssignedToTask(userId: string, taskId: string): Promise<void> {
+  const assignment = await prisma.taskAssignment.findUnique({
+    where: { userId_taskId: { userId, taskId } },
+  });
+  if (!assignment) {
+    throw AppError.badRequest(NOT_ASSIGNED, [{ field: 'taskId', message: NOT_ASSIGNED }]);
+  }
+}
+
 /**
- * Creates a time report for the authenticated caller. Assignment-to-task
- * filtering is SCRUM-71 — this slice only checks that the three ids form one
- * active client → project → task chain.
+ * Creates a time report for the authenticated caller. The task must be assigned
+ * to the caller and the three ids must form one active client → project → task chain.
  */
 export async function createTimeReport(userId: string, input: CreateTimeReportBody): Promise<TimeReportDto> {
   if (!allocationsFitWindow(input.startTime, input.endTime, [input.hours])) {
@@ -134,6 +143,8 @@ export async function createTimeReport(userId: string, input: CreateTimeReportBo
       { field: 'hours', message: HOURS_EXCEED_WINDOW },
     ]);
   }
+
+  await assertUserAssignedToTask(userId, input.taskId);
 
   const task = await prisma.task.findFirst({
     where: { id: input.taskId },
@@ -179,6 +190,16 @@ export async function createTimeReportBatch(
   const tasksById = new Map(tasks.map((task) => [task.id, task]));
 
   const details: ErrorDetail[] = [];
+  for (let index = 0; index < input.rows.length; index++) {
+    const row = input.rows[index]!;
+    const assignment = await prisma.taskAssignment.findUnique({
+      where: { userId_taskId: { userId, taskId: row.taskId } },
+    });
+    if (!assignment) {
+      details.push({ field: `rows.${index}.taskId`, message: NOT_ASSIGNED });
+    }
+  }
+
   input.rows.forEach((row, index) => {
     if (!isOneActiveHierarchy(tasksById.get(row.taskId), row)) {
       details.push({ field: `rows.${index}.taskId`, message: HIERARCHY_MISMATCH });
@@ -266,8 +287,18 @@ export async function deleteTimeReportsForDate(userId: string, date: string): Pr
   }
 }
 
-export async function listReportingOptions(): Promise<ReportingOptions> {
+export async function listReportingOptions(userId: string): Promise<ReportingOptions> {
+  const assignments = await prisma.taskAssignment.findMany({
+    where: { userId },
+    select: { taskId: true },
+  });
+  const assignedTaskIds = assignments.map((row) => row.taskId);
+  if (assignedTaskIds.length === 0) {
+    return { clients: [] };
+  }
+
   const clients = await prisma.client.findMany({
+    where: { isActive: true },
     orderBy: { name: 'asc' },
     select: {
       id: true,
@@ -279,7 +310,7 @@ export async function listReportingOptions(): Promise<ReportingOptions> {
           id: true,
           name: true,
           tasks: {
-            where: { isActive: true },
+            where: { isActive: true, id: { in: assignedTaskIds } },
             orderBy: { name: 'asc' },
             select: { id: true, name: true },
           },

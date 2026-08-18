@@ -10,7 +10,7 @@ import {
   reportWriteRateLimitStore,
 } from '../../middleware/writeRateLimit.middleware.js';
 import { Role } from '../../generated/prisma/enums.js';
-import { createClient, createProject, createTask, createTimeReport, createUser } from '../../test/factories.js';
+import { assignTask, createClient, createProject, createTask, createTimeReport, createUser } from '../../test/factories.js';
 import { resetDatabase } from '../../test/resetDatabase.js';
 
 function tokenFor(user: { id: string; role: string }): string {
@@ -27,6 +27,7 @@ describe('POST /reports', () => {
     const client = await createClient({ name: 'Acme' });
     const project = await createProject({ name: 'Website', clientId: client.id });
     const task = await createTask({ name: 'Design', projectId: project.id });
+    await assignTask(employee.id, task.id);
 
     const response = await request(app)
       .post('/reports')
@@ -80,9 +81,10 @@ describe('POST /reports', () => {
     expect(await prisma.timeReport.count()).toBe(0);
   });
 
-  it('rejects a missing description with 400 and creates no row', async () => {
+  it('stores a row without a description', async () => {
     const employee = await createUser();
     const task = await createTask();
+    await assignTask(employee.id, task.id);
     const project = await prisma.project.findFirstOrThrow({ where: { id: task.projectId } });
 
     const response = await request(app)
@@ -99,14 +101,15 @@ describe('POST /reports', () => {
         taskId: task.id,
       });
 
-    expect(response.status).toBe(400);
-    expect(response.body.error.details.some((d: { field: string }) => d.field === 'description')).toBe(true);
-    expect(await prisma.timeReport.count()).toBe(0);
+    expect(response.status).toBe(201);
+    expect(response.body.description).toBe('');
+    expect(await prisma.timeReport.count()).toBe(1);
   });
 
   it('accepts an overnight window when hours fit', async () => {
     const employee = await createUser();
     const task = await createTask();
+    await assignTask(employee.id, task.id);
     const project = await prisma.project.findFirstOrThrow({ where: { id: task.projectId } });
 
     const response = await request(app)
@@ -128,9 +131,10 @@ describe('POST /reports', () => {
     expect(response.body).toMatchObject({ startTime: '22:00', endTime: '06:00', hours: 8 });
   });
 
-  it('rejects hours of 0', async () => {
+  it('accepts zero hours when they fit the attendance window', async () => {
     const employee = await createUser();
     const task = await createTask();
+    await assignTask(employee.id, task.id);
     const project = await prisma.project.findFirstOrThrow({ where: { id: task.projectId } });
 
     const response = await request(app)
@@ -139,22 +143,23 @@ describe('POST /reports', () => {
       .send({
         date: '2026-08-16',
         workLocation: 'OFFICE',
-        startTime: '09:00',
-        endTime: '18:00',
+        startTime: '16:02',
+        endTime: '16:02',
         hours: 0,
         clientId: project.clientId,
         projectId: project.id,
         taskId: task.id,
-        description: 'Zero',
+        description: '',
       });
 
-    expect(response.status).toBe(400);
-    expect(await prisma.timeReport.count()).toBe(0);
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({ startTime: '16:02', endTime: '16:02', hours: 0 });
   });
 
   it('rejects hours that have more than one decimal place', async () => {
     const employee = await createUser();
     const task = await createTask();
+    await assignTask(employee.id, task.id);
     const project = await prisma.project.findFirstOrThrow({ where: { id: task.projectId } });
 
     const response = await request(app)
@@ -179,6 +184,7 @@ describe('POST /reports', () => {
   it('accepts hours with a single decimal place', async () => {
     const employee = await createUser();
     const task = await createTask();
+    await assignTask(employee.id, task.id);
     const project = await prisma.project.findFirstOrThrow({ where: { id: task.projectId } });
 
     const response = await request(app)
@@ -203,6 +209,7 @@ describe('POST /reports', () => {
   it('rejects a task that does not belong to the given project with 400', async () => {
     const employee = await createUser();
     const task = await createTask();
+    await assignTask(employee.id, task.id);
     const otherProject = await createProject({ name: 'Other' });
     const project = await prisma.project.findFirstOrThrow({ where: { id: task.projectId } });
 
@@ -228,6 +235,7 @@ describe('POST /reports', () => {
   it('rejects an inactive task with 400', async () => {
     const employee = await createUser();
     const task = await createTask({ isActive: false });
+    await assignTask(employee.id, task.id);
     const project = await prisma.project.findFirstOrThrow({
       where: { id: task.projectId },
     });
@@ -257,10 +265,13 @@ describe('POST /reports/batch', () => {
     await resetDatabase();
   });
 
-  async function aHierarchy() {
+  async function aHierarchy(employeeId?: string) {
     const client = await createClient({ name: 'Acme' });
     const project = await createProject({ name: 'Website', clientId: client.id });
     const task = await createTask({ name: 'Design', projectId: project.id });
+    if (employeeId) {
+      await assignTask(employeeId, task.id);
+    }
     return { client, project, task };
   }
 
@@ -285,10 +296,11 @@ describe('POST /reports/batch', () => {
 
   it('creates every row of the day and stamps them with the caller and date', async () => {
     const employee = await createUser({ role: Role.EMPLOYEE });
-    const first = await aHierarchy();
+    const first = await aHierarchy(employee.id);
     const secondClient = await createClient({ name: 'Globaly' });
     const secondProject = await createProject({ name: 'App', clientId: secondClient.id });
     const secondTask = await createTask({ name: 'Build', projectId: secondProject.id });
+    await assignTask(employee.id, secondTask.id);
 
     const response = await request(app)
       .post('/reports/batch')
@@ -329,7 +341,7 @@ describe('POST /reports/batch', () => {
 
   it('stores a row without a description', async () => {
     const employee = await createUser();
-    const hierarchy = await aHierarchy();
+    const hierarchy = await aHierarchy(employee.id);
 
     const response = await request(app)
       .post('/reports/batch')
@@ -363,7 +375,7 @@ describe('POST /reports/batch', () => {
 
   it('rolls back the whole day when one row has a broken hierarchy', async () => {
     const employee = await createUser();
-    const hierarchy = await aHierarchy();
+    const hierarchy = await aHierarchy(employee.id);
     const otherProject = await createProject({ name: 'Other' });
 
     const response = await request(app)
@@ -380,7 +392,7 @@ describe('POST /reports/batch', () => {
 
   it('rejects a batch whose hours exceed the attendance window', async () => {
     const employee = await createUser();
-    const hierarchy = await aHierarchy();
+    const hierarchy = await aHierarchy(employee.id);
 
     const response = await request(app)
       .post('/reports/batch')
@@ -395,7 +407,8 @@ describe('POST /reports/batch', () => {
   it('replaces the caller\'s previous rows for that date instead of appending', async () => {
     const employee = await createUser({ role: Role.EMPLOYEE });
     const other = await createUser({ role: Role.EMPLOYEE });
-    const hierarchy = await aHierarchy();
+    const hierarchy = await aHierarchy(employee.id);
+    await assignTask(other.id, hierarchy.task.id);
     const token = tokenFor(employee);
 
     await request(app)
@@ -428,7 +441,7 @@ describe('POST /reports/batch', () => {
 
   it('keeps the previous day when a replacement batch is invalid', async () => {
     const employee = await createUser({ role: Role.EMPLOYEE });
-    const hierarchy = await aHierarchy();
+    const hierarchy = await aHierarchy(employee.id);
     const token = tokenFor(employee);
 
     await request(app)
@@ -497,6 +510,7 @@ describe('report write rate limiting', () => {
     const client = await createClient({ name: 'Acme' });
     const project = await createProject({ name: 'Website', clientId: client.id });
     const task = await createTask({ name: 'Design', projectId: project.id });
+    await assignTask(colleague.id, task.id);
     await exhaustQuota(tokenFor(throttledEmployee));
 
     const response = await request(app)
@@ -546,6 +560,7 @@ describe('GET /reports', () => {
     const client = await createClient({ name: 'Globex' });
     const project = await createProject({ name: 'Mobile app', clientId: client.id });
     const task = await createTask({ name: 'QA', projectId: project.id });
+    await assignTask(employee.id, task.id);
 
     await prisma.timeReport.create({
       data: {
@@ -752,10 +767,13 @@ describe('GET /me/reporting-options', () => {
     const zebra = await createClient({ name: 'זברה' });
     const acme = await createClient({ name: 'Acme' });
     const acmeProject = await createProject({ name: 'Website', clientId: acme.id });
-    await createTask({ name: 'QA', projectId: acmeProject.id });
-    await createTask({ name: 'Design', projectId: acmeProject.id });
+    const qa = await createTask({ name: 'QA', projectId: acmeProject.id });
+    const design = await createTask({ name: 'Design', projectId: acmeProject.id });
     const zebraProject = await createProject({ name: 'App', clientId: zebra.id });
-    await createTask({ name: 'Build', projectId: zebraProject.id });
+    const build = await createTask({ name: 'Build', projectId: zebraProject.id });
+    await assignTask(employee.id, qa.id);
+    await assignTask(employee.id, design.id);
+    await assignTask(employee.id, build.id);
     const emptyClient = await createClient({ name: 'Empty' });
     await createProject({ name: 'No tasks', clientId: emptyClient.id });
     await createClient({ name: 'Inactive', isActive: false });

@@ -50,28 +50,51 @@ const savedReports = {
 function mockFetch(handlers: Record<string, unknown>) {
   vi.stubGlobal(
     'fetch',
-    vi.fn((input: RequestInfo | URL) => {
+    vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input)
+      const method = init?.method ?? 'GET'
       for (const [match, body] of Object.entries(handlers)) {
-        if (url.includes(match)) {
+        if (!url.includes(match)) continue
+        if (match.includes(':POST') && method !== 'POST') continue
+        if (match.includes(':GET') && method !== 'GET') continue
+        const key = match.replace(/:(GET|POST)$/, '')
+        if (!url.includes(key)) continue
+        if (typeof body === 'object' && body !== null && 'status' in body) {
+          const response = body as { status: number; body?: unknown }
           return Promise.resolve({
-            ok: true,
-            status: 200,
+            ok: response.status >= 200 && response.status < 300,
+            status: response.status,
             headers: new Headers({ 'content-type': 'application/json' }),
-            json: async () => body,
+            json: async () => response.body,
           })
         }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: async () => body,
+        })
       }
-      return Promise.reject(new Error(`Unhandled fetch: ${url}`))
+      if (method === 'POST' && url.includes('/me/clock/')) {
+        return Promise.resolve({
+          ok: true,
+          status: 204,
+          headers: new Headers(),
+          json: async () => undefined,
+        })
+      }
+      return Promise.reject(new Error(`Unhandled fetch: ${method} ${url}`))
     }),
   )
 }
 
-function mockReportingOptions() {
+function mockReportingOptions(extra: Record<string, unknown> = {}) {
   mockFetch({
     '/me/reporting-options': options,
+    '/me/clock/session': { session: null },
     '/reports?': savedReports,
     '/absences?': { absences: [] },
+    ...extra,
   })
 }
 
@@ -117,8 +140,6 @@ describe('Reports home shell', () => {
 
     const clock = screen.getByRole('button', { name: /הפעלת שעון/ })
     expect(clock).toBeDisabled()
-    expect(clock).toHaveAttribute('aria-disabled', 'true')
-    expect(clock).toHaveAccessibleName(/בקרוב/)
 
     for (const label of KPI_LABELS) {
       expect(screen.getByRole('heading', { name: label })).toBeInTheDocument()
@@ -280,6 +301,193 @@ describe('Reports home shell', () => {
     expect(within(secondOpen).getAllByLabelText(/פרויקט/)).toHaveLength(1)
     expect(within(secondOpen).getByLabelText('שעות 1')).toHaveValue('9')
     expect(within(secondOpen).getByText('סה״כ 9 שעות')).toBeInTheDocument()
+  })
+
+  it('starts the work clock when signed in and idle', async () => {
+    signIn()
+    const user = userEvent.setup()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input)
+        const method = init?.method ?? 'GET'
+        if (method === 'POST' && url.includes('/me/clock/start')) {
+          return Promise.resolve({
+            ok: true,
+            status: 201,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: async () => ({
+              session: {
+                sessionId: 's1',
+                status: 'ACTIVE',
+                startedAt: new Date().toISOString(),
+                stoppedAt: null,
+                autoStopped: false,
+                segments: [],
+              },
+            }),
+          })
+        }
+        if (url.includes('/me/clock/session')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: async () => ({ session: null }),
+          })
+        }
+        if (url.includes('/me/reporting-options')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: async () => options,
+          })
+        }
+        if (url.includes('/reports?')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: async () => savedReports,
+          })
+        }
+        if (url.includes('/absences?')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: async () => ({ absences: [] }),
+          })
+        }
+        return Promise.reject(new Error(`Unhandled fetch: ${method} ${url}`))
+      }),
+    )
+    renderHome()
+
+    const start = await screen.findByRole('button', { name: /הפעלת שעון/ })
+    expect(start).toBeEnabled()
+    await user.click(start)
+    expect(await screen.findByRole('button', { name: 'עצור שעון' })).toBeInTheDocument()
+    expect(screen.getByTestId('clock-elapsed')).toHaveTextContent(/^\d{2}:\d{2}:\d{2}$/)
+    expect(screen.getByRole('button', { name: 'דיווח ידני' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: /הפעלת שעון/ })).not.toBeInTheDocument()
+  })
+
+  it('opens the stop modal, then returns to idle after discard', async () => {
+    signIn()
+    const user = userEvent.setup()
+    let clockSession: Record<string, unknown> | null = null
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input)
+        const method = init?.method ?? 'GET'
+        if (method === 'POST' && url.includes('/me/clock/start')) {
+          clockSession = {
+            sessionId: 's1',
+            status: 'ACTIVE',
+            startedAt: new Date().toISOString(),
+            stoppedAt: null,
+            autoStopped: false,
+            segments: [],
+          }
+          return Promise.resolve({
+            ok: true,
+            status: 201,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: async () => ({ session: clockSession }),
+          })
+        }
+        if (method === 'POST' && url.includes('/me/clock/stop')) {
+          clockSession = {
+            sessionId: 's1',
+            status: 'AWAITING_CONFIRM',
+            startedAt: new Date().toISOString(),
+            stoppedAt: new Date().toISOString(),
+            autoStopped: false,
+            segments: [{ date: '2026-08-18', startTime: '16:00', endTime: '16:05', durationMinutes: 5 }],
+          }
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: async () => ({ session: clockSession }),
+          })
+        }
+        if (method === 'POST' && url.includes('/me/clock/discard')) {
+          clockSession = null
+          return Promise.resolve({ ok: true, status: 204, headers: new Headers(), json: async () => undefined })
+        }
+        if (url.includes('/me/clock/session')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: async () => ({ session: clockSession }),
+          })
+        }
+        if (url.includes('/me/reporting-options')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: async () => options,
+          })
+        }
+        if (url.includes('/reports?')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: async () => savedReports,
+          })
+        }
+        if (url.includes('/absences?')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            headers: new Headers({ 'content-type': 'application/json' }),
+            json: async () => ({ absences: [] }),
+          })
+        }
+        return Promise.reject(new Error(`Unhandled fetch: ${method} ${url}`))
+      }),
+    )
+    renderHome()
+
+    await user.click(await screen.findByRole('button', { name: /הפעלת שעון/ }))
+    await user.click(await screen.findByRole('button', { name: 'עצור שעון' }))
+
+    const stopDialog = await screen.findByRole('dialog', { name: 'סיום שעון עבודה' })
+    expect(stopDialog).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /הפעלת שעון/ })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'ביטול ללא שמירה' }))
+    expect(await screen.findByRole('button', { name: /הפעלת שעון/ })).toBeEnabled()
+    expect(screen.queryByRole('dialog', { name: 'סיום שעון עבודה' })).not.toBeInTheDocument()
+  })
+
+  it('opens the confirm modal on load when a session is awaiting confirm', async () => {
+    signIn()
+    mockReportingOptions({
+      '/me/clock/session': {
+        session: {
+          sessionId: 's-eod',
+          status: 'AWAITING_CONFIRM',
+          startedAt: '2026-08-18T06:00:00.000Z',
+          stoppedAt: '2026-08-18T20:59:00.000Z',
+          autoStopped: true,
+          segments: [{ date: '2026-08-18', startTime: '09:00', endTime: '23:59', durationMinutes: 899 }],
+        },
+      },
+    })
+    renderHome()
+
+    expect(await screen.findByRole('dialog', { name: 'סיום שעון עבודה' })).toBeInTheDocument()
+    expect(screen.getByText(/נעצר אוטומטית/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /הפעלת שעון/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'דיווח ידני' })).toBeEnabled()
   })
 
   it('opens the side panel from a demo day row with form-derived status', async () => {

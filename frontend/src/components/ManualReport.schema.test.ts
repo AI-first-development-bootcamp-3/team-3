@@ -43,6 +43,10 @@ describe('manualReportSchema', () => {
     )
   })
 
+  it('treats equal entry and exit times as zero hours', () => {
+    expect(attendanceWindowHours('15:52', '15:52')).toBe(0)
+  })
+
   it('rejects hours of 0', () => {
     const result = manualReportSchema.safeParse(aDay({ rows: [{ ...aDay().rows[0], hours: 0 }] }))
 
