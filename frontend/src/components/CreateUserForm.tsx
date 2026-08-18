@@ -5,10 +5,11 @@ import { Alert, Button, Form, Input, Select, notification } from 'antd'
 import { createUser } from '../services/adminUsers'
 import { ApiError } from '../services/apiClient'
 import { createUserFormSchema, type CreateUserFormValues } from './CreateUserForm.schema'
+import './CreateUserForm.css'
 
 const ROLE_OPTIONS = [
-  { value: 'EMPLOYEE', label: 'Employee' },
-  { value: 'ADMIN', label: 'Admin' },
+  { value: 'EMPLOYEE', label: 'עובד' },
+  { value: 'ADMIN', label: 'מנהל' },
 ]
 
 /**
@@ -44,31 +45,32 @@ function CreateUserForm() {
       })
 
       notification.success({
-        message: 'User created',
-        description: `${result.user.email} was created. Temporary password: ${result.temporaryPassword} (also emailed to the new user).`,
+        message: 'המשתמש נוצר',
+        description: `${result.user.email} נוצר. סיסמה זמנית: ${result.temporaryPassword}`,
         duration: 0,
       })
       reset()
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
-        setError('email', { message: 'A user with this email already exists' })
+        setError('email', { message: 'כבר קיים משתמש עם האימייל הזה' })
         return
       }
       if (error instanceof ApiError && error.status === 400) {
-        setFormError('Some fields are invalid. Please check the form and try again.')
+        setFormError('חלק מהשדות אינם תקינים. בדקו את הטופס ונסו שוב.')
         return
       }
-      setFormError('Could not create the user. Please try again.')
+      setFormError('לא הצלחנו ליצור את המשתמש. נסו שוב.')
     }
   }
 
   return (
+    <div className="admin-create-user" dir="rtl">
     <Form layout="vertical" onFinish={handleSubmit(onSubmit)}>
-      <h2>Create User</h2>
+      <h2>יצירת משתמש</h2>
 
       {formError && <Alert type="error" message={formError} showIcon style={{ marginBottom: 16 }} />}
 
-      <Form.Item label="Full name" htmlFor="displayName" validateStatus={errors.displayName ? 'error' : ''} help={errors.displayName?.message}>
+      <Form.Item label="שם מלא" htmlFor="displayName" validateStatus={errors.displayName ? 'error' : ''} help={errors.displayName?.message}>
         <Controller
           name="displayName"
           control={control}
@@ -76,15 +78,15 @@ function CreateUserForm() {
         />
       </Form.Item>
 
-      <Form.Item label="Email" htmlFor="email" validateStatus={errors.email ? 'error' : ''} help={errors.email?.message}>
+      <Form.Item label="אימייל" htmlFor="email" validateStatus={errors.email ? 'error' : ''} help={errors.email?.message}>
         <Controller
           name="email"
           control={control}
-          render={({ field }) => <Input {...field} id="email" type="email" autoComplete="off" />}
+          render={({ field }) => <Input {...field} id="email" type="email" autoComplete="off" className="admin-create-user__email" />}
         />
       </Form.Item>
 
-      <Form.Item label="Role" htmlFor="role" validateStatus={errors.role ? 'error' : ''} help={errors.role?.message}>
+      <Form.Item label="תפקיד" htmlFor="role" validateStatus={errors.role ? 'error' : ''} help={errors.role?.message}>
         <Controller
           name="role"
           control={control}
@@ -93,10 +95,10 @@ function CreateUserForm() {
       </Form.Item>
 
       <Form.Item
-        label="Temporary password"
+        label="סיסמה זמנית"
         htmlFor="temporaryPassword"
         validateStatus={errors.temporaryPassword ? 'error' : ''}
-        help={errors.temporaryPassword?.message ?? 'Leave blank to generate one automatically'}
+        help={errors.temporaryPassword?.message ?? 'השאירו ריק כדי לייצר סיסמה אוטומטית'}
       >
         <Controller
           name="temporaryPassword"
@@ -105,10 +107,13 @@ function CreateUserForm() {
         />
       </Form.Item>
 
-      <Button type="primary" htmlType="submit" loading={isSubmitting}>
-        Create user
-      </Button>
+      <div className="admin-create-user__actions">
+        <Button type="primary" htmlType="submit" loading={isSubmitting}>
+          יצירת משתמש
+        </Button>
+      </div>
     </Form>
+    </div>
   )
 }
 

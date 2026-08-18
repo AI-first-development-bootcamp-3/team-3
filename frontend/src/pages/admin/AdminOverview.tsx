@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import kpiBriefcase from '../../assets/home/kpi-briefcase.svg'
 import kpiClock from '../../assets/home/kpi-clock.svg'
@@ -50,6 +50,12 @@ const HUB = [
     title: 'נעילת חודש',
     detail: 'נעילה ופתיחה של חודשי דיווח',
     icon: kpiClock,
+  },
+  {
+    to: '/admin/reports',
+    title: 'דיווחי עובדים',
+    detail: 'עריכת דיווחים עם יומן שינויים',
+    icon: tagNote,
   },
 ] as const
 

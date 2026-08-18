@@ -37,6 +37,22 @@ export async function assertMonthUnlocked(isoDate: string): Promise<void> {
   }
 }
 
+/** Rejects when any calendar month in the inclusive range is locked. */
+export async function assertRangeUnlocked(startIso: string, endIso: string): Promise<void> {
+  const seen = new Set<string>();
+  let cursor = startIso;
+  while (cursor <= endIso) {
+    const monthKey = cursor.slice(0, 7);
+    if (!seen.has(monthKey)) {
+      seen.add(monthKey);
+      await assertMonthUnlocked(cursor);
+    }
+    const next = new Date(`${cursor}T00:00:00.000Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    cursor = next.toISOString().slice(0, 10);
+  }
+}
+
 export async function listMonthLocks(year: number): Promise<MonthLockDto[]> {
   const rows = await prisma.monthLock.findMany({
     where: { year },

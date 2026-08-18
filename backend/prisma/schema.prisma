@@ -48,6 +48,11 @@ enum LoginAttemptOutcome {
   SUCCESS
 }
 
+enum TimeReportAuditAction {
+  REPLACED
+  DELETED
+}
+
 model User {
   id                 String        @id @default(uuid())
   email              String        @unique
@@ -73,6 +78,8 @@ model User {
   taskAssignments    TaskAssignment[]
   workClockSessions  WorkClockSession[]
   managedProjects    Project[]         @relation("ProjectManager")
+  reportAuditsAsEmployee TimeReportAudit[] @relation("ReportAuditEmployee")
+  reportAuditsAsActor    TimeReportAudit[] @relation("ReportAuditActor")
 
   @@map("users")
 }
@@ -272,4 +279,23 @@ model WorkClockSession {
 
   @@index([userId, status])
   @@map("work_clock_sessions")
+}
+
+/// Append-only trail of an administrator replacing or deleting another
+/// employee's day. Employee self-saves on `/reports` do not write here.
+model TimeReportAudit {
+  id           String                 @id @default(uuid())
+  employeeId   String
+  employee     User                   @relation("ReportAuditEmployee", fields: [employeeId], references: [id])
+  actorId      String
+  actor        User                   @relation("ReportAuditActor", fields: [actorId], references: [id])
+  date         DateTime               @db.Date
+  action       TimeReportAuditAction
+  previousJson Json
+  nextJson     Json?
+  reason       String?
+  createdAt    DateTime               @default(now())
+
+  @@index([employeeId, date])
+  @@map("time_report_audits")
 }

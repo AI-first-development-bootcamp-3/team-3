@@ -9,6 +9,7 @@ import AdminTasks from './pages/admin/AdminTasks'
 import AdminAssignments from './pages/admin/AdminAssignments'
 import AdminHourSettings from './pages/admin/AdminHourSettings'
 import AdminMonthLock from './pages/admin/AdminMonthLock'
+import AdminEmployeeReports from './pages/admin/AdminEmployeeReports'
 import Login from './pages/Login'
 import ChangePassword from './pages/ChangePassword'
 import NotFound from './pages/NotFound'
@@ -44,6 +45,7 @@ const router = createBrowserRouter([
           { path: 'assignments', element: <AdminAssignments /> },
           { path: 'hour-settings', element: <AdminHourSettings /> },
           { path: 'month-lock', element: <AdminMonthLock /> },
+          { path: 'reports', element: <AdminEmployeeReports /> },
           { path: 'users', element: <AdminUsers /> },
           { path: 'clients', element: <AdminClients /> },
           { path: 'projects', element: <AdminProjects /> },

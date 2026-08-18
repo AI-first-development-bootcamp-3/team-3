@@ -18,6 +18,7 @@ describe('AdminOverview', () => {
     expect(screen.getByRole('heading', { name: 'ניהול המערכת' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /משתמשים/ })).toHaveAttribute('href', '/admin/users')
     expect(screen.getByRole('link', { name: /נעילת חודש/ })).toHaveAttribute('href', '/admin/month-lock')
+    expect(screen.getByRole('link', { name: /דיווחי עובדים/ })).toHaveAttribute('href', '/admin/reports')
     expect(screen.getByRole('link', { name: /שיוכים/ })).toHaveAttribute('href', '/admin/assignments')
   })
 })

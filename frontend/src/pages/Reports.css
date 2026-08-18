@@ -473,6 +473,10 @@
   box-shadow: var(--home-shadow);
 }
 
+.home-shell__day--locked {
+  opacity: 0.5;
+}
+
 .home-shell__day-main {
   display: flex;
   flex: 1;

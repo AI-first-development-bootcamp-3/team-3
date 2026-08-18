@@ -20,8 +20,15 @@ interface Props {
 }
 
 function conflictCopy(body: unknown): { title: string; detail: string } {
-  const details = (body as { error?: { details?: { field?: string; message?: string }[] } } | undefined)?.error
-    ?.details
+  const error = (body as { error?: { message?: string; details?: { field?: string; message?: string }[] } } | undefined)
+    ?.error
+  const details = error?.details
+  if (error?.message?.includes('נעול')) {
+    return {
+      title: 'החודש נעול',
+      detail: 'לא ניתן לדווח היעדרות בחודש נעול. פנו למנהל המערכת.',
+    }
+  }
   const dates = (details ?? []).map((detail) => detail.field).filter((field): field is string => Boolean(field))
   const uniqueDates = [...new Set(dates)]
   return {

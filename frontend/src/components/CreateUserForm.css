@@ -1,0 +1,45 @@
+.admin-create-user {
+  direction: rtl;
+  text-align: right;
+  margin-bottom: 24px;
+  padding: 24px 24px 32px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(27 42 74 / 6%);
+}
+
+.admin-create-user h2 {
+  margin: 0 0 20px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #1b2a4a;
+  text-align: right;
+}
+
+.admin-create-user .ant-form-item-label {
+  text-align: right;
+}
+
+.admin-create-user .ant-form-item-label > label,
+.admin-create-user .ant-form-item-explain,
+.admin-create-user .ant-form-item-extra {
+  text-align: right;
+}
+
+.admin-create-user .ant-select-selector,
+.admin-create-user .ant-input,
+.admin-create-user .ant-input-password {
+  text-align: right;
+}
+
+.admin-create-user__email {
+  direction: ltr;
+  text-align: left;
+}
+
+.admin-create-user__actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 8px;
+  margin-bottom: 8px;
+}

@@ -86,6 +86,20 @@ describe('POST /absences', () => {
     expect(await prisma.absence.count()).toBe(0);
   });
 
+  it('rejects an absence in a locked month with 409', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    await prisma.monthLock.create({ data: { year: 2026, month: 8, lockedById: employee.id } });
+
+    const response = await request(app)
+      .post('/absences')
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({ type: 'VACATION', startDate: '2026-08-09' });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error.message).toBe('החודש נעול — לא ניתן לדווח');
+    expect(await prisma.absence.count()).toBe(0);
+  });
+
   it('rejects overlap with an existing absence', async () => {
     const employee = await createUser({ role: Role.EMPLOYEE });
     await createAbsence({
@@ -188,6 +202,23 @@ describe('DELETE /absences/:id', () => {
       where: { id: absence.id, isActive: undefined },
     });
     expect(stored?.isActive).toBe(false);
+  });
+
+  it('rejects deleting an absence in a locked month with 409', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    const absence = await createAbsence({
+      userId: employee.id,
+      startDate: new Date('2026-08-24T00:00:00.000Z'),
+      endDate: new Date('2026-08-26T00:00:00.000Z'),
+    });
+    await prisma.monthLock.create({ data: { year: 2026, month: 8, lockedById: employee.id } });
+
+    const response = await request(app)
+      .delete(`/absences/${absence.id}`)
+      .set('Authorization', `Bearer ${tokenFor(employee)}`);
+
+    expect(response.status).toBe(409);
+    expect(await prisma.absence.count({ where: { id: absence.id } })).toBe(1);
   });
 
   it('refuses another user\'s absence', async () => {

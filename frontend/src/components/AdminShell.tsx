@@ -36,6 +36,20 @@ function PeopleIcon() {
   )
 }
 
+function EditIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path
+        d="M4.5 13.2 12.8 4.9a1.5 1.5 0 0 1 2.1 0l.2.2a1.5 1.5 0 0 1 0 2.1L6.8 15.5H4.5v-2.3Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path d="M11.6 6.1 13.9 8.4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 function LockIcon() {
   return (
     <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -107,6 +121,17 @@ function AdminShell() {
               <PeopleIcon />
             </span>
             משתמשים
+          </NavLink>
+          <NavLink
+            to="/admin/reports"
+            className={({ isActive }) =>
+              isActive ? 'admin-sidebar__link admin-sidebar__link--active' : 'admin-sidebar__link'
+            }
+          >
+            <span className="admin-sidebar__icon">
+              <EditIcon />
+            </span>
+            דיווחי עובדים
           </NavLink>
           <NavLink
             to="/admin/month-lock"

@@ -7,9 +7,11 @@ import {
   rowIntervalOnDayAxis,
   type RowInterval,
 } from '../lib/attendanceWindow.js';
-import type { ReportFormat, WorkLocation } from '../generated/prisma/enums.js';
+import { Prisma } from '../generated/prisma/client.js';
+import type { ReportFormat, TimeReportAuditAction, WorkLocation } from '../generated/prisma/enums.js';
 import { AppError, type ErrorDetail } from '../types/errors.js';
 import { assertIsoDayInProjectWindow, isIsoDayInProjectWindow, PROJECT_OUTSIDE_WINDOW } from './projectWindow.service.js';
+import { assertMonthUnlocked } from './monthLock.service.js';
 import type {
   CreateTimeReportBatchBody,
   CreateTimeReportBody,
@@ -61,6 +63,34 @@ export interface ReportingClientOption {
 
 export interface ReportingOptions {
   clients: ReportingClientOption[];
+}
+
+/** Written only when an administrator edits another employee's day. */
+export interface TimeReportAuditWrite {
+  actorId: string;
+  reason?: string;
+}
+
+export interface TimeReportAuditDto {
+  id: string;
+  employeeId: string;
+  actorId: string;
+  actorName: string;
+  date: string;
+  action: TimeReportAuditAction;
+  previousJson: Prisma.JsonValue;
+  nextJson: Prisma.JsonValue | null;
+  reason: string | null;
+  createdAt: string;
+}
+
+function asJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
+
+function auditReason(reason: string | undefined): string | null {
+  const trimmed = reason?.trim();
+  return trimmed ? trimmed : null;
 }
 
 function hhmmToDate(hhmm: string): Date {
@@ -259,6 +289,8 @@ function isAssignedToCaller(task: { assignments: unknown[] } | undefined | null)
  * that task — reporting time against work you were never given is refused.
  */
 export async function createTimeReport(userId: string, input: CreateTimeReportBody): Promise<TimeReportDto> {
+  await assertMonthUnlocked(input.date);
+
   const task = await prisma.task.findFirst({
     where: { id: input.taskId },
     include: {
@@ -326,7 +358,11 @@ function rowKey(ids: { projectId: string; taskId: string }): string {
 export async function createTimeReportBatch(
   userId: string,
   input: CreateTimeReportBatchBody,
+  audit?: TimeReportAuditWrite,
 ): Promise<TimeReportDto[]> {
+  if (!audit) {
+    await assertMonthUnlocked(input.date);
+  }
   const date = calendarDateToDate(input.date);
 
   const [tasks, storedRows] = await Promise.all([
@@ -416,8 +452,14 @@ export async function createTimeReportBatch(
   }
 
   const created = await prisma.$transaction(async (tx) => {
+    const previousRows = audit
+      ? await tx.timeReport.findMany({
+          where: { userId, date },
+          orderBy: [{ startTime: 'asc' }, { createdAt: 'asc' }],
+        })
+      : [];
     await tx.timeReport.deleteMany({ where: { userId, date } });
-    return Promise.all(
+    const rows = await Promise.all(
       input.rows.map((row, index) =>
         tx.timeReport.create({
           data: {
@@ -437,6 +479,20 @@ export async function createTimeReportBatch(
         }),
       ),
     );
+    if (audit) {
+      await tx.timeReportAudit.create({
+        data: {
+          employeeId: userId,
+          actorId: audit.actorId,
+          date,
+          action: 'REPLACED',
+          previousJson: asJson(previousRows.map(toDto)),
+          nextJson: asJson(rows.map(toDto)),
+          reason: auditReason(audit.reason),
+        },
+      });
+    }
+    return rows;
   });
 
   return created.map(toDto);
@@ -474,17 +530,82 @@ export async function listTimeReportsForMonth(
 }
 
 /** Removes every row the caller saved on one calendar date. Other users are untouched. */
-export async function deleteTimeReportsForDate(userId: string, date: string): Promise<void> {
-  const result = await prisma.timeReport.deleteMany({
+export async function deleteTimeReportsForDate(
+  userId: string,
+  date: string,
+  audit?: TimeReportAuditWrite,
+): Promise<void> {
+  const day = calendarDateToDate(date);
+
+  if (!audit) {
+    await assertMonthUnlocked(date);
+    const result = await prisma.timeReport.deleteMany({
+      where: { userId, date: day },
+    });
+    if (result.count === 0) {
+      throw AppError.notFound('No time reports for this date');
+    }
+    return;
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const previousRows = await tx.timeReport.findMany({
+      where: { userId, date: day },
+      orderBy: [{ startTime: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    if (previousRows.length === 0) {
+      throw AppError.notFound('No time reports for this date');
+    }
+
+    await tx.timeReport.deleteMany({
+      where: { userId, date: day },
+    });
+
+    await tx.timeReportAudit.create({
+      data: {
+        employeeId: userId,
+        actorId: audit.actorId,
+        date: day,
+        action: 'DELETED',
+        previousJson: asJson(previousRows.map(toDto)),
+        reason: auditReason(audit.reason),
+      },
+    });
+  });
+}
+
+export async function listTimeReportAudits(
+  employeeId: string,
+  month: number,
+  year: number,
+): Promise<TimeReportAuditDto[]> {
+  const rangeStart = new Date(Date.UTC(year, month - 1, 1));
+  const rangeEnd = new Date(Date.UTC(year, month, 1));
+
+  const rows = await prisma.timeReportAudit.findMany({
     where: {
-      userId,
-      date: calendarDateToDate(date),
+      employeeId,
+      date: { gte: rangeStart, lt: rangeEnd },
     },
+    include: {
+      actor: { select: { displayName: true } },
+    },
+    orderBy: { createdAt: 'desc' },
   });
 
-  if (result.count === 0) {
-    throw AppError.notFound('No time reports for this date');
-  }
+  return rows.map((row) => ({
+    id: row.id,
+    employeeId: row.employeeId,
+    actorId: row.actorId,
+    actorName: row.actor.displayName,
+    date: dateToCalendarDate(row.date),
+    action: row.action,
+    previousJson: row.previousJson,
+    nextJson: row.nextJson,
+    reason: row.reason,
+    createdAt: row.createdAt.toISOString(),
+  }));
 }
 
 /**
