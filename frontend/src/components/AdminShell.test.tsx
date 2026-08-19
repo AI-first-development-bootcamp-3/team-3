@@ -1,4 +1,5 @@
 import { cleanup, render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import AdminShell from './AdminShell'
@@ -74,5 +75,53 @@ describe('AdminShell', () => {
 
     expect(screen.getByText('clients page')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'לקוחות' })).toHaveClass('admin-sidebar__link--active')
+  })
+
+  it('opens the hamburger menu and closes it after choosing a destination', async () => {
+    const user = userEvent.setup()
+    renderAdmin()
+
+    const toggle = screen.getByRole('button', { name: 'תפריט ניהול' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+
+    await user.click(toggle)
+    expect(screen.getByRole('button', { name: 'סגירת תפריט ניהול' })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('button', { name: 'סגירת תפריט' })).toBeInTheDocument()
+    expect(document.querySelector('.admin-sidebar--open')).not.toBeNull()
+
+    await user.click(screen.getByRole('link', { name: 'נעילת חודש' }))
+    expect(screen.getByText('month lock page')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'תפריט ניהול' })).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('button', { name: 'סגירת תפריט' })).not.toBeInTheDocument()
+  })
+
+  it('closes the hamburger menu on Escape', async () => {
+    const user = userEvent.setup()
+    renderAdmin()
+
+    await user.click(screen.getByRole('button', { name: 'תפריט ניהול' }))
+    await user.keyboard('{Escape}')
+
+    expect(screen.getByRole('button', { name: 'תפריט ניהול' })).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('closes the hamburger menu when the overlay is clicked', async () => {
+    const user = userEvent.setup()
+    renderAdmin()
+
+    await user.click(screen.getByRole('button', { name: 'תפריט ניהול' }))
+    await user.click(screen.getByRole('button', { name: 'סגירת תפריט' }))
+
+    expect(screen.getByRole('button', { name: 'תפריט ניהול' })).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('opens the account menu from the header avatar', async () => {
+    const user = userEvent.setup()
+    renderAdmin()
+
+    await user.click(screen.getByRole('button', { name: 'תפריט חשבון' }))
+
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'דיווח שעות' })).toBeInTheDocument()
   })
 })
