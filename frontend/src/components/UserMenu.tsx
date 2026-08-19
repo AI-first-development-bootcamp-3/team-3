@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type AnimationEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type AnimationEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useLocation } from 'react-router-dom'
 import { logoutAndRedirect } from '../services/auth'
@@ -22,14 +22,16 @@ function UserMenu({ menuAlign = 'end' }: { menuAlign?: 'start' | 'end' }) {
   const [loggingOut, setLoggingOut] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (open) {
-      setPanelClosing(false)
-      setPanelMounted(true)
-      return
-    }
-    if (panelMounted) setPanelClosing(true)
-  }, [open, panelMounted])
+  const openMenu = () => {
+    setPanelClosing(false)
+    setPanelMounted(true)
+    setOpen(true)
+  }
+
+  const closeMenu = useCallback(() => {
+    setOpen(false)
+    setPanelClosing(true)
+  }, [])
 
   useEffect(() => {
     if (!panelClosing) return
@@ -44,10 +46,10 @@ function UserMenu({ menuAlign = 'end' }: { menuAlign?: 'start' | 'end' }) {
     if (!open) return
 
     const onPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
+      if (!rootRef.current?.contains(event.target as Node)) closeMenu()
     }
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false)
+      if (event.key === 'Escape') closeMenu()
     }
 
     document.addEventListener('pointerdown', onPointerDown)
@@ -56,7 +58,7 @@ function UserMenu({ menuAlign = 'end' }: { menuAlign?: 'start' | 'end' }) {
       document.removeEventListener('pointerdown', onPointerDown)
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [open])
+  }, [closeMenu, open])
 
   useEffect(() => {
     if (!confirming) return
@@ -92,7 +94,10 @@ function UserMenu({ menuAlign = 'end' }: { menuAlign?: 'start' | 'end' }) {
         aria-label="תפריט חשבון"
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          if (open) closeMenu()
+          else openMenu()
+        }}
       >
         {initialsFor(user.fullName)}
       </button>
@@ -110,13 +115,13 @@ function UserMenu({ menuAlign = 'end' }: { menuAlign?: 'start' | 'end' }) {
           </div>
 
           {isAdmin && onAdmin ? (
-            <Link className="user-menu__item" role="menuitem" to="/" onClick={() => setOpen(false)}>
+            <Link className="user-menu__item" role="menuitem" to="/" onClick={closeMenu}>
               דיווח שעות
             </Link>
           ) : null}
 
           {isAdmin && !onAdmin ? (
-            <Link className="user-menu__item" role="menuitem" to={ADMIN_HOME_PATH} onClick={() => setOpen(false)}>
+            <Link className="user-menu__item" role="menuitem" to={ADMIN_HOME_PATH} onClick={closeMenu}>
               ניהול
             </Link>
           ) : null}
@@ -125,7 +130,7 @@ function UserMenu({ menuAlign = 'end' }: { menuAlign?: 'start' | 'end' }) {
             className="user-menu__item"
             role="menuitem"
             to="/change-password"
-            onClick={() => setOpen(false)}
+            onClick={closeMenu}
           >
             שינוי סיסמה
           </Link>
@@ -135,7 +140,7 @@ function UserMenu({ menuAlign = 'end' }: { menuAlign?: 'start' | 'end' }) {
             className="user-menu__item user-menu__item--danger"
             role="menuitem"
             onClick={() => {
-              setOpen(false)
+              closeMenu()
               setConfirming(true)
             }}
           >

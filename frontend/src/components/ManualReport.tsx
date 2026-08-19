@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useFieldArray, useForm, useWatch, type FieldErrors, type FieldPath } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { App } from 'antd'
@@ -320,7 +320,7 @@ function ManualReport({
   const [reportTab, setReportTab] = useState<'hours' | 'absence'>(() =>
     (initialAbsences?.length ?? 0) > 0 && (initialReports?.length ?? 0) === 0 ? 'absence' : 'hours',
   )
-  const acknowledgedOverHalfDay = useRef<number | null>(null)
+  const [acknowledgedOverHalfDay, setAcknowledgedOverHalfDay] = useState<number | null>(null)
 
   const dayAbsences = initialAbsences ?? []
   const halfVacation = dayAbsences.some(isHalfDayVacation)
@@ -375,12 +375,6 @@ function ManualReport({
     [options, day.dayStart, rows],
   )
   const remaining = Math.max(hoursTarget - reported, 0)
-
-  useEffect(() => {
-    if (!halfVacation || !hoursExceedWindow(reported, hoursTarget)) {
-      acknowledgedOverHalfDay.current = null
-    }
-  }, [halfVacation, hoursTarget, reported])
   const hasHierarchy = (options?.clients.length ?? 0) > 0
   const hasSavedDay = (initialReports?.length ?? 0) > 0 || dayAbsences.length > 0
   const deleteCopy = dayDeleteCopy(dayAbsences, (initialReports?.length ?? 0) > 0)
@@ -488,11 +482,13 @@ function ManualReport({
       return
     }
     if (halfVacation && hoursExceedWindow(allocated, cap)) {
-      if (acknowledgedOverHalfDay.current !== allocated) {
-        acknowledgedOverHalfDay.current = allocated
+      if (acknowledgedOverHalfDay !== allocated) {
+        setAcknowledgedOverHalfDay(allocated)
         showWarningToast(halfDayOverTargetBanner(allocated, cap))
         return
       }
+    } else if (acknowledgedOverHalfDay !== null) {
+      setAcknowledgedOverHalfDay(null)
     }
     try {
       await saveBatch({

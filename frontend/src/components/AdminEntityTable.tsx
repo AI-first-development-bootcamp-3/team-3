@@ -5,7 +5,7 @@ export type AdminTableColumn<T> = {
   title: ReactNode
   key?: Key
   dataIndex?: string
-  render?: (value: any, record: T, index: number) => ReactNode
+  render?: (value: unknown, record: T, index: number) => ReactNode
   sorter?: boolean | ((a: T, b: T) => number)
 }
 
