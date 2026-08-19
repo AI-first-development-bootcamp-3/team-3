@@ -60,6 +60,7 @@ function renderScreen(
     initialDate?: string
     initialReports?: Parameters<typeof ManualReport>[0]['initialReports']
     initialAbsences?: Parameters<typeof ManualReport>[0]['initialAbsences']
+    headerMeta?: Parameters<typeof ManualReport>[0]['headerMeta']
     allowAbsenceTab?: boolean
   } = {},
 ) {
@@ -208,6 +209,32 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     renderScreen()
 
     expect(await screen.findByRole('button', { name: 'מחיקת דיווח' })).toBeDisabled()
+  })
+
+  it('shows the half-day status under the date without dropping מחיקת דיווח', async () => {
+    signIn()
+    mockFetch(() => ({ ok: true, status: 200, json: options }))
+
+    renderScreen(vi.fn(), {
+      initialDate: '2026-08-20',
+      headerMeta: { status: 'חצי יום חופשה 🏖️', tone: 'absence', tags: [] },
+      initialAbsences: [
+        {
+          id: 'a-half',
+          userId: 'u1',
+          type: 'VACATION',
+          startDate: '2026-08-20',
+          endDate: '2026-08-20',
+          halfDay: true,
+          workingDayCount: 0.5,
+          attachments: [],
+        },
+      ],
+    })
+
+    expect(await screen.findByText('חצי יום חופשה 🏖️')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'מחיקת דיווח' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'סגירה' })).toBeInTheDocument()
   })
 
   it('asks before deleting a saved day and does not call the API on cancel', async () => {
@@ -1020,7 +1047,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
 
     renderScreen(onClose)
     await user.click(await screen.findByRole('tab', { name: 'דיווח העדרות' }))
-    await user.selectOptions(screen.getByLabelText('סוג היעדרות'), 'VACATION')
+    await user.selectOptions(screen.getByLabelText('סוג היעדרות'), 'VACATION_FULL')
     await user.click(screen.getByRole('button', { name: 'דיווח על היעדרות ליותר מיום אחד' }))
     fireEvent.change(screen.getByLabelText('מתאריך'), { target: { value: '2026-08-13' } })
     fireEvent.change(screen.getByLabelText('עד תאריך'), { target: { value: '2026-08-16' } })
@@ -1039,8 +1066,59 @@ describe('ManualReport', { timeout: 20_000 }, () => {
       type: 'VACATION',
       startDate: '2026-08-13',
       endDate: '2026-08-16',
+      halfDay: false,
     })
     await waitFor(() => expect(onClose).toHaveBeenCalled())
+  })
+
+  it('posts a half-day vacation and stays on the hours tab to finish 4.5 hours', async () => {
+    signIn()
+    const fetchMock = mockFetch((url, init) => {
+      if (String(url).includes('/absences') && init?.method === 'POST') {
+        return {
+          ok: true,
+          status: 201,
+          json: {
+            id: 'a-half',
+            userId: 'u1',
+            type: 'VACATION',
+            startDate: '2026-08-09',
+            endDate: '2026-08-09',
+            halfDay: true,
+            workingDayCount: 0.5,
+          },
+        }
+      }
+      return { ok: true, status: 200, json: options }
+    })
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+
+    renderScreen(onClose)
+    await user.click(await screen.findByRole('tab', { name: 'דיווח העדרות' }))
+    await user.selectOptions(screen.getByLabelText('סוג היעדרות'), 'VACATION_HALF')
+    fireEvent.change(screen.getByLabelText('מתאריך'), { target: { value: '2026-08-09' } })
+    await user.click(screen.getByRole('button', { name: 'שמירה' }))
+
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(
+          ([url, init]) => String(url).includes('/absences') && (init as RequestInit).method === 'POST',
+        ),
+      ).toBe(true)
+    })
+    const call = fetchMock.mock.calls.find(
+      ([url, init]) => String(url).includes('/absences') && (init as RequestInit).method === 'POST',
+    )
+    expect(JSON.parse(String((call?.[1] as RequestInit).body))).toEqual({
+      type: 'VACATION',
+      startDate: '2026-08-09',
+      endDate: '2026-08-09',
+      halfDay: true,
+    })
+    expect(onClose).not.toHaveBeenCalled()
+    expect(await screen.findByRole('heading', { name: 'חצי יום חופשה נשמר' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'דיווח ידני' })).toHaveAttribute('aria-selected', 'true')
   })
 
   it('defaults the absence tab to one-day mode and reveals the end date only after the more-days link is clicked', async () => {
@@ -1053,6 +1131,8 @@ describe('ManualReport', { timeout: 20_000 }, () => {
 
     expect(screen.getByLabelText('מתאריך')).toBeInTheDocument()
     expect(screen.queryByLabelText('עד תאריך')).not.toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'חופשה - חצי יום 🏖️' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'חופשה - יום מלא 🏖️' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'דיווח על היעדרות ליותר מיום אחד' }))
 
@@ -1090,7 +1170,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
 
     renderScreen()
     await user.click(await screen.findByRole('tab', { name: 'דיווח העדרות' }))
-    await user.selectOptions(screen.getByLabelText('סוג היעדרות'), 'VACATION')
+    await user.selectOptions(screen.getByLabelText('סוג היעדרות'), 'VACATION_FULL')
     await user.click(screen.getByRole('button', { name: 'דיווח על היעדרות ליותר מיום אחד' }))
     fireEvent.change(screen.getByLabelText('מתאריך'), { target: { value: '2026-08-13' } })
     fireEvent.change(screen.getByLabelText('עד תאריך'), { target: { value: '2026-08-16' } })
@@ -1111,6 +1191,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
       type: 'VACATION',
       startDate: '2026-08-13',
       endDate: '2026-08-13',
+      halfDay: false,
     })
   })
 
@@ -1149,6 +1230,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
       type: 'SICK',
       startDate: '2026-08-13',
       endDate: '2026-08-13',
+      halfDay: false,
     })
   })
 
@@ -1251,7 +1333,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     })
 
     await user.click(await screen.findByRole('tab', { name: 'דיווח העדרות' }))
-    await user.selectOptions(screen.getByLabelText('סוג היעדרות'), 'VACATION')
+    await user.selectOptions(screen.getByLabelText('סוג היעדרות'), 'VACATION_FULL')
     await user.click(screen.getByRole('button', { name: 'שמירה' }))
 
     await waitFor(() => expect(onClose).toHaveBeenCalled())
@@ -1268,6 +1350,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
       type: 'VACATION',
       startDate: '2026-08-12',
       endDate: '2026-08-12',
+      halfDay: false,
       attachmentIds: [],
     })
   })
@@ -1304,7 +1387,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
       false,
     )
 
-    await user.selectOptions(screen.getByLabelText('סוג היעדרות'), 'VACATION')
+    await user.selectOptions(screen.getByLabelText('סוג היעדרות'), 'VACATION_FULL')
     await user.click(screen.getByRole('button', { name: 'שמירה' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('2026-08-13')

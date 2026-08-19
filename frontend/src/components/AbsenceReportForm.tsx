@@ -7,17 +7,19 @@ import { createAbsence, updateAbsence, uploadAttachment, type AttachmentMetadata
 import { countWorkingDays } from '../lib/workingDays'
 import type { Absence } from '../types'
 import {
-  ABSENCE_TYPE_LABELS,
-  ABSENCE_TYPES,
+  ABSENCE_FORM_KIND_LABELS,
+  ABSENCE_FORM_KINDS,
+  absenceFormKindFromAbsence,
+  absencePayloadFromKind,
   absenceReportSchema,
-  employeeAbsenceType,
+  type AbsenceFormKind,
   type AbsenceReportInput,
   type AbsenceReportValues,
 } from './AbsenceReport.schema'
 
 interface Props {
   onClose: () => void
-  onSaved?: () => void
+  onSaved?: (result?: { halfDay: boolean }) => void
   defaultStartDate?: string
   existingAbsence?: Absence
 }
@@ -47,7 +49,7 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
   const { message } = App.useApp()
   const [banner, setBanner] = useState<{ title: string; detail: string } | null>(null)
   const [uploadedFiles, setUploadedFiles] = useState<AttachmentMetadata[]>(existingAbsence?.attachments ?? [])
-  const [isUploading, setIsUploading] = useState(false)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [isMultiDay, setIsMultiDay] = useState(
     existingAbsence ? existingAbsence.startDate !== existingAbsence.endDate : false,
   )
@@ -62,7 +64,7 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
   } = useForm<AbsenceReportInput, unknown, AbsenceReportValues>({
     resolver: zodResolver(absenceReportSchema),
     defaultValues: {
-      type: employeeAbsenceType(existingAbsence?.type),
+      kind: absenceFormKindFromAbsence(existingAbsence),
       startDate: existingAbsence?.startDate ?? defaultStartDate,
       endDate: existingAbsence && existingAbsence.startDate !== existingAbsence.endDate ? existingAbsence.endDate : '',
       documents: [],
@@ -70,33 +72,21 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
   })
   const startDate = useWatch({ control, name: 'startDate' }) ?? ''
   const endDate = useWatch({ control, name: 'endDate' }) ?? ''
+  const kind = (useWatch({ control, name: 'kind' }) ?? '') as AbsenceFormKind | ''
+  const halfDay = kind === 'VACATION_HALF'
   const workingDays = useMemo(
-    () => countWorkingDays(startDate, endDate || startDate),
-    [startDate, endDate],
+    () => (halfDay ? 0.5 : countWorkingDays(startDate, endDate || startDate)),
+    [endDate, halfDay, startDate],
   )
+  const kindOptions = isMultiDay ? ABSENCE_FORM_KINDS.filter((value) => value !== 'VACATION_HALF') : ABSENCE_FORM_KINDS
 
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || [])
     if (files.length === 0) return
 
-    setIsUploading(true)
-    const newUploadedFiles: AttachmentMetadata[] = []
+    setPendingFiles((prev) => [...prev, ...files])
+    message.info(`${files.length} file(s) ready to upload`)
 
-    for (const file of files) {
-      try {
-        const metadata = await uploadAttachment(file)
-        newUploadedFiles.push(metadata)
-      } catch {
-        message.error(`Failed to upload ${file.name}`)
-      }
-    }
-
-    if (newUploadedFiles.length > 0) {
-      setUploadedFiles((prev) => [...prev, ...newUploadedFiles])
-      message.success(`${newUploadedFiles.length} file(s) uploaded`)
-    }
-
-    setIsUploading(false)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -106,14 +96,36 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
     setUploadedFiles((prev) => prev.filter((f) => f.id !== fileId))
   }
 
+  const removePendingFile = (index: number) => {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index))
+  }
+
   const onSubmit = async (values: AbsenceReportValues) => {
     setBanner(null)
     try {
-      const attachmentIds = uploadedFiles.map((f) => f.id)
+      // Upload any pending files
+      const newAttachments: AttachmentMetadata[] = []
+      for (const file of pendingFiles) {
+        try {
+          const metadata = await uploadAttachment(file)
+          newAttachments.push(metadata)
+        } catch {
+          message.error(`Failed to upload ${file.name}`)
+          return
+        }
+      }
+
+      // Combine previously uploaded files with newly uploaded files
+      const allAttachments = [...uploadedFiles, ...newAttachments]
+      const attachmentIds = allAttachments.map((f) => f.id)
+
+      const { type, halfDay: halfDayPayload } = absencePayloadFromKind(values.kind)
+
       const payload = {
-        type: values.type,
+        type,
         startDate: values.startDate,
         endDate: values.endDate || values.startDate,
+        halfDay: Boolean(halfDayPayload && !(values.endDate && values.endDate !== values.startDate)),
         ...(existingAbsence || attachmentIds.length > 0 ? { attachmentIds } : {}),
       }
       if (existingAbsence) {
@@ -121,10 +133,10 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
         message.success('ההיעדרות עודכנה בהצלחה')
       } else {
         await createAbsence(payload)
-        message.success('ההיעדרות נשמרה בהצלחה')
+        message.success(payload.halfDay ? 'חצי יום חופשה נשמר' : 'ההיעדרות נשמרה בהצלחה')
       }
-      onSaved?.()
-      onClose()
+      onSaved?.({ halfDay: payload.halfDay })
+      if (!payload.halfDay) onClose()
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
         setBanner(conflictCopy(error.body))
@@ -156,17 +168,17 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
       <div className="absence-report__fields">
         <label className="manual-report__field">
           <span className="manual-report__field-label">סוג היעדרות</span>
-          <select className="mr-project--desktop__select" aria-label="סוג היעדרות" {...register('type')}>
+          <select className="mr-project--desktop__select" aria-label="סוג היעדרות" {...register('kind')}>
             <option value="" disabled>
               בחר
             </option>
-            {ABSENCE_TYPES.map((type) => (
-              <option key={type} value={type}>
-                {ABSENCE_TYPE_LABELS[type]}
+            {kindOptions.map((option) => (
+              <option key={option} value={option}>
+                {ABSENCE_FORM_KIND_LABELS[option]}
               </option>
             ))}
           </select>
-          {errors.type ? <p className="manual-report__field-error">{errors.type.message}</p> : null}
+          {errors.kind ? <p className="manual-report__field-error">{errors.kind.message}</p> : null}
         </label>
         <label className="manual-report__field">
           <span className="manual-report__field-label">{isMultiDay ? 'מתאריך' : 'תאריך'}</span>
@@ -196,7 +208,10 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
           <button
             type="button"
             className="absence-report__more-days-link"
-            onClick={() => setIsMultiDay(true)}
+            onClick={() => {
+              setIsMultiDay(true)
+              if (kind === 'VACATION_HALF') setValue('kind', 'VACATION_FULL')
+            }}
           >
             דיווח על היעדרות ליותר מיום אחד
           </button>
@@ -212,7 +227,7 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
             type="button"
             className="absence-report__upload-button"
             onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
+            disabled={isSubmitting}
           >
             <span className="absence-report__upload-icon">📄</span>
             <span className="absence-report__upload-text">יש לצרף תמונה או מסמך</span>
@@ -225,10 +240,10 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
             accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx,.txt"
             style={{ display: 'none' }}
             onChange={handleFileSelect}
-            disabled={isUploading}
+            disabled={isSubmitting}
           />
         </label>
-        {uploadedFiles.length > 0 && (
+        {(uploadedFiles.length > 0 || pendingFiles.length > 0) && (
           <div className="absence-report__uploaded-files">
             {uploadedFiles.map((file) => (
               <div key={file.id} className="absence-report__file-item">
@@ -238,6 +253,19 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
                   className="absence-report__file-remove"
                   onClick={() => removeFile(file.id)}
                   aria-label={`Remove ${file.filename}`}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            {pendingFiles.map((file, index) => (
+              <div key={`pending-${index}`} className="absence-report__file-item absence-report__file-item--pending">
+                <span className="absence-report__file-name">{file.name} (לא שומר עדיין)</span>
+                <button
+                  type="button"
+                  className="absence-report__file-remove"
+                  onClick={() => removePendingFile(index)}
+                  aria-label={`Remove ${file.name}`}
                 >
                   ✕
                 </button>

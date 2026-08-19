@@ -25,11 +25,12 @@ export const absenceRouter = Router();
  * @openapi
  * /absences:
  *   post:
- *     summary: Create a full-day absence for the authenticated caller
+ *     summary: Create an absence for the authenticated caller
  *     description: >
- *       Stores one absence row (`halfDay` false). Working-day count excludes
- *       Friday and Saturday. Conflicts with existing absences or reported
- *       hours return 409 with per-date details.
+ *       Stores one absence row. `halfDay` is allowed only for vacation on a
+ *       single date (4.5 of 9 hours). Working-day count excludes Friday and
+ *       Saturday. Conflicts with existing absences or reported hours return
+ *       409 with per-date details.
  *     tags: [Absences]
  *     security: [{ bearerAuth: [] }]
  *     requestBody:
@@ -43,6 +44,7 @@ export const absenceRouter = Router();
  *               type: { type: string, enum: [VACATION, SICK, RESERVE_DUTY, OTHER] }
  *               startDate: { type: string, format: date, example: '2026-08-09' }
  *               endDate: { type: string, format: date, example: '2026-08-13', description: 'Inclusive; defaults to startDate' }
+ *               halfDay: { type: boolean, description: 'Vacation only, single date; claims 4.5 hours' }
  *               attachmentIds: { type: array, items: { type: string, format: uuid }, description: 'UUIDs of previously uploaded attachments to link to this absence' }
  *     responses:
  *       201:
@@ -128,6 +130,7 @@ absenceRouter.get(
  *               type: { type: string, enum: [VACATION, SICK, RESERVE_DUTY, OTHER] }
  *               startDate: { type: string, format: date, example: '2026-08-09' }
  *               endDate: { type: string, format: date, example: '2026-08-13', description: 'Inclusive; defaults to startDate' }
+ *               halfDay: { type: boolean, description: 'Vacation only, single date; claims 4.5 hours' }
  *               attachmentIds: { type: array, items: { type: string, format: uuid }, description: 'Full desired set of attachment UUIDs linked to this absence' }
  *     responses:
  *       200:

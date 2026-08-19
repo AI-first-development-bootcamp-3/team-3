@@ -1,8 +1,9 @@
-import { ABSENCE_TYPE_LABELS } from '../components/AbsenceReport.schema'
+import { ABSENCE_TYPE_LABELS, HALF_DAY_VACATION_LABEL } from '../components/AbsenceReport.schema'
 import { attendanceWindowHours } from '../components/ManualReport.schema'
 import tagBuilding from '../assets/home/tag-building.svg'
 import tagNote from '../assets/home/tag-note.svg'
 import { DAY_STATUS_LABELS } from '../lib/dayStatusLabels'
+import { isHalfDayVacation, workHoursTarget } from '../lib/halfDay'
 import { expandWorkingDayIsos, monthEndIso, weekendDatesInclusive } from '../lib/workingDays'
 import dayjs from '../services/dayjs'
 import type { Absence, TimeReportListItem, WorkLocation } from '../types'
@@ -50,10 +51,13 @@ export function weekendDatesForVisibleMonth(
   return [...new Set([...weekendDatesInclusive(start, cap), ...remembered.filter((date) => date.startsWith(monthPrefix(year, month)))])].sort()
 }
 
-function hoursDay(isoDate: string, rows: TimeReportListItem[]): DemoDay {
+function hoursDay(isoDate: string, rows: TimeReportListItem[], halfVacation: boolean): DemoDay {
   const weekend = isWeekend(isoDate)
   const first = rows[0]
-  const windowHours = first ? attendanceWindowHours(first.startTime, first.endTime) : 0
+  const windowHours = workHoursTarget(
+    first ? attendanceWindowHours(first.startTime, first.endTime) : 0,
+    halfVacation,
+  )
   const allocatedHours = rows.reduce((sum, row) => sum + row.hours, 0)
   const projectIds = new Set(rows.map((row) => row.projectId))
   const locations = [...new Set(rows.map((row) => row.workLocation))]
@@ -65,7 +69,7 @@ function hoursDay(isoDate: string, rows: TimeReportListItem[]): DemoDay {
   } else if (hoursShortOfWindow(allocatedHours, windowHours)) {
     tone = 'missing'
     status = DAY_STATUS_LABELS.missing
-  } else if (windowHours >= STANDARD_HOURS) {
+  } else if (halfVacation || windowHours >= STANDARD_HOURS) {
     tone = 'full'
     status = formatHoursLabel(windowHours)
   } else if (windowHours > 0) {
@@ -87,17 +91,18 @@ function hoursDay(isoDate: string, rows: TimeReportListItem[]): DemoDay {
         icon: tagBuilding,
       })),
       ...(projectIds.size > 0 ? [{ text: projectCountLabel(projectIds.size), icon: tagNote }] : []),
+      ...(halfVacation ? [{ text: HALF_DAY_VACATION_LABEL, icon: tagNote }] : []),
     ],
     weekend: weekend || undefined,
   }
 }
 
-function absenceDay(isoDate: string, type: Absence['type']): DemoDay {
+function absenceDay(isoDate: string, type: Absence['type'], halfDay: boolean): DemoDay {
   return {
     isoDate,
     date: dayjs(isoDate).format('DD/MM/YY, ddd'),
     tone: 'absence',
-    status: ABSENCE_TYPE_LABELS[type],
+    status: halfDay && type === 'VACATION' ? HALF_DAY_VACATION_LABEL : ABSENCE_TYPE_LABELS[type],
     tags: [],
     absenceType: type,
   }
@@ -130,11 +135,11 @@ export function buildHomeDays(input: {
 
   const inMonth = (isoDate: string) => !input.monthPrefix || isoDate.startsWith(input.monthPrefix)
 
-  const absenceByDate = new Map<string, Absence['type']>()
+  const absenceByDate = new Map<string, Absence>()
   for (const absence of input.absences ?? []) {
     for (const isoDate of expandWorkingDayIsos(absence.startDate, absence.endDate)) {
       if (!inMonth(isoDate)) continue
-      if (!absenceByDate.has(isoDate)) absenceByDate.set(isoDate, absence.type)
+      if (!absenceByDate.has(isoDate)) absenceByDate.set(isoDate, absence)
     }
   }
 
@@ -148,9 +153,9 @@ export function buildHomeDays(input: {
     .sort((left, right) => right.localeCompare(left))
     .map((isoDate) => {
       const rows = byDate.get(isoDate)
-      if (rows && rows.length > 0) return hoursDay(isoDate, rows)
-      const absenceType = absenceByDate.get(isoDate)
-      if (absenceType) return absenceDay(isoDate, absenceType)
+      const covering = absenceByDate.get(isoDate)
+      if (rows && rows.length > 0) return hoursDay(isoDate, rows, isHalfDayVacation(covering))
+      if (covering) return absenceDay(isoDate, covering.type, covering.halfDay)
       return weekendDay(isoDate)
     })
 }

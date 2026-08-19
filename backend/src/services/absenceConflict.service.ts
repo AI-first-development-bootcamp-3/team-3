@@ -74,6 +74,7 @@ export async function checkAbsenceConflicts(
     prisma.absence.findMany({
       where: {
         userId,
+        isActive: true,
         startDate: { lte: endDate },
         endDate: { gte: startDate },
         ...(excludeAbsenceId ? { id: { not: excludeAbsenceId } } : {}),
@@ -82,7 +83,7 @@ export async function checkAbsenceConflicts(
     }),
     prisma.timeReport.findMany({
       where: { userId, date: { gte: startDate, lte: endDate } },
-      select: { date: true, startTime: true, endTime: true },
+      select: { date: true, hours: true },
     }),
   ]);
 
@@ -100,8 +101,7 @@ export async function checkAbsenceConflicts(
   const reportedHoursByDate = new Map<string, number>();
   for (const report of timeReports) {
     const iso = toISODate(report.date);
-    const hours = (report.endTime.getTime() - report.startTime.getTime()) / (60 * 60 * 1000);
-    reportedHoursByDate.set(iso, (reportedHoursByDate.get(iso) ?? 0) + hours);
+    reportedHoursByDate.set(iso, (reportedHoursByDate.get(iso) ?? 0) + Number(report.hours));
   }
 
   const claimedHours = halfDay ? HALF_DAY_HOURS : STANDARD_DAY_HOURS;

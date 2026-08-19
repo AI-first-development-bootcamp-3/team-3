@@ -35,6 +35,35 @@ describe('createAbsenceBodySchema', () => {
     const result = createAbsenceBodySchema.safeParse({ type: 'HOLIDAY', startDate: '2026-08-09' });
     expect(result.success).toBe(false);
   });
+
+  it('accepts halfDay on a single vacation day', () => {
+    const parsed = createAbsenceBodySchema.parse({
+      type: 'VACATION',
+      startDate: '2026-08-09',
+      halfDay: true,
+    });
+    expect(parsed.halfDay).toBe(true);
+    expect(parsed.endDate).toBe('2026-08-09');
+  });
+
+  it('rejects halfDay on sick leave', () => {
+    const result = createAbsenceBodySchema.safeParse({
+      type: 'SICK',
+      startDate: '2026-08-09',
+      halfDay: true,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects halfDay on a date range', () => {
+    const result = createAbsenceBodySchema.safeParse({
+      type: 'VACATION',
+      startDate: '2026-08-09',
+      endDate: '2026-08-11',
+      halfDay: true,
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('updateAbsenceBodySchema', () => {
@@ -76,6 +105,57 @@ describe('POST /absences', () => {
       workingDayCount: 1,
     });
     expect(await prisma.absence.count()).toBe(1);
+  });
+
+  it('creates a half-day vacation with workingDayCount 0.5', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+
+    const response = await request(app)
+      .post('/absences')
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({ type: 'VACATION', startDate: '2026-08-09', halfDay: true });
+
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({
+      type: 'VACATION',
+      startDate: '2026-08-09',
+      endDate: '2026-08-09',
+      halfDay: true,
+      workingDayCount: 0.5,
+    });
+  });
+
+  it('accepts a half-day vacation next to 4.5 reported hours', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    await createTimeReport({
+      userId: employee.id,
+      date: new Date('2026-08-09T00:00:00.000Z'),
+      hours: 4.5,
+    });
+
+    const response = await request(app)
+      .post('/absences')
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({ type: 'VACATION', startDate: '2026-08-09', halfDay: true });
+
+    expect(response.status).toBe(201);
+    expect(response.body.halfDay).toBe(true);
+  });
+
+  it('rejects half-day vacation when more than 4.5 hours are already reported', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    await createTimeReport({
+      userId: employee.id,
+      date: new Date('2026-08-09T00:00:00.000Z'),
+      hours: 5,
+    });
+
+    const response = await request(app)
+      .post('/absences')
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({ type: 'VACATION', startDate: '2026-08-09', halfDay: true });
+
+    expect(response.status).toBe(409);
   });
 
   it('counts Thursday through Sunday as two working days', async () => {
@@ -264,6 +344,23 @@ describe('PATCH /absences/:id', () => {
       endDate: '2026-08-16',
       workingDayCount: 2,
     });
+  });
+
+  it('can turn a full vacation day into a half day', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    const absence = await createAbsence({
+      userId: employee.id,
+      startDate: new Date('2026-08-09T00:00:00.000Z'),
+      endDate: new Date('2026-08-09T00:00:00.000Z'),
+    });
+
+    const response = await request(app)
+      .patch(`/absences/${absence.id}`)
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({ type: 'VACATION', startDate: '2026-08-09', halfDay: true });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ halfDay: true, workingDayCount: 0.5 });
   });
 
   it('does not conflict with its own prior dates', async () => {
