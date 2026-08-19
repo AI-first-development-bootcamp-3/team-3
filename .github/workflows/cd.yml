@@ -1,0 +1,89 @@
+name: CD
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  migrate:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+        working-directory: backend
+
+      # Runs against production. Idempotent: a redeploy with no new
+      # migrations is a no-op, and Prisma fails loudly (non-zero exit)
+      # if a migration fails, which fails this job and blocks deploy-backend.
+      - run: npx prisma migrate deploy
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+  deploy-backend:
+    name: deploy backend (Render)
+    needs: migrate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy
+        id: trigger
+        run: |
+          response=$(curl -sf -X POST \
+            "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json")
+          deploy_id=$(echo "$response" | jq -r '.id')
+          if [ -z "$deploy_id" ] || [ "$deploy_id" = "null" ]; then
+            echo "Failed to trigger Render deploy: $response"
+            exit 1
+          fi
+          echo "deploy_id=$deploy_id" >> "$GITHUB_OUTPUT"
+
+      - name: Poll deploy status
+        run: |
+          deploy_id="${{ steps.trigger.outputs.deploy_id }}"
+          for i in $(seq 1 60); do
+            status=$(curl -sf \
+              "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys/$deploy_id" \
+              -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              | jq -r '.status')
+            echo "Render deploy status: $status"
+            case "$status" in
+              live)
+                exit 0
+                ;;
+              build_failed|update_failed|canceled|deactivated)
+                echo "Render deploy failed with status: $status"
+                exit 1
+                ;;
+            esac
+            sleep 10
+          done
+          echo "Timed out waiting for Render deploy to go live"
+          exit 1
+
+  # Frontend deploys via Render's own native GitHub integration (Static Site,
+  # auto-deploys on push to main) - no trigger step needed here, unlike
+  # deploy-backend which uses Render's API explicitly.
+  smoke-test:
+    name: post-deploy smoke test
+    needs: deploy-backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Backend health check
+        run: curl -sf "${{ secrets.RENDER_BACKEND_URL }}/health"
+
+      - name: Frontend reachability check
+        run: curl -sf "${{ secrets.RENDER_FRONTEND_URL }}"
