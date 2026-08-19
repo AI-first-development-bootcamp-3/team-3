@@ -74,6 +74,7 @@ export async function checkAbsenceConflicts(
     prisma.absence.findMany({
       where: {
         userId,
+        isActive: true,
         startDate: { lte: endDate },
         endDate: { gte: startDate },
         ...(excludeAbsenceId ? { id: { not: excludeAbsenceId } } : {}),
