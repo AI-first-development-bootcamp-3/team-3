@@ -201,6 +201,21 @@ describe('Reports home shell', () => {
     expect(screen.queryByText('אין נתונים עדיין')).not.toBeInTheDocument()
   })
 
+  it('dims every day row when the month is locked', async () => {
+    signIn()
+    mockReportingOptions({
+      '/reports?': { ...savedReports, monthLocked: true },
+    })
+    renderHome()
+
+    expect(await screen.findByText('9 שעות')).toBeInTheDocument()
+    const rows = screen.getAllByRole('button').filter((button) => button.classList.contains('home-shell__day'))
+    expect(rows.length).toBeGreaterThan(0)
+    for (const row of rows) {
+      expect(row).toHaveClass('home-shell__day--locked')
+    }
+  })
+
   it('shows an absence type badge for each working day of a saved absence', async () => {
     signIn()
     mockFetch({

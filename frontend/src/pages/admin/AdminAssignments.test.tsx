@@ -74,6 +74,16 @@ function defaultClients(): AdminClient[] {
   ]
 }
 
+function extraProjectFields() {
+  return {
+    managerId: null as string | null,
+    managerName: null as string | null,
+    startDate: null as string | null,
+    endDate: null as string | null,
+    description: '',
+  }
+}
+
 function defaultProjects(): AdminProject[] {
   return [
     {
@@ -83,6 +93,7 @@ function defaultProjects(): AdminProject[] {
       reportFormat: 'CLOCK_IN_OUT',
       clientId: 'c-elal',
       clientName: 'EL-AL',
+      ...extraProjectFields(),
     },
     {
       id: 'p-crew',
@@ -91,6 +102,7 @@ function defaultProjects(): AdminProject[] {
       reportFormat: 'CLOCK_IN_OUT',
       clientId: 'c-elal',
       clientName: 'EL-AL',
+      ...extraProjectFields(),
     },
     {
       id: 'p-force',
@@ -99,6 +111,7 @@ function defaultProjects(): AdminProject[] {
       reportFormat: 'SUM_HOURS',
       clientId: 'c-one',
       clientName: 'ONE',
+      ...extraProjectFields(),
     },
   ]
 }
@@ -196,6 +209,11 @@ function stubAdminApi() {
         reportFormat: 'CLOCK_IN_OUT',
         clientId: String(body.clientId),
         clientName: client?.name ?? '',
+        managerId: String(body.managerId),
+        managerName: store.users.find((user) => user.id === body.managerId)?.displayName ?? null,
+        startDate: String(body.startDate),
+        endDate: String(body.endDate),
+        description: String(body.description ?? ''),
       }
       store.projects.push(project)
       return jsonResponse({ project }, 201)
@@ -277,6 +295,19 @@ describe('AdminAssignments', () => {
     expect(screen.getAllByText('+3').length).toBeGreaterThan(0)
   })
 
+  it('shows every assigned name when hovering the +N pill', async () => {
+    stubAdminApi()
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Cargo')
+
+    const overflow = screen.getByLabelText(/כל העובדים/)
+    await user.hover(overflow)
+    expect(within(overflow).getByText('שירי כהן נפטלי')).toBeInTheDocument()
+    expect(within(overflow).getByText('יואב ישראלי בכר')).toBeInTheDocument()
+    expect(within(overflow).getByText('רז לוי')).toBeInTheDocument()
+  })
+
   it('filters rows by employee name', async () => {
     stubAdminApi()
     const user = userEvent.setup()
@@ -299,6 +330,40 @@ describe('AdminAssignments', () => {
     expect(screen.getByRole('menuitem', { name: 'צור לקוח חדש' })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: 'צור פרויקט חדש' })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: 'צור משימה חדשה' })).toBeInTheDocument()
+  })
+
+  it('opens the create-project dialog and POSTs name, client, manager, and dates', async () => {
+    const fetchMock = stubAdminApi()
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Cargo')
+
+    await user.click(screen.getByRole('button', { name: 'יצירה' }))
+    await user.click(screen.getByRole('menuitem', { name: 'צור פרויקט חדש' }))
+    const dialog = screen.getByRole('dialog', { name: 'יצירת פרויקט' })
+    expect(within(dialog).getByText('כאן תיצור את הפרויקט החדש שיופיע במערכת')).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'צור פרויקט' })).toBeDisabled()
+
+    await user.type(within(dialog).getByLabelText('שם הפרויקט'), 'Atlas')
+    await user.selectOptions(within(dialog).getByLabelText('שם הלקוח'), 'EL-AL')
+    await user.selectOptions(within(dialog).getByLabelText('שייך מנהל ראשי לפרויקט'), 'אביאל שרון')
+    await user.type(within(dialog).getByLabelText('תאריך התחלה'), '2025-09-20')
+    await user.type(within(dialog).getByLabelText('תאריך סיום'), '2026-02-20')
+    await user.click(within(dialog).getByRole('button', { name: 'צור פרויקט' }))
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(
+        (entry) => String(entry[0]).includes('/admin/projects') && entry[1]?.method === 'POST',
+      )
+      expect(call).toBeDefined()
+      expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({
+        name: 'Atlas',
+        clientId: 'c-elal',
+        managerId: 'u-aviel',
+        startDate: '2025-09-20',
+        endDate: '2026-02-20',
+      })
+    })
   })
 
   it('opens the create-client dialog and POSTs a new client', async () => {

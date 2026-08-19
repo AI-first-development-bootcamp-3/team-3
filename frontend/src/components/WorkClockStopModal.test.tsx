@@ -26,7 +26,10 @@ const options = {
     {
       id: 'client-1',
       name: 'Acme',
-      projects: [{ id: 'project-1', name: 'Website', tasks: [{ id: 'task-1', name: 'Design' }] }],
+      projects: [
+        { id: 'project-1', name: 'Website', reportFormat: 'SUM_HOURS', tasks: [{ id: 'task-1', name: 'Design' }] },
+        { id: 'project-2', name: 'AWS Console IL', reportFormat: 'CLOCK_IN_OUT', tasks: [{ id: 'task-2', name: 'IAM policies' }] },
+      ],
     },
   ],
 }
@@ -85,6 +88,15 @@ async function pickHierarchy(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await screen.findByText('משרד'))
 }
 
+async function pickClockHierarchy(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole('combobox', { name: 'פרויקט' }))
+  await user.click(await screen.findByText('AWS Console IL'))
+  await user.click(screen.getByRole('combobox', { name: 'משימה' }))
+  await user.click(await screen.findByText('IAM policies'))
+  await user.click(screen.getByRole('combobox', { name: 'מיקום' }))
+  await user.click(await screen.findByText('בית לקוח'))
+}
+
 describe('WorkClockStopModal', () => {
   afterEach(() => {
     cleanup()
@@ -137,6 +149,39 @@ describe('WorkClockStopModal', () => {
       workLocation: 'OFFICE',
       taskId: 'task-1',
     })
+    expect(body).not.toHaveProperty('rowStartTime')
+    expect(body).not.toHaveProperty('rowEndTime')
+  })
+
+  it('posts a clock pair without hours for a CLOCK_IN_OUT project, even under a minute', async () => {
+    const fetchMock = stubClockApis()
+    const user = userEvent.setup()
+    const { onConfirmed } = renderModal({
+      session: {
+        ...session,
+        segments: [{ date: '2026-08-18', startTime: '22:47', endTime: '22:47', durationMinutes: 0 }],
+      },
+    })
+
+    expect(await screen.findByText('פחות מדקה')).toBeInTheDocument()
+    await pickClockHierarchy(user)
+    await user.click(screen.getByRole('button', { name: 'שמירת דיווח' }))
+    await waitFor(() => expect(onConfirmed).toHaveBeenCalled())
+
+    const reportCall = fetchMock.mock.calls.find(
+      ([input, init]) => String(input).includes('/reports') && (init as RequestInit | undefined)?.method === 'POST',
+    )
+    const body = JSON.parse(String((reportCall?.[1] as RequestInit).body))
+    expect(body).toMatchObject({
+      date: '2026-08-18',
+      startTime: '22:47',
+      endTime: '22:48',
+      rowStartTime: '22:47',
+      rowEndTime: '22:48',
+      workLocation: 'CLIENT',
+      taskId: 'task-2',
+    })
+    expect(body).not.toHaveProperty('hours')
   })
 
   it('posts one report per midnight-split segment', async () => {

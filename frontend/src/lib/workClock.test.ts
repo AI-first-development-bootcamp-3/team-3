@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { clockErrorMessage, formatElapsed, segmentHours, totalSessionMinutes } from './workClock'
+import {
+  addOneMinute,
+  attendanceTimesForSegment,
+  clockErrorMessage,
+  clockReportTimeFields,
+  formatElapsed,
+  segmentHours,
+  totalSessionMinutes,
+} from './workClock'
 
 describe('formatElapsed', () => {
   it('renders a live HH:MM:SS clock from milliseconds', () => {
@@ -41,5 +49,40 @@ describe('totalSessionMinutes', () => {
 describe('clockErrorMessage', () => {
   it('reads the API error message when present', () => {
     expect(clockErrorMessage({ error: { message: 'אין משימות מוקצות' } })).toBe('אין משימות מוקצות')
+  })
+})
+
+describe('addOneMinute', () => {
+  it('advances a clock by one minute', () => {
+    expect(addOneMinute('22:47')).toBe('22:48')
+  })
+
+  it('stays on the same calendar day at 23:59', () => {
+    expect(addOneMinute('23:59')).toBe('23:59')
+  })
+})
+
+describe('clockReportTimeFields', () => {
+  const subMinute = { date: '2026-08-18', startTime: '22:47', endTime: '22:47', durationMinutes: 0 }
+  const nineHours = { date: '2026-08-17', startTime: '09:00', endTime: '18:00', durationMinutes: 540 }
+
+  it('sends hours and never a clock pair for a SUM_HOURS project', () => {
+    expect(clockReportTimeFields(subMinute, 'SUM_HOURS')).toEqual({ hours: 0 })
+    expect(clockReportTimeFields(nineHours, 'SUM_HOURS')).toEqual({ hours: 9 })
+  })
+
+  it('sends a clock pair and never hours for a CLOCK_IN_OUT project', () => {
+    expect(clockReportTimeFields(nineHours, 'CLOCK_IN_OUT')).toEqual({
+      rowStartTime: '09:00',
+      rowEndTime: '18:00',
+    })
+  })
+
+  it('bumps a same-minute CLOCK_IN_OUT stop so the pair is not zero-length', () => {
+    expect(attendanceTimesForSegment(subMinute)).toEqual({ startTime: '22:47', endTime: '22:48' })
+    expect(clockReportTimeFields(subMinute, 'CLOCK_IN_OUT')).toEqual({
+      rowStartTime: '22:47',
+      rowEndTime: '22:48',
+    })
   })
 })

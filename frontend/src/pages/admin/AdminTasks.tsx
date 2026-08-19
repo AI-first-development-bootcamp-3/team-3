@@ -1,43 +1,113 @@
-import AdminListPage from '../../components/AdminListPage'
-import { actionsColumn } from '../../components/adminActionsColumn'
-
-interface TaskRecord {
-  key: string
-  name: string
-  project: string
-  status: string
-  priority: string
-  assignee: string
-}
-
-const mockData: TaskRecord[] = [
-  { key: '1', name: 'פיתוח API', project: 'Cargo', status: 'In Progress', priority: 'High', assignee: 'יואב ישראלי' },
-  { key: '2', name: 'עיצוב UI', project: 'Crew-hub', status: 'Done', priority: 'Medium', assignee: 'אריאל מזרחי' },
-  { key: '3', name: 'בדיקות', project: 'Globally', status: 'To Do', priority: 'High', assignee: 'גבריאל רון' },
-  { key: '4', name: 'דוקומנטציה', project: 'Globally', status: 'In Progress', priority: 'Low', assignee: 'לי כהן' },
-]
-
-const columns = [
-  actionsColumn,
-  { title: 'Assignee', dataIndex: 'assignee', key: 'assignee', width: 150 },
-  { title: 'Priority', dataIndex: 'priority', key: 'priority', width: 120 },
-  { title: 'Status', dataIndex: 'status', key: 'status', width: 120 },
-  { title: 'Project', dataIndex: 'project', key: 'project', width: 150 },
-  { title: 'Task Name', dataIndex: 'name', key: 'name' },
-]
-
-const matchesName = (task: TaskRecord, query: string) => task.name.toLowerCase().includes(query)
+import { useMemo, useState } from 'react'
+import { Button, Tag } from 'antd'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import AdminEntityTable from '../../components/AdminEntityTable'
+import { listClients } from '../../services/adminClients'
+import { listProjects } from '../../services/adminProjects'
+import { listTasks, updateTask, type AdminTask } from '../../services/adminTasks'
+import { CreateEntityDialog, EditEntityDialog } from './AdminFigmaDialogs'
+import './AdminAssignments.css'
 
 function AdminTasks() {
+  const queryClient = useQueryClient()
+  const tasksQuery = useQuery({ queryKey: ['adminTasks'], queryFn: listTasks })
+  const clientsQuery = useQuery({ queryKey: ['adminClients'], queryFn: listClients })
+  const projectsQuery = useQuery({ queryKey: ['adminProjects'], queryFn: listProjects })
+  const [query, setQuery] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [editing, setEditing] = useState<AdminTask | null>(null)
+
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    const rows = tasksQuery.data ?? []
+    if (!needle) return rows
+    return rows.filter(
+      (row) =>
+        row.name.toLowerCase().includes(needle) ||
+        row.projectName.toLowerCase().includes(needle) ||
+        row.clientName.toLowerCase().includes(needle),
+    )
+  }, [query, tasksQuery.data])
+
+  const columns = [
+    { title: 'משימה', dataIndex: 'name', key: 'name' },
+    { title: 'פרויקט', dataIndex: 'projectName', key: 'projectName' },
+    { title: 'לקוח', dataIndex: 'clientName', key: 'clientName' },
+    {
+      title: 'סטטוס משימה',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: AdminTask['status']) => (status === 'OPEN' ? 'פתוחה' : 'סגורה'),
+    },
+    {
+      title: 'פעיל',
+      dataIndex: 'isActive',
+      key: 'isActive',
+      render: (isActive: boolean) => (
+        <Tag color={isActive ? 'green' : 'default'}>{isActive ? 'פעיל' : 'לא פעיל'}</Tag>
+      ),
+    },
+    {
+      title: '',
+      key: 'actions',
+      render: (_: unknown, task: AdminTask) => (
+        <Button type="link" onClick={() => setEditing(task)}>
+          עריכה
+        </Button>
+      ),
+    },
+  ]
+
   return (
-    <AdminListPage
-      title="משימות"
-      description="ניהול משימות בפרויקטים. יצירה, עריכה והקצאה של משימות לעובדים."
-      searchPlaceholder="חיפוש לפי שם משימה"
-      data={mockData}
-      columns={columns}
-      filter={matchesName}
-    />
+    <section>
+      <div className="admin-page__head">
+        <div className="admin-page__titles">
+          <h1 className="admin-page__title">משימות</h1>
+          <p className="admin-page__lead">משימות לדיווח שעות תחת פרויקטים.</p>
+        </div>
+        <div className="admin-page__tools">
+          <label className="admin-search">
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="חיפוש לפי משימה, פרויקט או לקוח"
+            />
+          </label>
+          <button type="button" className="admin-create__btn" onClick={() => setCreating(true)}>
+            משימה חדשה
+          </button>
+        </div>
+      </div>
+      {creating ? (
+        <CreateEntityDialog
+          kind="task"
+          clients={(clientsQuery.data ?? []).map((client) => ({ id: client.id, name: client.name }))}
+          projects={(projectsQuery.data ?? []).map((project) => ({
+            id: project.id,
+            name: project.name,
+            clientId: project.clientId,
+          }))}
+          onClose={() => setCreating(false)}
+          onCreated={() => {
+            void queryClient.invalidateQueries({ queryKey: ['adminTasks'] })
+          }}
+        />
+      ) : null}
+      {editing ? (
+        <EditEntityDialog
+          kind="task"
+          initialName={editing.name}
+          onClose={() => setEditing(null)}
+          onSave={async (name) => {
+            await updateTask(editing.id, { name })
+            await queryClient.invalidateQueries({ queryKey: ['adminTasks'] })
+            setEditing(null)
+          }}
+        />
+      ) : null}
+      <AdminEntityTable columns={columns} dataSource={filtered} rowKey="id" loading={tasksQuery.isLoading} />
+    </section>
   )
 }
 

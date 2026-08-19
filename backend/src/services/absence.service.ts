@@ -2,6 +2,7 @@ import { prisma } from '../config/prisma.js';
 import { AppError } from '../types/errors.js';
 import type { AbsenceType } from '../generated/prisma/enums.js';
 import { checkAbsenceConflicts } from './absenceConflict.service.js';
+import { assertRangeUnlocked } from './monthLock.service.js';
 import { expandWorkingDays } from './workingDays.service.js';
 
 export interface AbsenceAttachmentDto {
@@ -56,6 +57,8 @@ export async function createAbsence(
   userId: string,
   input: { type: AbsenceType; startDate: string; endDate: string; attachmentIds?: string[] },
 ): Promise<AbsenceDto> {
+  await assertRangeUnlocked(input.startDate, input.endDate);
+
   const startLocal = parseCalendarDate(input.startDate);
   const endLocal = parseCalendarDate(input.endDate);
   const { count } = expandWorkingDays(startLocal, endLocal);
@@ -239,6 +242,8 @@ export async function deleteAbsence(userId: string, absenceId: string): Promise<
   if (row.userId !== userId) {
     throw AppError.forbidden();
   }
+
+  await assertRangeUnlocked(toIsoDate(row.startDate), toIsoDate(row.endDate));
 
   await prisma.absence.delete({ where: { id: absenceId } });
 }

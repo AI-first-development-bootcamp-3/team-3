@@ -47,7 +47,12 @@ export async function createClient(overrides: Partial<Pick<ClientModel, 'name' |
 }
 
 export async function createProject(
-  overrides: Partial<Pick<ProjectModel, 'name' | 'isActive' | 'clientId' | 'reportFormat'>> = {},
+  overrides: Partial<
+    Pick<
+      ProjectModel,
+      'name' | 'isActive' | 'clientId' | 'reportFormat' | 'managerId' | 'startDate' | 'endDate' | 'description'
+    >
+  > = {},
 ): Promise<ProjectModel> {
   const clientId = overrides.clientId ?? (await createClient()).id;
 
@@ -57,6 +62,10 @@ export async function createProject(
       clientId,
       ...(overrides.isActive !== undefined ? { isActive: overrides.isActive } : {}),
       ...(overrides.reportFormat !== undefined ? { reportFormat: overrides.reportFormat } : {}),
+      ...(overrides.managerId !== undefined ? { managerId: overrides.managerId } : {}),
+      ...(overrides.startDate !== undefined ? { startDate: overrides.startDate } : {}),
+      ...(overrides.endDate !== undefined ? { endDate: overrides.endDate } : {}),
+      ...(overrides.description !== undefined ? { description: overrides.description } : {}),
     },
   });
 }

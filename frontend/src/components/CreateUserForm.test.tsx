@@ -24,21 +24,21 @@ describe('CreateUserForm', () => {
   it('renders name, email, role, and temporary password fields', () => {
     render(<CreateUserForm />)
 
-    expect(screen.getByLabelText(/full name/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/^email$/i)).toBeInTheDocument()
+    expect(screen.getByLabelText('שם מלא')).toBeInTheDocument()
+    expect(screen.getByLabelText('אימייל')).toBeInTheDocument()
     expect(screen.getByRole('combobox')).toBeInTheDocument()
-    expect(screen.getByLabelText(/temporary password/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /create user/i })).toBeInTheDocument()
+    expect(screen.getByLabelText('סיסמה זמנית')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'יצירת משתמש' })).toBeInTheDocument()
   })
 
   it('shows inline validation errors for an empty submit', async () => {
     const user = userEvent.setup()
     render(<CreateUserForm />)
 
-    await user.click(screen.getByRole('button', { name: /create user/i }))
+    await user.click(screen.getByRole('button', { name: 'יצירת משתמש' }))
 
-    expect(await screen.findByText(/name is required/i)).toBeInTheDocument()
-    expect(await screen.findByText(/email is required/i)).toBeInTheDocument()
+    expect(await screen.findByText('יש למלא שם')).toBeInTheDocument()
+    expect(await screen.findByText('יש למלא אימייל')).toBeInTheDocument()
   })
 
   it('creates a user, shows a success notification, and resets the form', async () => {
@@ -55,18 +55,18 @@ describe('CreateUserForm', () => {
 
     render(<CreateUserForm />)
 
-    await user.type(screen.getByLabelText(/full name/i), 'New Person')
-    await user.type(screen.getByLabelText(/^email$/i), 'new@abra.test')
-    await user.click(screen.getByRole('button', { name: /create user/i }))
+    await user.type(screen.getByLabelText('שם מלא'), 'New Person')
+    await user.type(screen.getByLabelText('אימייל'), 'new@abra.test')
+    await user.click(screen.getByRole('button', { name: 'יצירת משתמש' }))
 
     await waitFor(() => {
       expect(notifySpy).toHaveBeenCalledOnce()
     })
     expect(notifySpy.mock.calls[0]?.[0]).toMatchObject({
-      message: 'User created',
+      message: 'המשתמש נוצר',
     })
     await waitFor(() => {
-      expect(screen.getByLabelText(/full name/i)).toHaveValue('')
+      expect(screen.getByLabelText('שם מלא')).toHaveValue('')
     })
 
     notifySpy.mockRestore()
@@ -82,11 +82,11 @@ describe('CreateUserForm', () => {
 
     render(<CreateUserForm />)
 
-    await user.type(screen.getByLabelText(/full name/i), 'Existing Person')
-    await user.type(screen.getByLabelText(/^email$/i), 'taken@abra.test')
-    await user.click(screen.getByRole('button', { name: /create user/i }))
+    await user.type(screen.getByLabelText('שם מלא'), 'Existing Person')
+    await user.type(screen.getByLabelText('אימייל'), 'taken@abra.test')
+    await user.click(screen.getByRole('button', { name: 'יצירת משתמש' }))
 
-    expect(await screen.findByText(/a user with this email already exists/i)).toBeInTheDocument()
+    expect(await screen.findByText('כבר קיים משתמש עם האימייל הזה')).toBeInTheDocument()
   })
 
   it('shows a form-level error for a malformed-input (400) response', async () => {
@@ -99,11 +99,11 @@ describe('CreateUserForm', () => {
 
     render(<CreateUserForm />)
 
-    await user.type(screen.getByLabelText(/full name/i), 'Someone')
-    await user.type(screen.getByLabelText(/^email$/i), 'someone@abra.test')
-    await user.click(screen.getByRole('button', { name: /create user/i }))
+    await user.type(screen.getByLabelText('שם מלא'), 'Someone')
+    await user.type(screen.getByLabelText('אימייל'), 'someone@abra.test')
+    await user.click(screen.getByRole('button', { name: 'יצירת משתמש' }))
 
-    expect(await screen.findByText(/some fields are invalid/i)).toBeInTheDocument()
+    expect(await screen.findByText('חלק מהשדות אינם תקינים. בדקו את הטופס ונסו שוב.')).toBeInTheDocument()
   })
 
   it('shows a generic form error for an unexpected failure without a global toast taking over', async () => {
@@ -112,10 +112,10 @@ describe('CreateUserForm', () => {
 
     render(<CreateUserForm />)
 
-    await user.type(screen.getByLabelText(/full name/i), 'Someone')
-    await user.type(screen.getByLabelText(/^email$/i), 'someone@abra.test')
-    await user.click(screen.getByRole('button', { name: /create user/i }))
+    await user.type(screen.getByLabelText('שם מלא'), 'Someone')
+    await user.type(screen.getByLabelText('אימייל'), 'someone@abra.test')
+    await user.click(screen.getByRole('button', { name: 'יצירת משתמש' }))
 
-    expect(await screen.findByText(/could not create the user/i)).toBeInTheDocument()
+    expect(await screen.findByText('לא הצלחנו ליצור את המשתמש. נסו שוב.')).toBeInTheDocument()
   })
 })
