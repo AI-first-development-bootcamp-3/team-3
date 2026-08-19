@@ -10,10 +10,11 @@ export const SESSION_COOKIE_NAME = 'abra_session';
 // fine in production (Render always serves HTTPS) but would silently break
 // local dev over http, so it stays Lax there.
 const isProduction = env.NODE_ENV === 'production';
+const sameSite: 'none' | 'lax' = isProduction ? 'none' : 'lax';
 const cookieBase = {
   httpOnly: true,
   secure: isProduction,
-  sameSite: (isProduction ? 'none' : 'lax') as const,
+  sameSite,
   path: '/',
 };
 
