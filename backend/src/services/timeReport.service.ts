@@ -11,6 +11,7 @@ import { Prisma } from '../generated/prisma/client.js';
 import type { ReportFormat, TimeReportAuditAction, WorkLocation } from '../generated/prisma/enums.js';
 import { AppError, type ErrorDetail } from '../types/errors.js';
 import { assertIsoDayInProjectWindow, isIsoDayInProjectWindow, PROJECT_OUTSIDE_WINDOW } from './projectWindow.service.js';
+import { ensureHolidayAbsencesForMonth } from './israeliHolidays.service.js';
 import { assertMonthUnlocked } from './monthLock.service.js';
 import type {
   CreateTimeReportBatchBody,
@@ -504,6 +505,8 @@ export async function listTimeReportsForMonth(
   month: number,
   year: number,
 ): Promise<TimeReportListItemDto[]> {
+  await ensureHolidayAbsencesForMonth(year, month);
+
   const rangeStart = new Date(Date.UTC(year, month - 1, 1));
   const rangeEnd = new Date(Date.UTC(year, month, 1));
 

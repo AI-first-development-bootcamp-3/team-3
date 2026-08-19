@@ -141,6 +141,13 @@
   color: #0c3058;
 }
 
+.manual-report__header-tag--holiday {
+  background: linear-gradient(135deg, #ffe27a 0%, #ffb347 100%);
+  color: #6b2d00;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1.5px #e8941a;
+}
+
 .manual-report__header-tag--neutral {
   background: #f6f6f6;
   color: #696f76;

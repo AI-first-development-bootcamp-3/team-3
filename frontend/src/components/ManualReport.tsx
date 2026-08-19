@@ -106,6 +106,7 @@ export type ManualReportHeaderMeta = {
   status: string
   tone: ManualReportHeaderTone
   tags: ManualReportHeaderTag[]
+  holiday?: boolean
 }
 
 interface Props {
@@ -231,10 +232,10 @@ function deriveHeader(
   windowHours: number,
 ): ManualReportHeaderMeta {
   if (headerMeta?.tone === 'weekend') {
-    return { status: headerMeta.status, tone: 'weekend', tags: [] }
+    return { status: headerMeta.status, tone: 'weekend', tags: [], holiday: headerMeta.holiday }
   }
   if (headerMeta?.tone === 'absence') {
-    return { status: headerMeta.status, tone: 'absence', tags: [] }
+    return { status: headerMeta.status, tone: 'absence', tags: [], holiday: headerMeta.holiday }
   }
   if (hoursShortOfWindow(reportedHours, windowHours) || reportedHours <= 0) {
     return { status: DAY_STATUS_LABELS.missing, tone: 'missing', tags: [] }
@@ -613,7 +614,9 @@ function ManualReport({
               </label>
             </div>
             <div className="manual-report__header-tags">
-              <span className={`manual-report__header-tag manual-report__header-tag--${header.tone}`}>
+              <span
+                className={`manual-report__header-tag manual-report__header-tag--${header.tone}${header.holiday ? ' manual-report__header-tag--holiday' : ''}`}
+              >
                 {header.status}
                 {header.tone !== 'weekend' && header.tone !== 'absence' ? (
                   <img src={STATUS_ICONS[header.tone]} alt="" width={16} height={16} />

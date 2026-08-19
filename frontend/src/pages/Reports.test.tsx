@@ -241,6 +241,33 @@ describe('Reports home shell', () => {
     expect(await screen.findByText('מחלה 😷')).toBeInTheDocument()
   })
 
+  it('renders a holiday badge that is visually distinct from other absences', async () => {
+    signIn()
+    mockFetch({
+      '/me/reporting-options': options,
+      '/reports?': { reports: [] },
+      '/absences?': {
+        absences: [
+          {
+            id: 'h1',
+            userId: 'u1',
+            type: 'HOLIDAY',
+            startDate: '2026-08-13',
+            endDate: '2026-08-13',
+            halfDay: false,
+            workingDayCount: 1,
+            attachments: [],
+          },
+        ],
+      },
+    })
+    renderHome()
+
+    const badge = await screen.findByText('חג 🎉')
+    expect(badge).toHaveClass('home-shell__tag--holiday')
+    expect(badge).toHaveClass('home-shell__tag--absence')
+  })
+
   it('opens a blank absence form from the general דיווח ידני button even when today already has a saved absence', async () => {
     signIn()
     const today = dayjs().format('YYYY-MM-DD')
@@ -269,6 +296,7 @@ describe('Reports home shell', () => {
     await user.click(await screen.findByRole('tab', { name: 'דיווח העדרות' }))
 
     expect(screen.getByLabelText('סוג היעדרות')).toHaveValue('')
+    expect(screen.queryByRole('option', { name: 'חג' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'דיווח על היעדרות ליותר מיום אחד' })).toBeInTheDocument()
     expect(screen.queryByText('note.pdf')).not.toBeInTheDocument()
   })
@@ -709,6 +737,7 @@ describe('Reports home shell', () => {
         'מחלה 😷',
         'מילואים 🚨',
         'אחר',
+        'חג 🎉',
       ])
     })
 

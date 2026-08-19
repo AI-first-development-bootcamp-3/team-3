@@ -553,6 +553,13 @@
   color: #0c3058;
 }
 
+.home-shell__tag--holiday {
+  background: linear-gradient(135deg, #ffe27a 0%, #ffb347 100%);
+  color: #6b2d00;
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1.5px #e8941a;
+}
+
 .home-shell__tag img,
 .home-shell__day-icon img,
 .home-shell__day-chevron img {

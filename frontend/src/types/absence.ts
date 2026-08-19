@@ -1,6 +1,6 @@
 import type { Id, ISODateString } from './common'
 
-export type AbsenceType = 'VACATION' | 'SICK' | 'RESERVE_DUTY' | 'OTHER'
+export type AbsenceType = 'VACATION' | 'SICK' | 'RESERVE_DUTY' | 'OTHER' | 'HOLIDAY'
 
 export interface AbsenceAttachment {
   id: Id
