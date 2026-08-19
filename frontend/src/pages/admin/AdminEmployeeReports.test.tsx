@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { App } from 'antd'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -33,6 +33,53 @@ const report = {
   taskName: 'Design',
   durationHours: 9,
 }
+
+const audits = [
+  {
+    id: 'a1',
+    employeeId: 'u-emp',
+    actorId: 'u-admin',
+    actorName: 'דנה מנהלת',
+    date: '2026-08-16',
+    action: 'REPLACED' as const,
+    previousJson: [
+      {
+        clientId: 'client-1',
+        projectId: 'project-1',
+        taskId: 'task-1',
+        workLocation: 'OFFICE',
+        hours: 9,
+        description: 'Original',
+        startTime: '09:00',
+        endTime: '18:00',
+      },
+    ],
+    nextJson: [
+      {
+        clientId: 'client-1',
+        projectId: 'project-1',
+        taskId: 'task-2',
+        workLocation: 'HOME',
+        hours: 8,
+        description: 'Fixed',
+        startTime: '09:00',
+        endTime: '18:00',
+      },
+      {
+        clientId: 'client-1',
+        projectId: 'project-2',
+        taskId: 'task-3',
+        workLocation: 'OFFICE',
+        hours: 1,
+        description: 'New',
+        startTime: '09:00',
+        endTime: '18:00',
+      },
+    ],
+    reason: null,
+    createdAt: '2026-08-16T12:00:00.000Z',
+  },
+]
 
 const options = {
   clients: [
@@ -128,5 +175,33 @@ describe('AdminEmployeeReports', () => {
         }),
       )
     })
+  })
+
+  it('shows specific audit change pills and hides the overflow behind +N', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL) => {
+        const href = String(url)
+        if (href.includes('/admin/users')) return jsonResponse({ users })
+        if (href.includes('/admin/reports/audit')) return jsonResponse({ audits })
+        if (href.includes('/admin/reports?')) return jsonResponse({ reports: [report] })
+        return jsonResponse({ error: { message: 'unexpected' } }, 500)
+      }),
+    )
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByRole('option', { name: 'גל ישראלי' })
+    await user.selectOptions(screen.getByLabelText('עובד'), 'u-emp')
+
+    expect(await screen.findByLabelText('הוספת פרויקט · שינוי משימה · שינוי מיקום · שינוי שעות · שינוי פירוט')).toBeInTheDocument()
+    expect(screen.getByText('+3')).toBeInTheDocument()
+    expect(screen.getAllByText('הוספת פרויקט').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('שינוי משימה').length).toBeGreaterThan(0)
+
+    await user.hover(screen.getByLabelText('עוד 3 פעולות'))
+    const tooltip = await screen.findByRole('tooltip')
+    expect(within(tooltip).getByText('שינוי מיקום')).toBeInTheDocument()
+    expect(within(tooltip).getByText('שינוי שעות')).toBeInTheDocument()
+    expect(within(tooltip).getByText('שינוי פירוט')).toBeInTheDocument()
   })
 })

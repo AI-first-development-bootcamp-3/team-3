@@ -236,7 +236,7 @@ function Reports() {
                 <span
                   className={`home-shell__tag home-shell__tag--${day.tone}${day.absenceType === 'HOLIDAY' ? ' home-shell__tag--holiday' : ''}`}
                 >
-                  {day.status}
+                  <span className="home-shell__tag-label">{day.status}</span>
                   {day.tone !== 'weekend' && day.tone !== 'absence' ? (
                     <img src={DEMO_STATUS_ICONS[day.tone]} alt="" />
                   ) : null}
@@ -244,7 +244,7 @@ function Reports() {
                 {day.tags.length > 0 ? <span className="home-shell__tag-sep" aria-hidden="true" /> : null}
                 {day.tags.map((tag) => (
                   <span key={tag.text} className="home-shell__tag">
-                    {tag.text}
+                    <span className="home-shell__tag-label">{tag.text}</span>
                     <img src={tag.icon} alt="" />
                   </span>
                 ))}
@@ -270,7 +270,6 @@ function Reports() {
       <div className="home-shell">
         <header className="home-shell__header">
           <div className="home-shell__toolbar">
-            <UserMenu />
             <div className="home-shell__brand">
               <img src={abraLogo} alt="abra" className="home-shell__logo" width={107} height={24} />
               <span className="home-shell__brand-divider" aria-hidden="true" />
@@ -301,6 +300,7 @@ function Reports() {
           </div>
 
           <div className="home-shell__actions">
+            <UserMenu menuAlign="start" />
             <button type="button" className="home-shell__cta" onClick={() => openManualReport()}>
               דיווח ידני
               <span className="home-shell__cta-icon" aria-hidden="true">

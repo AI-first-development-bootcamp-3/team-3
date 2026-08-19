@@ -10,9 +10,11 @@ import {
   saveAdminEmployeeReportBatch,
   type AdminTimeReportAudit,
 } from '../../services/adminReports'
+import AdminPillOverflow from '../../components/AdminPillOverflow'
 import ManualReport from '../../components/ManualReport'
 import ManualReportModal, { SLIDE_MS } from '../../components/ManualReportModal'
 import type { CreateReportBatchInput, TimeReportListItem } from '../../types'
+import { auditChangeLabels } from './auditChangeLabels'
 import './AdminAssignments.css'
 import './AdminEmployeeReports.css'
 
@@ -57,8 +59,32 @@ function formatHours(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1)
 }
 
-function auditActionLabel(action: AdminTimeReportAudit['action']): string {
-  return action === 'DELETED' ? 'מחיקה' : 'עדכון'
+const VISIBLE_AUDIT_PILLS = 2
+
+function AuditActionPills({ audit }: { audit: AdminTimeReportAudit }) {
+  const labels = auditChangeLabels(audit)
+  const visible = labels.slice(0, VISIBLE_AUDIT_PILLS)
+  const extra = labels.slice(VISIBLE_AUDIT_PILLS)
+  const allLabels = labels.join(' · ')
+
+  return (
+    <div className="admin-pills admin-audit-actions" aria-label={allLabels}>
+      {visible.map((label) => (
+        <span key={label} className="admin-pill admin-audit-pill">
+          {label}
+        </span>
+      ))}
+      {extra.length > 0 ? (
+        <AdminPillOverflow count={extra.length} label={`עוד ${extra.length} פעולות`} pillClassName="admin-audit-more">
+          {labels.map((label) => (
+            <span key={label} className="admin-pill admin-audit-pill">
+              {label}
+            </span>
+          ))}
+        </AdminPillOverflow>
+      ) : null}
+    </div>
+  )
 }
 
 function AdminEmployeeReports() {
@@ -67,7 +93,6 @@ function AdminEmployeeReports() {
   const [employeeId, setEmployeeId] = useState('')
   const [month, setMonth] = useState(today.month() + 1)
   const [year, setYear] = useState(today.year())
-  const [reason, setReason] = useState('')
   const [newDate, setNewDate] = useState(`${today.year()}-${String(today.month() + 1).padStart(2, '0')}-01`)
   const [editor, setEditor] = useState<Editor | null>(null)
   const [panelOpen, setPanelOpen] = useState(false)
@@ -94,13 +119,12 @@ function AdminEmployeeReports() {
       saveAdminEmployeeReportBatch({
         userId: employeeId,
         ...body,
-        reason: reason.trim() || undefined,
       }),
-    [employeeId, reason],
+    [employeeId],
   )
   const deleteDay = useCallback(
-    (date: string) => deleteAdminEmployeeReports(employeeId, date, reason.trim() || undefined),
-    [employeeId, reason],
+    (date: string) => deleteAdminEmployeeReports(employeeId, date),
+    [employeeId],
   )
 
   const openDay = (isoDate: string, reports: TimeReportListItem[]) => {
@@ -184,16 +208,6 @@ function AdminEmployeeReports() {
         </label>
       </div>
 
-      <label className="admin-reports__reason">
-        <span>סיבת העריכה (לא חובה)</span>
-        <input
-          value={reason}
-          onChange={(event) => setReason(event.target.value)}
-          maxLength={500}
-          placeholder="למשל: תיקון אחרי נעילת חודש"
-        />
-      </label>
-
       {!employeeId ? (
         <p className="admin-empty">בחרו עובד כדי לראות ולערוך את הדיווחים שלו.</p>
       ) : (
@@ -263,26 +277,26 @@ function AdminEmployeeReports() {
                   <th>פעולה</th>
                   <th>מנהל</th>
                   <th>זמן</th>
-                  <th>סיבה</th>
                 </tr>
               </thead>
               <tbody>
                 {auditsQuery.isLoading ? (
                   <tr>
-                    <td colSpan={5}>טוען…</td>
+                    <td colSpan={4}>טוען…</td>
                   </tr>
                 ) : (auditsQuery.data?.audits ?? []).length === 0 ? (
                   <tr>
-                    <td colSpan={5}>אין שינויים מתועדים לחודש הזה</td>
+                    <td colSpan={4}>אין שינויים מתועדים לחודש הזה</td>
                   </tr>
                 ) : (
                   (auditsQuery.data?.audits ?? []).map((audit) => (
                     <tr key={audit.id}>
                       <td>{dayjs(audit.date).format('DD/MM/YYYY')}</td>
-                      <td>{auditActionLabel(audit.action)}</td>
+                      <td>
+                        <AuditActionPills audit={audit} />
+                      </td>
                       <td>{audit.actorName}</td>
                       <td>{dayjs(audit.createdAt).format('DD/MM/YYYY HH:mm')}</td>
-                      <td>{audit.reason || '—'}</td>
                     </tr>
                   ))
                 )}

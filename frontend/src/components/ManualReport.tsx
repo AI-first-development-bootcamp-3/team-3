@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFieldArray, useForm, useWatch, type FieldErrors, type FieldPath } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { App } from 'antd'
@@ -18,8 +18,10 @@ import { translateReportApiMessage } from '../lib/reportApiMessages'
 import {
   attendanceWindowHours,
   buildManualReportSchema,
+  hoursExceedWindow,
   OVERFLOW_HOURS_MESSAGE,
   UNDERFILL_HOURS_MESSAGE,
+  overflowHours,
   projectFormat,
   rowAllocatedHours,
   rowFormat,
@@ -32,25 +34,17 @@ import {
 import AbsenceReportForm from './AbsenceReportForm'
 import ManualReportDeleteDialog from './ManualReportDeleteDialog'
 import ManualReportProjectCard, { type RowErrors } from './ManualReportProjectCard'
-import { CloseMark, WarningTriangle } from './ManualReportIcons'
 import addCircleBlue from '../assets/manual-report/desktop/add-circle-blue.svg'
-import alertFill from '../assets/manual-report/desktop/alert-fill.svg'
-import buildingIcon from '../assets/manual-report/desktop/building.svg'
 import calendarJobs from '../assets/manual-report/desktop/calendar-jobs.svg'
 import clockLinear from '../assets/manual-report/desktop/clock-linear.svg'
 import closeCircle from '../assets/manual-report/desktop/close-circle.svg'
 import infoCircle from '../assets/manual-report/desktop/info-circle.svg'
 import messageEdit from '../assets/manual-report/desktop/message-edit.svg'
-import noteIcon from '../assets/manual-report/desktop/note.svg'
 import scheduleGreen from '../assets/manual-report/desktop/schedule-green.svg'
 import sectionChevron from '../assets/manual-report/desktop/section-chevron.svg'
 import trashIcon from '../assets/manual-report/desktop/trash.svg'
 import cactusIllustration from '../assets/manual-report/desktop/cactus-illustration.svg'
-import tagCheckGreen from '../assets/home/tag-check-green.svg'
-import tagAlertOrange from '../assets/home/tag-alert-orange.svg'
-import tagCloseBlue from '../assets/home/tag-close-blue.svg'
-import { DAY_STATUS_LABELS } from '../lib/dayStatusLabels'
-import { HALF_DAY_HOURS, isHalfDayVacation, STANDARD_DAY_HOURS, workHoursTarget } from '../lib/halfDay'
+import { isHalfDayVacation, STANDARD_DAY_HOURS, workHoursTarget } from '../lib/halfDay'
 import './ManualReport.css'
 
 const STANDARD_HOURS = STANDARD_DAY_HOURS
@@ -116,20 +110,13 @@ interface Props {
   initialDate?: string
   initialReports?: TimeReportListItem[]
   initialAbsences?: Absence[]
+  /** Kept for callers that still pass day-row status; not shown in the panel. */
   headerMeta?: ManualReportHeaderMeta
   /** Hide the absence tab when an admin is correcting hours for someone else. */
   allowAbsenceTab?: boolean
   loadOptions?: () => Promise<ReportingOptions>
   saveBatch?: (body: CreateReportBatchInput) => Promise<CreateReportBatchResult>
   deleteDay?: (date: string) => Promise<void>
-}
-
-const STATUS_ICONS: Record<ManualReportHeaderTone, string> = {
-  missing: alertFill,
-  full: tagCheckGreen,
-  partial: tagAlertOrange,
-  weekend: tagCloseBlue,
-  absence: tagCloseBlue,
 }
 
 function emptyRow(): ProjectRowValues {
@@ -217,34 +204,8 @@ function applyApiFieldErrors(
   }
 }
 
-function tagIcon(tag: ManualReportHeaderTag): string {
-  if (tag.icon) return tag.icon
-  if (tag.text.includes('פרויקט')) return noteIcon
-  return buildingIcon
-}
-
 function hoursShortOfWindow(allocated: number, windowHours: number): boolean {
   return windowHours > 0 && allocated + 0.1 <= windowHours + 1e-9
-}
-
-function deriveHeader(
-  headerMeta: ManualReportHeaderMeta | undefined,
-  reportedHours: number,
-  windowHours: number,
-): ManualReportHeaderMeta {
-  if (headerMeta?.tone === 'weekend') {
-    return { status: headerMeta.status, tone: 'weekend', tags: [], holiday: headerMeta.holiday }
-  }
-  if (headerMeta?.tone === 'absence') {
-    return { status: headerMeta.status, tone: 'absence', tags: [], holiday: headerMeta.holiday }
-  }
-  if (hoursShortOfWindow(reportedHours, windowHours) || reportedHours <= 0) {
-    return { status: DAY_STATUS_LABELS.missing, tone: 'missing', tags: [] }
-  }
-  if (windowHours >= STANDARD_HOURS || reportedHours >= STANDARD_HOURS) {
-    return { status: DAY_STATUS_LABELS.full, tone: 'full', tags: [] }
-  }
-  return { status: DAY_STATUS_LABELS.partial, tone: 'partial', tags: [] }
 }
 
 function arrayErrorMessage(error: unknown): string | undefined {
@@ -262,10 +223,18 @@ function hoursPhrase(value: number): string {
 }
 
 function overflowBanner(allocated: number, windowHours: number) {
-  const extra = Math.max(0, Math.round((allocated - windowHours) * 10) / 10)
+  const extra = overflowHours(allocated, windowHours)
+  const totals = `סכום שעות הפרויקטים הוא ${formatHours(allocated)}, וחלון הכניסה–יציאה הוא ${hoursPhrase(windowHours)}.`
   return {
     title: 'יותר מדי שעות בפרויקטים',
-    detail: `סכום שעות הפרויקטים הוא ${formatHours(allocated)}, וחלון הכניסה–יציאה הוא ${hoursPhrase(windowHours)}. יש להפחית ${hoursPhrase(extra)}.`,
+    detail: extra > 0 ? `${totals} יש להפחית ${hoursPhrase(extra)}.` : totals,
+  }
+}
+
+function halfDayOverTargetBanner(allocated: number, target: number) {
+  return {
+    title: 'דיווח מעל חצי יום חופשה',
+    detail: `ביום זה נלקח חצי יום חופשה, ולכן מספיקות ${hoursPhrase(target)}. אתם מדווחים ${hoursPhrase(allocated)}. לחצו שמירה שוב אם ברצונכם לדווח מעל היעד.`,
   }
 }
 
@@ -337,7 +306,6 @@ function ManualReport({
   initialDate,
   initialReports,
   initialAbsences,
-  headerMeta,
   allowAbsenceTab = true,
   loadOptions = getReportingOptions,
   saveBatch = createReportBatch,
@@ -346,14 +314,16 @@ function ManualReport({
   const { message } = App.useApp()
   const [options, setOptions] = useState<ReportingOptions | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [banner, setBanner] = useState<{ title: string; detail: string } | null>(null)
   const [pendingRemoval, setPendingRemoval] = useState<number | null>(null)
   const [pendingDayDelete, setPendingDayDelete] = useState(false)
   const [hoursOpen, setHoursOpen] = useState(true)
   const [reportTab, setReportTab] = useState<'hours' | 'absence'>(() =>
     (initialAbsences?.length ?? 0) > 0 && (initialReports?.length ?? 0) === 0 ? 'absence' : 'hours',
   )
+  const acknowledgedOverHalfDay = useRef<number | null>(null)
 
+  const dayAbsences = initialAbsences ?? []
+  const halfVacation = dayAbsences.some(isHalfDayVacation)
   const schema = useMemo(() => buildManualReportSchema(options), [options])
 
   const {
@@ -392,22 +362,28 @@ function ManualReport({
     }
   }, [loadOptions])
 
-  const dayAbsences = initialAbsences ?? []
-  const halfVacation = dayAbsences.some(isHalfDayVacation)
-  const dayTotal = useMemo(
-    () => workHoursTarget(attendanceWindowHours(day.dayStart ?? '', day.dayEnd ?? ''), halfVacation),
-    [day.dayEnd, day.dayStart, halfVacation],
+  const windowHours = useMemo(
+    () => attendanceWindowHours(day.dayStart ?? '', day.dayEnd ?? ''),
+    [day.dayEnd, day.dayStart],
+  )
+  const hoursTarget = useMemo(
+    () => workHoursTarget(windowHours, halfVacation),
+    [halfVacation, windowHours],
   )
   const reported = useMemo(
     () => rows.reduce((total, row) => total + rowAllocatedHours(options, day.dayStart ?? '', row), 0),
     [options, day.dayStart, rows],
   )
-  const remaining = Math.max(dayTotal - reported, 0)
+  const remaining = Math.max(hoursTarget - reported, 0)
+
+  useEffect(() => {
+    if (!halfVacation || !hoursExceedWindow(reported, hoursTarget)) {
+      acknowledgedOverHalfDay.current = null
+    }
+  }, [halfVacation, hoursTarget, reported])
   const hasHierarchy = (options?.clients.length ?? 0) > 0
   const hasSavedDay = (initialReports?.length ?? 0) > 0 || dayAbsences.length > 0
   const deleteCopy = dayDeleteCopy(dayAbsences, (initialReports?.length ?? 0) > 0)
-  const header = deriveHeader(headerMeta, reported, dayTotal)
-  const rowsError = arrayErrorMessage(errors.rows)
   /** Options loaded and came back empty — the employee is assigned to nothing. */
   const noAssignments = Boolean(options) && !hasHierarchy
 
@@ -444,13 +420,35 @@ function ManualReport({
     clearErrors(paths)
   }
 
+  const showErrorToast = (toast: { title: string; detail: string }) => {
+    message.error({
+      content: (
+        <div>
+          <strong>{toast.title}</strong>
+          <div>{toast.detail}</div>
+        </div>
+      ),
+      duration: 6,
+    })
+  }
+
+  const showWarningToast = (toast: { title: string; detail: string }) => {
+    message.warning({
+      content: (
+        <div>
+          <strong>{toast.title}</strong>
+          <div>{toast.detail}</div>
+        </div>
+      ),
+      duration: 6,
+    })
+  }
+
   const addRow = () => {
-    setBanner(null)
     append(emptyRow())
   }
 
   const selectProject = (index: number, clientId: string, projectId: string) => {
-    setBanner(null)
     clearRowFieldErrors(index)
     setValue(`rows.${index}.clientId`, clientId, { shouldValidate: false, shouldDirty: true })
     setValue(`rows.${index}.projectId`, projectId, { shouldValidate: false, shouldDirty: true })
@@ -476,19 +474,25 @@ function ManualReport({
   }
 
   const onSubmit = async (values: ManualReportValues) => {
-    setBanner(null)
     if (!hasHierarchy) {
-      setBanner(EMPTY_TREE)
+      showErrorToast(EMPTY_TREE)
       return
     }
-    const windowHours = attendanceWindowHours(values.dayStart, values.dayEnd)
     const allocated = values.rows.reduce(
       (sum, row) => sum + rowAllocatedHours(options, values.dayStart, row),
       0,
     )
-    if (hoursShortOfWindow(allocated, windowHours)) {
-      setBanner(UNDERFILL)
+    const cap = workHoursTarget(attendanceWindowHours(values.dayStart, values.dayEnd), halfVacation)
+    if (hoursShortOfWindow(allocated, cap)) {
+      showErrorToast(UNDERFILL)
       return
+    }
+    if (halfVacation && hoursExceedWindow(allocated, cap)) {
+      if (acknowledgedOverHalfDay.current !== allocated) {
+        acknowledgedOverHalfDay.current = allocated
+        showWarningToast(halfDayOverTargetBanner(allocated, cap))
+        return
+      }
     }
     try {
       await saveBatch({
@@ -520,14 +524,14 @@ function ManualReport({
         const details = apiFieldErrors(error.body)
         applyApiFieldErrors(details, setError)
         const code = (error.body as { error?: { code?: string } } | undefined)?.error?.code
-        setBanner(code === 'HOURS_EXCEED_WINDOW' ? overflowBanner(reported, dayTotal) : MISSING_DETAILS)
+        showErrorToast(code === 'HOURS_EXCEED_WINDOW' ? overflowBanner(reported, windowHours) : MISSING_DETAILS)
         return
       }
       if (error instanceof ApiError && error.status === 409) {
-        setBanner(MONTH_LOCKED)
+        showErrorToast(MONTH_LOCKED)
         return
       }
-      setBanner(error instanceof ApiError && error.status === 429 ? TOO_MANY_SAVES : SAVE_FAILED)
+      showErrorToast(error instanceof ApiError && error.status === 429 ? TOO_MANY_SAVES : SAVE_FAILED)
     }
   }
 
@@ -535,11 +539,10 @@ function ManualReport({
   // Saying "a detail or two is missing" would send them looking for a field that
   // is not there — explain the missing assignment instead.
   const onInvalid = (formErrors: FieldErrors<ManualReportValues>) =>
-    setBanner(noAssignments ? EMPTY_TREE : bannerForInvalid(formErrors, reported, dayTotal))
+    showErrorToast(noAssignments ? EMPTY_TREE : bannerForInvalid(formErrors, reported, windowHours))
 
   const deleteSavedDay = async () => {
     setPendingDayDelete(false)
-    setBanner(null)
     const date = day.date || initialDate
     if (!date) return
     try {
@@ -556,7 +559,7 @@ function ManualReport({
       reset(freshDay(date))
       onClose()
     } catch (error) {
-      setBanner(error instanceof ApiError && error.status === 409 ? MONTH_LOCKED : SAVE_FAILED)
+      showErrorToast(error instanceof ApiError && error.status === 409 ? MONTH_LOCKED : SAVE_FAILED)
     }
   }
 
@@ -615,23 +618,6 @@ function ManualReport({
                 />
               </label>
             </div>
-            <div className="manual-report__header-tags">
-              <span
-                className={`manual-report__header-tag manual-report__header-tag--${header.tone}${header.holiday ? ' manual-report__header-tag--holiday' : ''}`}
-              >
-                {header.status}
-                {header.tone !== 'weekend' && header.tone !== 'absence' ? (
-                  <img src={STATUS_ICONS[header.tone]} alt="" width={16} height={16} />
-                ) : null}
-              </span>
-              {header.tags.length > 0 ? <span className="manual-report__header-sep" aria-hidden="true" /> : null}
-              {header.tags.map((tag) => (
-                <span key={tag.text} className="manual-report__header-tag manual-report__header-tag--neutral">
-                  {tag.text}
-                  <img src={tagIcon(tag)} alt="" width={16} height={16} />
-                </span>
-              ))}
-            </div>
           </div>
           <div className="manual-report__top-actions">
             <button
@@ -642,7 +628,6 @@ function ManualReport({
               title={hasSavedDay ? 'מחיקת דיווח' : 'אין דיווח שמור למחוק'}
               onClick={() => {
                 if (!hasSavedDay) return
-                setBanner(null)
                 setPendingDayDelete(true)
               }}
             >
@@ -664,20 +649,6 @@ function ManualReport({
           <div className="manual-report__scroll">
             {topChrome}
             {tabs}
-            {banner ? (
-          <div className="manual-report__banner" role="alert">
-            <span className="manual-report__banner-icon">
-              <WarningTriangle />
-            </span>
-            <div className="manual-report__banner-text">
-              <h2>{banner.title}</h2>
-              <p>{banner.detail}</p>
-            </div>
-            <button type="button" onClick={() => setBanner(null)} aria-label="סגירת ההודעה">
-              <CloseMark />
-            </button>
-          </div>
-        ) : null}
 
         <section className="manual-report__hours">
           <button
@@ -686,13 +657,6 @@ function ManualReport({
             onClick={() => setHoursOpen((open) => !open)}
             aria-expanded={hoursOpen}
           >
-            <img
-              src={sectionChevron}
-              alt=""
-              className={`manual-report__hours-chevron${hoursOpen ? ' manual-report__hours-chevron--open' : ''}`}
-              width={12}
-              height={6}
-            />
             <div className="manual-report__hours-title">
               <img src={clockLinear} alt="" width={24} height={24} />
               <span>שעות עבודה</span>
@@ -702,23 +666,40 @@ function ManualReport({
                 תקן יומי {STANDARD_HOURS} שע׳
               </span>
             </div>
+            <img
+              src={sectionChevron}
+              alt=""
+              className={`manual-report__hours-chevron${hoursOpen ? ' manual-report__hours-chevron--open' : ''}`}
+              width={12}
+              height={6}
+            />
           </button>
 
           {hoursOpen ? (
             <div className="manual-report__hours-fields">
               <label className="manual-report__field">
                 <span className="manual-report__field-label">שעת כניסה</span>
-                <input type="time" className="manual-report__field-input" aria-label="שעת כניסה" {...register('dayStart')} />
+                <span className="manual-report__field-shell">
+                  <input type="time" className="manual-report__field-input" aria-label="שעת כניסה" {...register('dayStart')} />
+                </span>
               </label>
               <label className="manual-report__field">
                 <span className="manual-report__field-label">שעת יציאה</span>
-                <input type="time" className="manual-report__field-input" aria-label="שעת יציאה" {...register('dayEnd')} />
+                <span className="manual-report__field-shell">
+                  <input type="time" className="manual-report__field-input" aria-label="שעת יציאה" {...register('dayEnd')} />
+                </span>
               </label>
               <div className="manual-report__field">
                 <span className="manual-report__field-label">סה״כ שעות</span>
-                <output className="manual-report__field-input manual-report__field-input--readonly" aria-live="polite">
-                  {formatTotalHoursLabel(dayTotal)}
-                </output>
+                <span className="manual-report__field-shell manual-report__field-shell--readonly">
+                  <output
+                    className="manual-report__field-input manual-report__field-input--readonly"
+                    aria-label="סה״כ שעות"
+                    aria-live="polite"
+                  >
+                    {formatTotalHoursLabel(windowHours)}
+                  </output>
+                </span>
               </div>
             </div>
           ) : null}
@@ -763,17 +744,14 @@ function ManualReport({
                   register={register}
                   onProjectChange={(clientId, projectId) => selectProject(index, clientId, projectId)}
                   onTaskChange={(taskId) => {
-                    setBanner(null)
                     clearRowFieldErrors(index)
                     setValue(`rows.${index}.taskId`, taskId, { shouldValidate: false, shouldDirty: true })
                   }}
                   onLocationChange={(location) => {
-                    setBanner(null)
                     clearRowFieldErrors(index)
                     setValue(`rows.${index}.workLocation`, location, { shouldValidate: false, shouldDirty: true })
                   }}
                   onHoursChange={() => {
-                    setBanner(null)
                     clearRowFieldErrors(index)
                   }}
                   onRemove={() => setPendingRemoval(index)}
@@ -795,7 +773,6 @@ function ManualReport({
             הוספת פרויקט
             <img src={addCircleBlue} alt="" width={24} height={24} />
           </button>
-          {rowsError && !noAssignments ? <p className="manual-report__field-error">{rowsError}</p> : null}
         </section>
           </div>
           <footer className="manual-report__footer">
@@ -809,28 +786,25 @@ function ManualReport({
               {reported > 0 ? (
                 <span className="manual-report__summary-badge">סה״כ {formatHours(reported)} שעות</span>
               ) : null}
-              {hoursShortOfWindow(reported, dayTotal) && reported > 0 ? (
-                <span className="manual-report__summary-badge manual-report__summary-badge--missing">חסר</span>
-              ) : null}
             </div>
           </div>
           <div className="manual-report__progress-labels">
             <span>{progressHint}</span>
             <span>
-              {formatHours(reported)} מתוך {formatHours(dayTotal || STANDARD_HOURS)} שעות
+              {formatHours(reported)} מתוך {formatHours(hoursTarget || STANDARD_HOURS)} שעות
             </span>
           </div>
           <div
             className="manual-report__progress-track"
             role="progressbar"
             aria-valuemin={0}
-            aria-valuemax={dayTotal || STANDARD_HOURS}
+            aria-valuemax={hoursTarget || STANDARD_HOURS}
             aria-valuenow={reported}
           >
             <div
               className="manual-report__progress-fill"
               style={{
-                width: `${Math.min(reported / (dayTotal || STANDARD_HOURS), 1) * 100}%`,
+                width: `${Math.min(reported / (hoursTarget || STANDARD_HOURS), 1) * 100}%`,
               }}
             />
           </div>
@@ -846,14 +820,8 @@ function ManualReport({
           {tabs}
           <AbsenceReportForm
             onClose={onClose}
-            onSaved={(result) => {
+            onSaved={() => {
               onSaved?.()
-              if (!result?.halfDay) return
-              setReportTab('hours')
-              setBanner({
-                title: 'חצי יום חופשה נשמר',
-                detail: `יש להשלים ${HALF_DAY_HOURS} שעות עבודה ליום זה.`,
-              })
             }}
             defaultStartDate={day.date || initialDate}
             existingAbsence={dayAbsences[0]}

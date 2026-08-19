@@ -611,7 +611,7 @@ describe('POST /reports/batch', () => {
     expect(await prisma.timeReport.count()).toBe(0);
   });
 
-  it('rejects nine reported hours on a half-day vacation', async () => {
+  it('accepts nine reported hours on a half-day vacation when they fill the attendance window', async () => {
     const employee = await createUser();
     const hierarchy = await aHierarchy(employee);
     await createAbsence({
@@ -627,8 +627,8 @@ describe('POST /reports/batch', () => {
       .set('Authorization', `Bearer ${tokenFor(employee)}`)
       .send(dayBody([rowFor(hierarchy, { hours: 9 })]));
 
-    expect(response.status).toBe(400);
-    expect(response.body.error.code).toBe('HOURS_EXCEED_WINDOW');
+    expect(response.status).toBe(201);
+    expect(response.body.reports[0].hours).toBe(9);
   });
 
   it('accepts 4.5 reported hours on a half-day vacation', async () => {

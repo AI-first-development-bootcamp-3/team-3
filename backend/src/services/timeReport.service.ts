@@ -12,7 +12,6 @@ import type { ReportFormat, TimeReportAuditAction, WorkLocation } from '../gener
 import { AppError, type ErrorDetail } from '../types/errors.js';
 import { assertIsoDayInProjectWindow, isIsoDayInProjectWindow, PROJECT_OUTSIDE_WINDOW } from './projectWindow.service.js';
 import { ensureHolidayAbsencesForMonth } from './israeliHolidays.service.js';
-import { hasHalfDayVacationOnDate } from './absence.service.js';
 import { assertMonthUnlocked } from './monthLock.service.js';
 import type {
   CreateTimeReportBatchBody,
@@ -147,7 +146,6 @@ function toDto(row: {
 const HIERARCHY_MISMATCH = 'Client, project, and task must form one active hierarchy';
 const TASK_NOT_ASSIGNED = 'You are not assigned to this task';
 const HOURS_EXCEED_WINDOW = 'Project hours cannot exceed the attendance window';
-const HALF_DAY_HOURS = 4.5;
 const HOURS_NOT_ALLOWED = 'This project reports clock-in/clock-out, so it cannot carry hours';
 const HOURS_REQUIRED = 'This project reports total hours, so hours are required';
 const TIMES_NOT_ALLOWED = 'This project reports total hours, so it cannot carry row times';
@@ -325,7 +323,6 @@ export async function createTimeReport(userId: string, input: CreateTimeReportBo
     input.startTime,
     input.endTime,
     [resolved.hours],
-    (await hasHalfDayVacationOnDate(userId, input.date)) ? HALF_DAY_HOURS : undefined,
   )) {
     throw new AppError(400, 'HOURS_EXCEED_WINDOW', HOURS_EXCEED_WINDOW, [
       { field: 'hours', message: HOURS_EXCEED_WINDOW },
@@ -457,7 +454,6 @@ export async function createTimeReportBatch(
     input.startTime,
     input.endTime,
     resolved.map((entry) => entry!.hours),
-    (await hasHalfDayVacationOnDate(userId, input.date)) ? HALF_DAY_HOURS : undefined,
   )) {
     throw new AppError(400, 'HOURS_EXCEED_WINDOW', HOURS_EXCEED_WINDOW, [
       { field: 'hours', message: HOURS_EXCEED_WINDOW },

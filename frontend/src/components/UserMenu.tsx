@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type AnimationEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useLocation } from 'react-router-dom'
 import { logoutAndRedirect } from '../services/auth'
@@ -12,13 +12,33 @@ function initialsFor(name: string): string {
   return first[0].toUpperCase()
 }
 
-function UserMenu() {
+function UserMenu({ menuAlign = 'end' }: { menuAlign?: 'start' | 'end' }) {
   const user = sessionStore((state) => state.user)
   const location = useLocation()
   const [open, setOpen] = useState(false)
+  const [panelMounted, setPanelMounted] = useState(false)
+  const [panelClosing, setPanelClosing] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (open) {
+      setPanelClosing(false)
+      setPanelMounted(true)
+      return
+    }
+    if (panelMounted) setPanelClosing(true)
+  }, [open, panelMounted])
+
+  useEffect(() => {
+    if (!panelClosing) return
+    const timeout = window.setTimeout(() => {
+      setPanelMounted(false)
+      setPanelClosing(false)
+    }, 180)
+    return () => window.clearTimeout(timeout)
+  }, [panelClosing])
 
   useEffect(() => {
     if (!open) return
@@ -58,8 +78,14 @@ function UserMenu() {
     await logoutAndRedirect()
   }
 
+  const onPanelAnimationEnd = (event: AnimationEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget || !panelClosing) return
+    setPanelMounted(false)
+    setPanelClosing(false)
+  }
+
   return (
-    <div className="user-menu" ref={rootRef}>
+    <div className={menuAlign === 'start' ? 'user-menu user-menu--anchor-start' : 'user-menu'} ref={rootRef}>
       <button
         type="button"
         className="user-menu__avatar"
@@ -71,8 +97,13 @@ function UserMenu() {
         {initialsFor(user.fullName)}
       </button>
 
-      {open ? (
-        <div className="user-menu__panel" role="menu">
+      {panelMounted ? (
+        <div
+          className={`user-menu__panel${panelClosing ? ' user-menu__panel--closing' : ''}`}
+          role="menu"
+          aria-hidden={panelClosing || undefined}
+          onAnimationEnd={onPanelAnimationEnd}
+        >
           <div className="user-menu__identity">
             <p className="user-menu__name">{user.fullName}</p>
             <p className="user-menu__email">{user.email}</p>

@@ -27,8 +27,15 @@
   background: var(--home-bg);
 }
 
+.reports-layout--panel-open {
+  overflow: hidden;
+  max-height: 100svh;
+}
+
 .reports-layout--panel-open .home-shell {
-  min-height: 100svh;
+  overflow: hidden;
+  max-height: 100svh;
+  min-height: 0;
 }
 
 .home-shell h1,
@@ -126,18 +133,20 @@
 
 .home-shell__actions {
   display: flex;
-  flex-direction: row-reverse;
+  flex-direction: row;
+  direction: ltr;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
+  align-items: center;
   gap: 16px;
 }
 
 .home-shell__cta,
 .home-shell__clock {
-  /* Figma order is text then icon reading left to right, inside an RTL page. */
+  /* Text then icon, left → right (icon sits to the right of the label). */
   position: relative;
   display: inline-flex;
-  flex-direction: row-reverse;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
   gap: 8px;
@@ -519,7 +528,7 @@
 
 .home-shell__tag {
   display: inline-flex;
-  flex-direction: row-reverse;
+  flex-direction: row;
   align-items: center;
   gap: 4px;
   padding: 5px 10px;
@@ -530,6 +539,15 @@
   line-height: 1.35;
   white-space: nowrap;
   color: #696f76;
+}
+
+.home-shell__tag img {
+  order: -1;
+}
+
+.home-shell__tag-label {
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 
 .home-shell__tag--missing {
