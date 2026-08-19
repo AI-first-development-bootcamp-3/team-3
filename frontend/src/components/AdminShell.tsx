@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import UserMenu from './UserMenu'
 import { sessionStore } from '../services/sessionStore'
 import abraLogo from '../assets/home/abra-logo.svg'
@@ -97,16 +98,60 @@ const ADMIN_NAV = [
   { to: '/admin/month-lock', label: 'נעילת חודש', icon: LockIcon },
 ] as const
 
+function MenuIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 function AdminShell() {
   const user = sessionStore((state) => state.user)
+  const location = useLocation()
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  useEffect(() => {
+    setMenuOpen(false)
+  }, [location.pathname])
+
+  useEffect(() => {
+    if (!menuOpen) return
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [menuOpen])
 
   return (
-    <div className="admin-shell">
-      <aside className="admin-sidebar">
-        <div className="admin-sidebar__brand">
-          <img src={abraLogo} alt="abra" width={107} height={24} />
+    <div className={menuOpen ? 'admin-shell admin-shell--menu-open' : 'admin-shell'}>
+      {menuOpen ? (
+        <button
+          type="button"
+          className="admin-shell__scrim"
+          aria-label="סגירת תפריט"
+          onClick={() => setMenuOpen(false)}
+        />
+      ) : null}
+      <aside className={menuOpen ? 'admin-sidebar admin-sidebar--open' : 'admin-sidebar'}>
+        <div className="admin-sidebar__top">
+          <button
+            type="button"
+            className="admin-sidebar__menu-btn"
+            aria-label={menuOpen ? 'סגירת תפריט ניהול' : 'תפריט ניהול'}
+            aria-expanded={menuOpen}
+            aria-controls="admin-nav"
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <MenuIcon />
+          </button>
+          <div className="admin-sidebar__brand">
+            <img src={abraLogo} alt="abra" width={107} height={24} />
+          </div>
         </div>
-        <nav className="admin-sidebar__nav" aria-label="ניהול">
+        <nav id="admin-nav" className="admin-sidebar__nav" aria-label="ניהול">
           {ADMIN_NAV.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
