@@ -50,7 +50,6 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
   const [banner, setBanner] = useState<{ title: string; detail: string } | null>(null)
   const [uploadedFiles, setUploadedFiles] = useState<AttachmentMetadata[]>(existingAbsence?.attachments ?? [])
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
-  const [isUploading, setIsUploading] = useState(false)
   const [isMultiDay, setIsMultiDay] = useState(
     existingAbsence ? existingAbsence.startDate !== existingAbsence.endDate : false,
   )
@@ -104,9 +103,6 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
   const onSubmit = async (values: AbsenceReportValues) => {
     setBanner(null)
     try {
-
-      setIsUploading(true)
-
       // Upload any pending files
       const newAttachments: AttachmentMetadata[] = []
       for (const file of pendingFiles) {
@@ -115,7 +111,6 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
           newAttachments.push(metadata)
         } catch {
           message.error(`Failed to upload ${file.name}`)
-          setIsUploading(false)
           return
         }
       }
@@ -123,8 +118,6 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
       // Combine previously uploaded files with newly uploaded files
       const allAttachments = [...uploadedFiles, ...newAttachments]
       const attachmentIds = allAttachments.map((f) => f.id)
-
-      setIsUploading(false)
 
       const { type, halfDay: halfDayPayload } = absencePayloadFromKind(values.kind)
 
