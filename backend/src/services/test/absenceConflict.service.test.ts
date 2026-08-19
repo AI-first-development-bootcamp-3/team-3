@@ -88,7 +88,13 @@ describe('checkAbsenceConflicts', () => {
   describe('full-day absence against reported work hours', () => {
     it('rejects a date already fully reported (9 hours)', async () => {
       const user = await createUser();
-      await createTimeReport({ userId: user.id, date: day('2026-08-20'), startTime: time('09:00'), endTime: time('18:00') });
+      await createTimeReport({
+        userId: user.id,
+        date: day('2026-08-20'),
+        startTime: time('09:00'),
+        endTime: time('18:00'),
+        hours: 9,
+      });
 
       const result = await checkAbsenceConflicts({
         userId: user.id,
@@ -102,7 +108,13 @@ describe('checkAbsenceConflicts', () => {
 
     it('rejects a date with partial (not full) reported hours', async () => {
       const user = await createUser();
-      await createTimeReport({ userId: user.id, date: day('2026-08-20'), startTime: time('09:00'), endTime: time('12:00') });
+      await createTimeReport({
+        userId: user.id,
+        date: day('2026-08-20'),
+        startTime: time('09:00'),
+        endTime: time('18:00'),
+        hours: 3,
+      });
 
       const result = await checkAbsenceConflicts({
         userId: user.id,
@@ -131,7 +143,13 @@ describe('checkAbsenceConflicts', () => {
   describe('half-day absence against reported work hours', () => {
     it('accepts exactly half a day reported (the intended combination)', async () => {
       const user = await createUser();
-      await createTimeReport({ userId: user.id, date: day('2026-08-20'), startTime: time('09:00'), endTime: time('13:30') });
+      await createTimeReport({
+        userId: user.id,
+        date: day('2026-08-20'),
+        startTime: time('09:00'),
+        endTime: time('18:00'),
+        hours: 4.5,
+      });
 
       const result = await checkAbsenceConflicts({
         userId: user.id,
@@ -158,7 +176,13 @@ describe('checkAbsenceConflicts', () => {
 
     it('rejects a date with more than half a day reported', async () => {
       const user = await createUser();
-      await createTimeReport({ userId: user.id, date: day('2026-08-20'), startTime: time('09:00'), endTime: time('14:00') });
+      await createTimeReport({
+        userId: user.id,
+        date: day('2026-08-20'),
+        startTime: time('09:00'),
+        endTime: time('18:00'),
+        hours: 5,
+      });
 
       const result = await checkAbsenceConflicts({
         userId: user.id,

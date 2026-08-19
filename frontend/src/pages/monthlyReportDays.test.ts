@@ -127,6 +127,47 @@ describe('buildHomeDays', () => {
     expect(days[0]?.tone).toBe('full')
   })
 
+  it('treats 4.5 reported hours plus half-day vacation as a complete day', () => {
+    const days = buildHomeDays({
+      reports: [row({ date: '2026-08-12', hours: 4.5, durationHours: 4.5, startTime: '09:00', endTime: '18:00' })],
+      absences: [
+        {
+          id: 'a1',
+          userId: 'u1',
+          type: 'VACATION',
+          startDate: '2026-08-12',
+          endDate: '2026-08-12',
+          halfDay: true,
+          workingDayCount: 0.5,
+          attachments: [],
+        },
+      ],
+    })
+
+    expect(days[0]?.tone).toBe('full')
+    expect(days[0]?.tags.some((tag) => tag.text.includes('חצי יום'))).toBe(true)
+  })
+
+  it('shows חצי יום חופשה when there are no hours yet', () => {
+    const days = buildHomeDays({
+      absences: [
+        {
+          id: 'a1',
+          userId: 'u1',
+          type: 'VACATION',
+          startDate: '2026-08-12',
+          endDate: '2026-08-12',
+          halfDay: true,
+          workingDayCount: 0.5,
+          attachments: [],
+        },
+      ],
+    })
+
+    expect(days[0]?.status).toBe('חצי יום חופשה 🏖️')
+    expect(days[0]?.tone).toBe('absence')
+  })
+
   it('shows חג for a holiday absence instead of a missing work day', () => {
     const days = buildHomeDays({
       absences: [
