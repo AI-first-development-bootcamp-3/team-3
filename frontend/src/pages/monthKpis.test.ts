@@ -136,4 +136,26 @@ describe('buildMonthKpis', () => {
     expect(kpis['דיווחים חסרים'].value).toBe('0')
     expect(kpis['שעות חודשיות'].caption).toBe('מתוך 180')
   })
+
+  it('treats חג as covered time off that does not spend vacation', () => {
+    const kpis = buildMonthKpis({
+      reports: [],
+      absences: [
+        absence({
+          type: 'HOLIDAY',
+          startDate: '2026-04-01',
+          endDate: '2026-04-01',
+          workingDayCount: 1,
+        }),
+      ],
+      year: 2026,
+      month: 4,
+      today: '2026-04-02',
+    })
+
+    expect(kpis['ימי חופשה'].value).toBe('0')
+    expect(kpis['ימי מחלה'].value).toBe('0')
+    // 2 Sun–Thu days through the 2nd, minus Pesach on the 1st.
+    expect(kpis['דיווחים חסרים'].value).toBe('1')
+  })
 })

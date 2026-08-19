@@ -218,7 +218,13 @@ A date with no rows for the caller is `404`.
 ## Absences
 
 `GET /absences?month=&year=` lists the caller's absences whose range overlaps
-that calendar month (`200`). Unauthenticated callers get `401`.
+that calendar month (`200`). Unauthenticated callers get `401`. Loading an
+unlocked month also materializes system `HOLIDAY` rows (חג) for weekday Israeli
+public holidays so they appear without using vacation.
+
+`GET /holidays?year=` lists those holidays for a Gregorian year (`code`,
+`nameHe`, civil `date`). Authenticated employees and admins; `400` if `year`
+is missing or out of range.
 
 `POST /absences` creates one full-day absence for the authenticated caller
 (`type` `VACATION` / `SICK` / `RESERVE_DUTY` / `OTHER`, `startDate`, optional

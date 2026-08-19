@@ -1,5 +1,7 @@
 import { z } from 'zod';
-import { AbsenceType } from '../generated/prisma/enums.js';
+
+/** Employee-writable types. HOLIDAY is system-owned (SCRUM-308). */
+export const EMPLOYEE_ABSENCE_TYPES = ['VACATION', 'SICK', 'RESERVE_DUTY', 'OTHER'] as const;
 
 const calendarDateSchema = z
   .string()
@@ -7,7 +9,7 @@ const calendarDateSchema = z
 
 const absenceWriteObject = z
   .object({
-    type: z.enum(AbsenceType),
+    type: z.enum(EMPLOYEE_ABSENCE_TYPES),
     startDate: calendarDateSchema,
     endDate: calendarDateSchema.optional(),
     attachmentIds: z.array(z.string().uuid()).optional(),

@@ -2,6 +2,7 @@ import { prisma } from '../config/prisma.js';
 import { AppError } from '../types/errors.js';
 import type { AbsenceType } from '../generated/prisma/enums.js';
 import { checkAbsenceConflicts } from './absenceConflict.service.js';
+import { ensureHolidayAbsencesForMonth } from './israeliHolidays.service.js';
 import { assertRangeUnlocked } from './monthLock.service.js';
 import { expandWorkingDays } from './workingDays.service.js';
 
@@ -122,6 +123,8 @@ export async function listAbsencesForMonth(
   month: number,
   year: number,
 ): Promise<AbsenceDto[]> {
+  await ensureHolidayAbsencesForMonth(year, month);
+
   const rangeStart = new Date(Date.UTC(year, month - 1, 1));
   const rangeEnd = new Date(Date.UTC(year, month, 1));
 
@@ -167,6 +170,16 @@ export async function updateAbsence(
 
   if (existing.userId !== userId) {
     throw AppError.forbidden();
+  }
+
+  if (existing.type === 'HOLIDAY') {
+    throw AppError.forbidden('לא ניתן לערוך יום חג');
+  }
+
+  if (input.type === 'HOLIDAY') {
+    throw AppError.badRequest('Holiday absences are system-owned', [
+      { field: 'type', message: 'Holiday absences are system-owned' },
+    ]);
   }
 
   await assertRangeUnlocked(toIsoDate(existing.startDate), toIsoDate(existing.endDate));
@@ -249,6 +262,10 @@ export async function deleteAbsence(userId: string, absenceId: string): Promise<
 
   if (row.userId !== userId) {
     throw AppError.forbidden();
+  }
+
+  if (row.type === 'HOLIDAY') {
+    throw AppError.forbidden('לא ניתן למחוק יום חג');
   }
 
   await assertRangeUnlocked(toIsoDate(row.startDate), toIsoDate(row.endDate));

@@ -1,12 +1,15 @@
 import { z } from 'zod'
+import type { AbsenceType } from '../types'
 
+/** Types an employee may pick in the absence form. HOLIDAY is system-owned. */
 export const ABSENCE_TYPES = ['VACATION', 'SICK', 'RESERVE_DUTY', 'OTHER'] as const
 
-export const ABSENCE_TYPE_LABELS: Record<(typeof ABSENCE_TYPES)[number], string> = {
+export const ABSENCE_TYPE_LABELS: Record<AbsenceType, string> = {
   VACATION: 'חופשה 🏖️',
   SICK: 'מחלה 😷',
   RESERVE_DUTY: 'מילואים 🚨',
   OTHER: 'אחר',
+  HOLIDAY: 'חג 🎉',
 }
 
 const isoDate = z.string().min(1, 'יש לבחור תאריך').regex(/^\d{4}-\d{2}-\d{2}$/, 'תאריך בפורמט YYYY-MM-DD')
