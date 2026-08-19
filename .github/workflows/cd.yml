@@ -74,12 +74,56 @@ jobs:
           echo "Timed out waiting for Render deploy to go live"
           exit 1
 
-  # Frontend deploys via Render's own native GitHub integration (Static Site,
-  # auto-deploys on push to main) - no trigger step needed here, unlike
-  # deploy-backend which uses Render's API explicitly.
+  # Render's own auto-deploy for this Static Site does not reliably fire on
+  # push to main (confirmed live: the site sat a full day stale across two
+  # merges), so this triggers it explicitly via the API, same as the
+  # backend. No `needs: migrate` - the frontend has no DB dependency, so it
+  # deploys in parallel with migrate/deploy-backend instead of waiting on them.
+  deploy-frontend:
+    name: deploy frontend (Render)
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy
+        id: trigger
+        run: |
+          response=$(curl -sf -X POST \
+            "https://api.render.com/v1/services/${{ secrets.RENDER_FRONTEND_SERVICE_ID }}/deploys" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json")
+          deploy_id=$(echo "$response" | jq -r '.id')
+          if [ -z "$deploy_id" ] || [ "$deploy_id" = "null" ]; then
+            echo "Failed to trigger Render deploy: $response"
+            exit 1
+          fi
+          echo "deploy_id=$deploy_id" >> "$GITHUB_OUTPUT"
+
+      - name: Poll deploy status
+        run: |
+          deploy_id="${{ steps.trigger.outputs.deploy_id }}"
+          for i in $(seq 1 60); do
+            status=$(curl -sf \
+              "https://api.render.com/v1/services/${{ secrets.RENDER_FRONTEND_SERVICE_ID }}/deploys/$deploy_id" \
+              -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              | jq -r '.status')
+            echo "Render deploy status: $status"
+            case "$status" in
+              live)
+                exit 0
+                ;;
+              build_failed|update_failed|canceled|deactivated)
+                echo "Render deploy failed with status: $status"
+                exit 1
+                ;;
+            esac
+            sleep 10
+          done
+          echo "Timed out waiting for Render deploy to go live"
+          exit 1
+
   smoke-test:
     name: post-deploy smoke test
-    needs: deploy-backend
+    needs: [deploy-backend, deploy-frontend]
     runs-on: ubuntu-latest
     steps:
       - name: Backend health check
