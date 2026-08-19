@@ -4,6 +4,13 @@ import type { AbsenceType } from '../types'
 /** Types an employee may pick in the absence form. HOLIDAY is system-owned. */
 export const ABSENCE_TYPES = ['VACATION', 'SICK', 'RESERVE_DUTY', 'OTHER'] as const
 
+export type EmployeeAbsenceType = (typeof ABSENCE_TYPES)[number]
+
+export function employeeAbsenceType(type: AbsenceType | undefined): EmployeeAbsenceType | '' {
+  if (type && (ABSENCE_TYPES as readonly string[]).includes(type)) return type as EmployeeAbsenceType
+  return ''
+}
+
 export const ABSENCE_TYPE_LABELS: Record<AbsenceType, string> = {
   VACATION: 'חופשה 🏖️',
   SICK: 'מחלה 😷',

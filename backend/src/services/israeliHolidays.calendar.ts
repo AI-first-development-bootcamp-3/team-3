@@ -32,8 +32,12 @@ const NAME_HE: Record<IsraeliHolidayCode, string> = {
   yom_haatzmaut: 'יום העצמאות',
 };
 
+/** Hebcal `greg()` is local midnight of the daytime civil date. Never use UTC ISO. */
 function toIsoDate(value: Date): string {
-  return value.toISOString().slice(0, 10);
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function classify(desc: string): IsraeliHolidayCode | null {

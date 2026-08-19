@@ -36,7 +36,7 @@ describe('GET /holidays', () => {
 
     expect(response.status).toBe(200);
     const pesach = response.body.holidays.find((row: { code: string }) => row.code === 'pesach');
-    expect(pesach).toEqual({ code: 'pesach', nameHe: 'פסח', date: '2026-04-01' });
+    expect(pesach).toEqual({ code: 'pesach', nameHe: 'פסח', date: '2026-04-02' });
     expect(await prisma.israeliHoliday.count({ where: { year: 2026 } })).toBeGreaterThan(0);
   });
 });

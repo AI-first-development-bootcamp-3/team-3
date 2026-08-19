@@ -122,7 +122,7 @@ describe('POST /absences', () => {
     const response = await request(app)
       .post('/absences')
       .set('Authorization', `Bearer ${tokenFor(employee)}`)
-      .send({ type: 'VACATION', startDate: '2026-04-01' });
+      .send({ type: 'VACATION', startDate: '2026-04-02' });
 
     expect(response.status).toBe(409);
   });
@@ -231,9 +231,9 @@ describe('GET /absences', () => {
     expect(response.status).toBe(200);
     const holidays = response.body.absences.filter((row: { type: string }) => row.type === 'HOLIDAY');
     expect(holidays.map((row: { startDate: string }) => row.startDate).sort()).toEqual([
-      '2026-04-01',
-      '2026-04-07',
-      '2026-04-21',
+      '2026-04-02',
+      '2026-04-08',
+      '2026-04-22',
     ]);
   });
 });

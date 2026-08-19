@@ -16,7 +16,7 @@ describe('syncIsraeliHolidays', () => {
 
     expect(second).toEqual(first);
     expect(await prisma.israeliHoliday.count({ where: { year: 2026 } })).toBe(first.length);
-    expect(first.some((row) => row.code === 'yom_haatzmaut' && row.date === '2026-04-21')).toBe(true);
+    expect(first.some((row) => row.code === 'yom_haatzmaut' && row.date === '2026-04-22')).toBe(true);
   });
 });
 
@@ -39,8 +39,8 @@ describe('ensureHolidayAbsencesForMonth', () => {
     const datesFor = (userId: string) =>
       rows.filter((row) => row.userId === userId).map((row) => row.startDate.toISOString().slice(0, 10));
 
-    expect(datesFor(active.id)).toEqual(['2026-04-01', '2026-04-07', '2026-04-21']);
-    expect(datesFor(admin.id)).toEqual(['2026-04-01', '2026-04-07', '2026-04-21']);
+    expect(datesFor(active.id)).toEqual(['2026-04-02', '2026-04-08', '2026-04-22']);
+    expect(datesFor(admin.id)).toEqual(['2026-04-02', '2026-04-08', '2026-04-22']);
     expect(datesFor(inactive.id)).toEqual([]);
   });
 
@@ -58,21 +58,24 @@ describe('ensureHolidayAbsencesForMonth', () => {
 
     await ensureHolidayAbsencesForMonth(2026, 9);
 
-    const dates = (await prisma.absence.findMany({ where: { type: AbsenceType.HOLIDAY } })).map((row) =>
-      row.startDate.toISOString().slice(0, 10),
-    );
+    const dates = (
+      await prisma.absence.findMany({
+        where: { type: AbsenceType.HOLIDAY },
+        orderBy: { startDate: 'asc' },
+      })
+    ).map((row) => row.startDate.toISOString().slice(0, 10));
 
-    expect(dates).toEqual(['2026-09-20']);
-    expect(dates).not.toContain('2026-09-11');
+    // RH day 2 is Sunday; Yom Kippur is Monday. Fri/Sat RH 1 and Sukkot stay off the list.
+    expect(dates).toEqual(['2026-09-13', '2026-09-21']);
     expect(dates).not.toContain('2026-09-12');
-    expect(dates).not.toContain('2026-09-25');
+    expect(dates).not.toContain('2026-09-26');
   });
 
   it('replaces hours already reported on the holiday date', async () => {
     const employee = await createUser();
     await createTimeReport({
       userId: employee.id,
-      date: new Date('2026-04-01T00:00:00.000Z'),
+      date: new Date('2026-04-02T00:00:00.000Z'),
     });
 
     await ensureHolidayAbsencesForMonth(2026, 4);
@@ -83,7 +86,7 @@ describe('ensureHolidayAbsencesForMonth', () => {
         where: {
           userId: employee.id,
           type: AbsenceType.HOLIDAY,
-          startDate: new Date('2026-04-01T00:00:00.000Z'),
+          startDate: new Date('2026-04-02T00:00:00.000Z'),
         },
       }),
     ).toBe(1);
@@ -95,7 +98,7 @@ describe('ensureHolidayAbsencesForMonth', () => {
       userId: employee.id,
       type: AbsenceType.VACATION,
       startDate: new Date('2026-03-30T00:00:00.000Z'),
-      endDate: new Date('2026-04-02T00:00:00.000Z'),
+      endDate: new Date('2026-04-03T00:00:00.000Z'),
     });
 
     await ensureHolidayAbsencesForMonth(2026, 4);
@@ -107,8 +110,8 @@ describe('ensureHolidayAbsencesForMonth', () => {
     expect(
       vacations.map((row) => [row.startDate.toISOString().slice(0, 10), row.endDate.toISOString().slice(0, 10)]),
     ).toEqual([
-      ['2026-03-30', '2026-03-31'],
-      ['2026-04-02', '2026-04-02'],
+      ['2026-03-30', '2026-04-01'],
+      ['2026-04-03', '2026-04-03'],
     ]);
   });
 });
