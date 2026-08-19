@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet } from 'react-router-dom'
 import UserMenu from './UserMenu'
 import { sessionStore } from '../services/sessionStore'
 import abraLogo from '../assets/home/abra-logo.svg'
@@ -108,12 +108,7 @@ function MenuIcon() {
 
 function AdminShell() {
   const user = sessionStore((state) => state.user)
-  const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
-
-  useEffect(() => {
-    setMenuOpen(false)
-  }, [location.pathname])
 
   useEffect(() => {
     if (!menuOpen) return
