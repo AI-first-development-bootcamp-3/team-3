@@ -381,9 +381,9 @@ describe('Reports home shell', () => {
     const dialog = await screen.findByRole('dialog')
 
     expect(within(dialog).queryByText('עדיין אין פרויקטים מדווחים')).not.toBeInTheDocument()
-    expect(within(dialog).getByLabelText('פרויקט 1')).toHaveValue('client-1:project-1')
-    expect(within(dialog).getByLabelText('משימה 1')).toHaveValue('task-1')
-    expect(within(dialog).getByLabelText('מיקום 1')).toHaveValue('CLIENT')
+    expect(within(dialog).getByLabelText('פרויקט 1')).toHaveAttribute('data-value', 'client-1:project-1')
+    expect(within(dialog).getByLabelText('משימה 1')).toHaveAttribute('data-value', 'task-1')
+    expect(within(dialog).getByLabelText('מיקום 1')).toHaveAttribute('data-value', 'CLIENT')
     expect(within(dialog).getByLabelText('שעות 1')).toHaveValue('9')
     expect(within(dialog).getByLabelText('פירוט 1')).toHaveValue('Saved')
   })
@@ -866,7 +866,7 @@ describe('Reports home shell', () => {
       await user.click(screen.getByRole('button', { name: /18\/08\/26/ }))
       const dialog = await screen.findByRole('dialog')
 
-      expect(within(dialog).getByLabelText('פרויקט 1')).toHaveValue('client-1:project-1')
+      expect(within(dialog).getByLabelText('פרויקט 1')).toHaveAttribute('data-value', 'client-1:project-1')
       expect(within(dialog).getByLabelText('שעות 1')).toHaveValue('4')
       expect(within(dialog).getByLabelText('פירוט 1')).toHaveValue('Saved')
     })
