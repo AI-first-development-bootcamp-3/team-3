@@ -38,7 +38,7 @@ The service SHALL let an authenticated caller update one of their own absences b
 
 ### Requirement: Hebrew absence form in the daily drawer
 
-The home daily drawer SHALL enable **דיווח העדרות** next to **דיווח ידני**. That tab SHALL show a Hebrew RTL form: type (חופשה / מחלה / מילואים / אחר), a single date field shown by default, the working-day count for the current selection, and שמירה. Below the date field, a link ("דיווח על היעדרות ליותר מיום אחד") SHALL reveal an end-date field so the employee can enter a range. Once revealed, the end-date field SHALL remain visible for the rest of that open form session (no control collapses it back). Submitting while the end-date field is hidden SHALL send `endDate` equal to `startDate`.
+The home daily drawer SHALL enable **דיווח העדרות** next to **דיווח ידני**. That tab SHALL show a Hebrew RTL form: type (חופשה / מחלה / מילואים / אחר), a single date field shown by default, the working-day count for the current selection, and שמירה. Below the date field, a link ("דיווח על היעדרות ליותר מיום אחד") SHALL reveal an end-date field so the employee can enter a range. While the end-date field is visible, a "חזרה ליום אחד" control SHALL hide it again, clear `endDate`, and return the form to one-day mode. Submitting while the end-date field is hidden SHALL send `endDate` equal to `startDate`.
 
 When the drawer is opened for a specific day that already has a saved absence, the form SHALL open pre-filled with that absence's type, date(s), and attached documents instead of a blank form. If the saved absence's `startDate` and `endDate` differ, the form SHALL open with the end-date field already revealed (multi-day mode), and the "more days" link SHALL NOT be shown. Saving from this pre-filled state SHALL update the existing absence (same id) rather than create a new one. This pre-fill SHALL happen only when the drawer was opened for that specific day (e.g. by clicking that day's own row); the general **דיווח ידני** entry point, which is not scoped to any one day, SHALL always open **דיווח העדרות** blank, even when the date it defaults to already has a saved absence elsewhere.
 
@@ -57,10 +57,10 @@ When the drawer is opened for a specific day that already has a saved absence, t
 - **WHEN** the user picks a type, sets one date without clicking the "more days" link, and saves
 - **THEN** the client sends `POST /absences` with `endDate` equal to `startDate`
 
-#### Scenario: The range reveal is one-way for the open form
+#### Scenario: The employee can return to one-day mode
 
-- **WHEN** the user has clicked "דיווח על היעדרות ליותר מיום אחד" and the end-date field is visible
-- **THEN** no control in that open form collapses the end-date field back to one-day mode
+- **WHEN** the user has clicked "דיווח על היעדרות ליותר מיום אחד" and then clicks "חזרה ליום אחד"
+- **THEN** the end-date field is hidden, the "more days" link is shown again, and a later save sends `endDate` equal to `startDate`
 
 #### Scenario: Opening a day with a saved single-day absence pre-fills it
 
@@ -70,7 +70,7 @@ When the drawer is opened for a specific day that already has a saved absence, t
 #### Scenario: Opening a day with a saved multi-day absence pre-fills the range
 
 - **WHEN** the user opens **דיווח העדרות** for a day inside a saved absence range
-- **THEN** the form shows the end-date field already revealed with both saved dates filled in, and the "more days" link is not shown
+- **THEN** the form shows the end-date field already revealed with both saved dates filled in, and "חזרה ליום אחד" is shown instead of the "more days" link
 
 #### Scenario: Editing a pre-filled absence updates it in place
 

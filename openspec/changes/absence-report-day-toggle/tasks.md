@@ -2,7 +2,7 @@
 
 - [x] 1.1 Add local `isMultiDay` state (default `false`) to `AbsenceReportForm`
 - [x] 1.2 When `isMultiDay` is `false`, render only the type selector and the start date field; keep `endDate` unset (submitted equal to `startDate`, as the schema already handles)
-- [x] 1.3 Add the "דיווח על היעדרות ליותר מיום אחד" link/button below the date field that sets `isMultiDay` to `true`; do not render any control that sets it back to `false`
+- [x] 1.3 Add the "דיווח על היעדרות ליותר מיום אחד" link/button below the date field that sets `isMultiDay` to `true`, and "חזרה ליום אחד" to set it back to `false` and clear `endDate`
 
 ## 2. Range mode
 
@@ -38,7 +38,7 @@
 ## 8. Frontend: form pre-fill and edit mode
 
 - [x] 8.1 Add an optional `existingAbsence` prop to `AbsenceReportForm`; when present, initialize `type`/`startDate`/`endDate` from it, set `isMultiDay` to `startDate !== endDate`, and seed `uploadedFiles` from `existingAbsence.attachments`
-- [x] 8.2 When `existingAbsence` is present, hide the "דיווח על היעדרות ליותר מיום אחד" link (the range is already shown per the pre-filled dates)
+- [x] 8.2 When `isMultiDay` is true, show "חזרה ליום אחד"; when false, show "דיווח על היעדרות ליותר מיום אחד" (including edit of a saved one-day absence)
 - [x] 8.3 On submit, call `updateAbsence(existingAbsence.id, …)` when `existingAbsence` is present, otherwise the existing `createAbsence(…)` path
 - [x] 8.4 In `ManualReport.tsx`, pass the day's first entry of `dayAbsences` (if any) into `AbsenceReportForm` as `existingAbsence`
 

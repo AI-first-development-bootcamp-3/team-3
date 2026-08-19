@@ -5,7 +5,7 @@ The **דיווח היעדרות** form always shows a "מתאריך" / "עד ת�
 ## What Changes
 
 - `AbsenceReportForm` opens in **one-day mode** by default: סוג היעדרות selector plus a single date field. `endDate` is not shown and is submitted equal to `startDate`, matching existing API/schema behavior.
-- A secondary link below the date field — "דיווח על היעדרות ליותר מיום אחד" — reveals the "עד תאריך" field so the employee can enter a range. This reveal is **one-way** for the lifetime of that open form (no control to collapse back to one-day mode); closing and reopening the form resets to one-day mode.
+- A secondary link below the date field — "דיווח על היעדרות ליותר מיום אחד" — reveals the "עד תאריך" field so the employee can enter a range. "חזרה ליום אחד" hides the end date again and clears it so a save is one day.
 - No change to the `/absences` API, the Zod schema, or working-day counting for the create path — `endDate` was already optional and already defaults to `startDate` server-side and client-side.
 - Add styling for the new link (and a visual separator) consistent with the existing `absence-report__*` styles.
 - **Editing an existing absence:** opening **דיווח היעדרות** for a day that already has a saved absence SHALL pre-fill the form with that absence's type, date(s) — with the multi-day field already expanded if the saved absence spans a range — and attached documents, instead of a blank form. The employee SHALL be able to edit those fields, and saving SHALL update the existing absence row (same `id`) instead of creating a new one.
