@@ -303,7 +303,7 @@ describe('Reports home shell', () => {
     await user.click(await screen.findByRole('tab', { name: 'דיווח העדרות' }))
 
     expect(screen.getByLabelText('סוג היעדרות')).toHaveValue('SICK')
-    expect(screen.queryByRole('button', { name: 'דיווח על היעדרות ליותר מיום אחד' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'דיווח על היעדרות ליותר מיום אחד' })).toBeInTheDocument()
   })
 
   it('inserts סופ״ש rows for Fridays and Saturdays that already happened this month', async () => {

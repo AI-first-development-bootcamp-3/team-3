@@ -54,6 +54,8 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
   const {
     register,
     handleSubmit,
+    setValue,
+    clearErrors,
     formState: { errors, isSubmitting },
     control,
   } = useForm<AbsenceReportInput, unknown, AbsenceReportValues>({
@@ -171,12 +173,25 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
           {errors.startDate ? <p className="manual-report__field-error">{errors.startDate.message}</p> : null}
         </label>
         {isMultiDay ? (
-          <label className="manual-report__field">
-            <span className="manual-report__field-label">עד תאריך</span>
-            <input type="date" className="manual-report__field-input" aria-label="עד תאריך" {...register('endDate')} />
-            {errors.endDate ? <p className="manual-report__field-error">{errors.endDate.message}</p> : null}
-          </label>
-        ) : existingAbsence ? null : (
+          <>
+            <label className="manual-report__field">
+              <span className="manual-report__field-label">עד תאריך</span>
+              <input type="date" className="manual-report__field-input" aria-label="עד תאריך" {...register('endDate')} />
+              {errors.endDate ? <p className="manual-report__field-error">{errors.endDate.message}</p> : null}
+            </label>
+            <button
+              type="button"
+              className="absence-report__more-days-link"
+              onClick={() => {
+                setIsMultiDay(false)
+                setValue('endDate', '')
+                clearErrors('endDate')
+              }}
+            >
+              חזרה ליום אחד
+            </button>
+          </>
+        ) : (
           <button
             type="button"
             className="absence-report__more-days-link"
