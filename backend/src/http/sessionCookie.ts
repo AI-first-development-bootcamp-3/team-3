@@ -3,10 +3,18 @@ import { env } from '../config/env.js';
 
 export const SESSION_COOKIE_NAME = 'abra_session';
 
+// Frontend and backend are separate Render subdomains, so the session cookie
+// is cross-site from the browser's perspective. SameSite=Lax cookies aren't
+// sent on cross-site fetch/XHR (only top-level navigations), which broke
+// every API call right after login. SameSite=None requires Secure, which is
+// fine in production (Render always serves HTTPS) but would silently break
+// local dev over http, so it stays Lax there.
+const isProduction = env.NODE_ENV === 'production';
+const sameSite: 'none' | 'lax' = isProduction ? 'none' : 'lax';
 const cookieBase = {
   httpOnly: true,
-  secure: env.NODE_ENV === 'production',
-  sameSite: 'lax' as const,
+  secure: isProduction,
+  sameSite,
   path: '/',
 };
 
