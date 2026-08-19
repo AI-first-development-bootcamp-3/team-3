@@ -25,6 +25,78 @@ function ClockIcon() {
   )
 }
 
+function PeopleIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <circle cx="7.5" cy="7" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M3.5 15c.7-2 2.2-3 4-3s3.3 1 4 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="13.5" cy="7.5" r="2" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M13 12.2c1.5.2 2.7 1.1 3.3 2.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function EditIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path
+        d="M4.5 13.2 12.8 4.9a1.5 1.5 0 0 1 2.1 0l.2.2a1.5 1.5 0 0 1 0 2.1L6.8 15.5H4.5v-2.3Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path d="M11.6 6.1 13.9 8.4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function LockIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <rect x="4.5" y="9" width="11" height="7.5" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M7 9V7.2a3 3 0 0 1 6 0V9" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  )
+}
+
+function BuildingIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M4.5 16.5V5.5A1.5 1.5 0 0 1 6 4h8a1.5 1.5 0 0 1 1.5 1.5v11" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M8 7h.01M12 7h.01M8 10.5h.01M12 10.5h.01M8 14h.01M12 14h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function BriefcaseIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <rect x="3" y="7" width="14" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M8 7V5.5A1.5 1.5 0 0 1 9.5 4h1A1.5 1.5 0 0 1 12 5.5V7" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  )
+}
+
+function TaskIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <rect x="4" y="3.5" width="12" height="13" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M7 8h6M7 11.5h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+const ADMIN_NAV = [
+  { to: '/admin/assignments', label: 'ניהול לקוחות/פרויקטים', icon: FolderIcon },
+  { to: '/admin/clients', label: 'לקוחות', icon: BuildingIcon },
+  { to: '/admin/projects', label: 'פרויקטים', icon: BriefcaseIcon },
+  { to: '/admin/tasks', label: 'משימות', icon: TaskIcon },
+  { to: '/admin/hour-settings', label: 'הגדרת דיווחי שעות', icon: ClockIcon },
+  { to: '/admin/users', label: 'משתמשים', icon: PeopleIcon },
+  { to: '/admin/reports', label: 'דיווחי עובדים', icon: EditIcon },
+  { to: '/admin/month-lock', label: 'נעילת חודש', icon: LockIcon },
+] as const
+
 function AdminShell() {
   const user = sessionStore((state) => state.user)
 
@@ -35,28 +107,20 @@ function AdminShell() {
           <img src={abraLogo} alt="abra" width={107} height={24} />
         </div>
         <nav className="admin-sidebar__nav" aria-label="ניהול">
-          <NavLink
-            to="/admin/assignments"
-            className={({ isActive }) =>
-              isActive ? 'admin-sidebar__link admin-sidebar__link--active' : 'admin-sidebar__link'
-            }
-          >
-            <span className="admin-sidebar__icon">
-              <FolderIcon />
-            </span>
-            ניהול לקוחות/פרויקטים
-          </NavLink>
-          <NavLink
-            to="/admin/hour-settings"
-            className={({ isActive }) =>
-              isActive ? 'admin-sidebar__link admin-sidebar__link--active' : 'admin-sidebar__link'
-            }
-          >
-            <span className="admin-sidebar__icon">
-              <ClockIcon />
-            </span>
-            הגדרת דיווחי שעות
-          </NavLink>
+          {ADMIN_NAV.map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              className={({ isActive }) =>
+                isActive ? 'admin-sidebar__link admin-sidebar__link--active' : 'admin-sidebar__link'
+              }
+            >
+              <span className="admin-sidebar__icon">
+                <Icon />
+              </span>
+              {label}
+            </NavLink>
+          ))}
         </nav>
         <div className="admin-sidebar__profile">
           <UserMenu />

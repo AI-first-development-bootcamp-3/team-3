@@ -100,7 +100,7 @@ export const timeReportRouter = Router();
  *         schema: { type: integer, minimum: 2000, maximum: 2100 }
  *     responses:
  *       200:
- *         description: Every saved row in the month, with hierarchy names and duration.
+ *         description: Every saved row in the month, plus whether that month is locked.
  *       400:
  *         description: Invalid month or year.
  *         content:

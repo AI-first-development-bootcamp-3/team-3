@@ -10,11 +10,20 @@ export interface AdminProject {
   reportFormat: ReportFormat
   clientId: string
   clientName: string
+  managerId: string | null
+  managerName: string | null
+  startDate: string | null
+  endDate: string | null
+  description: string
 }
 
 export interface CreateProjectRequest {
   name: string
   clientId: string
+  managerId: string
+  startDate: string
+  endDate: string
+  description?: string
 }
 
 export interface UpdateProjectRequest {

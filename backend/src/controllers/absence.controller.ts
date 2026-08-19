@@ -1,7 +1,12 @@
 import type { RequestHandler } from 'express';
-import { createAbsence, deleteAbsence, listAbsencesForMonth } from '../services/absence.service.js';
+import { createAbsence, deleteAbsence, listAbsencesForMonth, updateAbsence } from '../services/absence.service.js';
 import { AppError } from '../types/errors.js';
-import type { AbsenceIdParam, CreateAbsenceBody, ListAbsencesQuery } from '../types/absence.schema.js';
+import type {
+  AbsenceIdParam,
+  CreateAbsenceBody,
+  ListAbsencesQuery,
+  UpdateAbsenceBody,
+} from '../types/absence.schema.js';
 
 export const postAbsence: RequestHandler = async (req, res, next) => {
   try {
@@ -26,6 +31,21 @@ export const getMyAbsences: RequestHandler = async (req, res, next) => {
     const { month, year } = req.query as unknown as ListAbsencesQuery;
     const absences = await listAbsencesForMonth(req.user.sub, month, year);
     res.status(200).json({ absences });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateMyAbsence: RequestHandler = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      next(AppError.unauthorized());
+      return;
+    }
+    const { id } = req.params as AbsenceIdParam;
+    const body = req.body as UpdateAbsenceBody;
+    const absence = await updateAbsence(req.user.sub, id, body);
+    res.status(200).json(absence);
   } catch (error) {
     next(error);
   }

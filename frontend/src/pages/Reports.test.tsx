@@ -201,6 +201,21 @@ describe('Reports home shell', () => {
     expect(screen.queryByText('אין נתונים עדיין')).not.toBeInTheDocument()
   })
 
+  it('dims every day row when the month is locked', async () => {
+    signIn()
+    mockReportingOptions({
+      '/reports?': { ...savedReports, monthLocked: true },
+    })
+    renderHome()
+
+    expect(await screen.findByText('9 שעות')).toBeInTheDocument()
+    const rows = screen.getAllByRole('button').filter((button) => button.classList.contains('home-shell__day'))
+    expect(rows.length).toBeGreaterThan(0)
+    for (const row of rows) {
+      expect(row).toHaveClass('home-shell__day--locked')
+    }
+  })
+
   it('shows an absence type badge for each working day of a saved absence', async () => {
     signIn()
     mockFetch({
@@ -216,6 +231,7 @@ describe('Reports home shell', () => {
             endDate: '2026-08-12',
             halfDay: false,
             workingDayCount: 1,
+            attachments: [],
           },
         ],
       },
@@ -223,6 +239,71 @@ describe('Reports home shell', () => {
     renderHome()
 
     expect(await screen.findByText('מחלה 😷')).toBeInTheDocument()
+  })
+
+  it('opens a blank absence form from the general דיווח ידני button even when today already has a saved absence', async () => {
+    signIn()
+    const today = dayjs().format('YYYY-MM-DD')
+    mockFetch({
+      '/me/reporting-options': options,
+      '/reports?': { reports: [] },
+      '/absences?': {
+        absences: [
+          {
+            id: 'a1',
+            userId: 'u1',
+            type: 'SICK',
+            startDate: today,
+            endDate: today,
+            halfDay: false,
+            workingDayCount: 1,
+            attachments: [{ id: 'att-1', filename: 'note.pdf', mimeType: 'application/pdf', sizeBytes: 100, uploadedAt: today }],
+          },
+        ],
+      },
+    })
+    const user = userEvent.setup()
+    renderHome()
+
+    await user.click(await screen.findByRole('button', { name: 'דיווח ידני' }))
+    await user.click(await screen.findByRole('tab', { name: 'דיווח העדרות' }))
+
+    expect(screen.getByLabelText('סוג היעדרות')).toHaveValue('')
+    expect(screen.getByRole('button', { name: 'דיווח על היעדרות ליותר מיום אחד' })).toBeInTheDocument()
+    expect(screen.queryByText('note.pdf')).not.toBeInTheDocument()
+  })
+
+  it('opens that day\'s own saved absence in edit mode when its row is clicked directly', async () => {
+    signIn()
+    const today = dayjs().format('YYYY-MM-DD')
+    mockFetch({
+      '/me/reporting-options': options,
+      '/reports?': { reports: [] },
+      '/absences?': {
+        absences: [
+          {
+            id: 'a1',
+            userId: 'u1',
+            type: 'SICK',
+            startDate: today,
+            endDate: today,
+            halfDay: false,
+            workingDayCount: 1,
+            attachments: [],
+          },
+        ],
+      },
+    })
+    const user = userEvent.setup()
+    renderHome()
+
+    const dayRow = (await screen.findByText('מחלה 😷')).closest('button')
+    expect(dayRow).not.toBeNull()
+    await user.click(dayRow!)
+    await user.click(await screen.findByRole('tab', { name: 'דיווח העדרות' }))
+
+    expect(screen.getByLabelText('סוג היעדרות')).toHaveValue('SICK')
+    expect(screen.getByRole('button', { name: 'דיווח על היעדרות ליותר מיום אחד' })).toBeInTheDocument()
   })
 
   it('inserts סופ״ש rows for Fridays and Saturdays that already happened this month', async () => {
@@ -564,6 +645,7 @@ describe('Reports home shell', () => {
                   endDate: '2026-08-20',
                   halfDay: false,
                   workingDayCount: 1,
+            attachments: [],
                 },
               ]
             : [],

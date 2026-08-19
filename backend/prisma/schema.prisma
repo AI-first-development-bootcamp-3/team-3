@@ -48,6 +48,11 @@ enum LoginAttemptOutcome {
   SUCCESS
 }
 
+enum TimeReportAuditAction {
+  REPLACED
+  DELETED
+}
+
 model User {
   id                 String        @id @default(uuid())
   email              String        @unique
@@ -72,6 +77,9 @@ model User {
   loginAttempts      LoginAttempt[]
   taskAssignments    TaskAssignment[]
   workClockSessions  WorkClockSession[]
+  managedProjects    Project[]         @relation("ProjectManager")
+  reportAuditsAsEmployee TimeReportAudit[] @relation("ReportAuditEmployee")
+  reportAuditsAsActor    TimeReportAudit[] @relation("ReportAuditActor")
 
   @@map("users")
 }
@@ -123,10 +131,16 @@ model Project {
   /// project to per-row clock pairs. See
   /// openspec/changes/report-format-aware-entry/design.md, D8.
   reportFormat ReportFormat @default(SUM_HOURS)
+  description  String       @default("")
+  /// Inclusive calendar window. Null on older rows means unbounded (no gate).
+  startDate    DateTime?    @db.Date
+  endDate      DateTime?    @db.Date
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   clientId     String
   client       Client       @relation(fields: [clientId], references: [id])
+  managerId    String?
+  manager      User?        @relation("ProjectManager", fields: [managerId], references: [id])
   tasks        Task[]
   timeReports  TimeReport[]
 
@@ -265,4 +279,23 @@ model WorkClockSession {
 
   @@index([userId, status])
   @@map("work_clock_sessions")
+}
+
+/// Append-only trail of an administrator replacing or deleting another
+/// employee's day. Employee self-saves on `/reports` do not write here.
+model TimeReportAudit {
+  id           String                 @id @default(uuid())
+  employeeId   String
+  employee     User                   @relation("ReportAuditEmployee", fields: [employeeId], references: [id])
+  actorId      String
+  actor        User                   @relation("ReportAuditActor", fields: [actorId], references: [id])
+  date         DateTime               @db.Date
+  action       TimeReportAuditAction
+  previousJson Json
+  nextJson     Json?
+  reason       String?
+  createdAt    DateTime               @default(now())
+
+  @@index([employeeId, date])
+  @@map("time_report_audits")
 }

@@ -5,7 +5,7 @@ const calendarDateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD');
 
-export const createAbsenceBodySchema = z
+const absenceWriteObject = z
   .object({
     type: z.enum(AbsenceType),
     startDate: calendarDateSchema,
@@ -21,15 +21,26 @@ export const createAbsenceBodySchema = z
         message: 'End date must not be before start date',
       });
     }
-  })
-  .transform((body) => ({
-    type: body.type,
-    startDate: body.startDate,
-    endDate: body.endDate ?? body.startDate,
-    attachmentIds: body.attachmentIds ?? [],
-  }));
+  });
+
+export const createAbsenceBodySchema = absenceWriteObject.transform((body) => ({
+  type: body.type,
+  startDate: body.startDate,
+  endDate: body.endDate ?? body.startDate,
+  attachmentIds: body.attachmentIds ?? [],
+}));
 
 export type CreateAbsenceBody = z.infer<typeof createAbsenceBodySchema>;
+
+/** Omitted `attachmentIds` means leave current links; `[]` clears them. */
+export const updateAbsenceBodySchema = absenceWriteObject.transform((body) => ({
+  type: body.type,
+  startDate: body.startDate,
+  endDate: body.endDate ?? body.startDate,
+  attachmentIds: body.attachmentIds,
+}));
+
+export type UpdateAbsenceBody = z.infer<typeof updateAbsenceBodySchema>;
 
 export const listAbsencesQuerySchema = z.object({
   month: z.coerce.number().int().min(1, 'Month must be 1–12').max(12, 'Month must be 1–12'),

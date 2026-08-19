@@ -19,6 +19,10 @@ export function createAbsence(body: CreateAbsenceInput): Promise<Absence> {
   return request<Absence>('/absences', { method: 'POST', body })
 }
 
+export function updateAbsence(id: string, body: CreateAbsenceInput): Promise<Absence> {
+  return request<Absence>(`/absences/${id}`, { method: 'PATCH', body })
+}
+
 export function deleteAbsence(id: string): Promise<void> {
   return request<void>(`/absences/${id}`, { method: 'DELETE' })
 }

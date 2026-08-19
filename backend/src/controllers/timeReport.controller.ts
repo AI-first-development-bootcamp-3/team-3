@@ -6,6 +6,7 @@ import {
   listReportingOptions,
   listTimeReportsForMonth,
 } from '../services/timeReport.service.js';
+import { isMonthLocked } from '../services/monthLock.service.js';
 import { AppError } from '../types/errors.js';
 import type {
   CreateTimeReportBatchBody,
@@ -52,8 +53,12 @@ export const getMyTimeReports: RequestHandler = async (req, res, next) => {
     // so these are already coerced numbers — but Express still types the
     // property as ParsedQs, which shares no members with the parsed shape.
     const { month, year } = req.query as unknown as ListTimeReportsQuery;
-    const reports = await listTimeReportsForMonth(req.user.sub, month, year);
-    res.status(200).json({ reports });
+    const monthKey = `${year}-${String(month).padStart(2, '0')}-01`;
+    const [reports, monthLocked] = await Promise.all([
+      listTimeReportsForMonth(req.user.sub, month, year),
+      isMonthLocked(monthKey),
+    ]);
+    res.status(200).json({ reports, monthLocked });
   } catch (error) {
     next(error);
   }

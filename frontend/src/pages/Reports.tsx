@@ -60,9 +60,10 @@ type MonthSnapshot = {
   absences: Absence[]
   kpis: MonthKpis | null
   days: DemoDay[]
+  monthLocked: boolean
 }
 
-const EMPTY_MONTH: MonthSnapshot = { reports: [], absences: [], kpis: null, days: [] }
+const EMPTY_MONTH: MonthSnapshot = { reports: [], absences: [], kpis: null, days: [], monthLocked: false }
 
 function headerFromDay(day: DemoDay): ManualReportHeaderMeta {
   return {
@@ -85,6 +86,7 @@ function Reports() {
   const [monthReports, setMonthReports] = useState<TimeReportListItem[]>([])
   const [monthAbsences, setMonthAbsences] = useState<Absence[]>([])
   const [monthKpis, setMonthKpis] = useState<MonthKpis | null>(null)
+  const [monthLocked, setMonthLocked] = useState(false)
   const [listLoading, setListLoading] = useState(
     () => !isHomeDemo() && Boolean(sessionStore.getState().user),
   )
@@ -110,7 +112,7 @@ function Reports() {
       const monthNumber = targetMonth.month() + 1
       const today = dayjs().format('YYYY-MM-DD')
       const userId = sessionStore.getState().user?.id
-      const [{ reports }, absences] = await Promise.all([
+      const [{ reports, monthLocked = false }, absences] = await Promise.all([
         listReports(monthNumber, year),
         listAbsences(monthNumber, year)
           .then((result) => result.absences)
@@ -120,6 +122,7 @@ function Reports() {
       return {
         reports,
         absences,
+        monthLocked,
         kpis: buildMonthKpis({ reports, absences, year, month: monthNumber, today }),
         days: buildHomeDays({
           reports,
@@ -140,6 +143,7 @@ function Reports() {
     setMonthAbsences(snapshot.absences)
     setMonthKpis(snapshot.kpis)
     setSavedDays(snapshot.days)
+    setMonthLocked(snapshot.monthLocked)
   }, [])
 
   const refreshSavedDays = useCallback(async () => {
@@ -178,6 +182,12 @@ function Reports() {
 
   const openManualReport = (isoDate?: string, headerMeta?: ManualReportHeaderMeta) => {
     const date = isoDate ?? dayjs().format('YYYY-MM-DD')
+    // The generic "דיווח ידני" button (no isoDate) always starts a fresh
+    // report - it must not silently drop the caller into editing whatever
+    // absence happens to already be saved for today. Editing an absence is
+    // reachable only by opening that specific day's own row, which always
+    // passes an isoDate.
+    const isSpecificDay = isoDate !== undefined
     // Reopening during a slide-out would otherwise be undone by the pending
     // unmount from the close that is still animating.
     cancelPendingUnmount()
@@ -190,7 +200,7 @@ function Reports() {
       sessionKey: (current?.sessionKey ?? 0) + 1,
       headerMeta: headerMeta ?? { status: 'חסר', tone: 'missing', tags: [] },
       reports: monthReports.filter((report) => report.date === date),
-      absences: absencesCoveringDate(monthAbsences, date),
+      absences: isSpecificDay ? absencesCoveringDate(monthAbsences, date) : [],
     }))
   }
 
@@ -211,7 +221,7 @@ function Reports() {
         <li key={day.isoDate}>
           <button
             type="button"
-            className="home-shell__day"
+            className={`home-shell__day${monthLocked ? ' home-shell__day--locked' : ''}`}
             onClick={() => openManualReport(day.isoDate, headerFromDay(day))}
           >
             <div className="home-shell__day-main">

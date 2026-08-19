@@ -60,6 +60,7 @@ function renderScreen(
     initialDate?: string
     initialReports?: Parameters<typeof ManualReport>[0]['initialReports']
     initialAbsences?: Parameters<typeof ManualReport>[0]['initialAbsences']
+    allowAbsenceTab?: boolean
   } = {},
 ) {
   return render(
@@ -311,6 +312,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
           endDate: '2026-08-26',
           halfDay: false,
           workingDayCount: 3,
+          attachments: [],
         },
       ],
     })
@@ -369,9 +371,9 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     fireEvent.change(screen.getByLabelText('שעת יציאה'), { target: { value: '18:00' } })
 
     await user.click(screen.getByRole('button', { name: 'הוספת פרויקט' }))
-    await fillCard(user, 1, 'client-1:project-1', 'task-2', '4')
+    await fillCard(user, 1, 'client-1:project-1', 'task-2', '5')
     await user.click(screen.getByRole('button', { name: 'הוספת פרויקט' }))
-    await fillCard(user, 2, 'client-2:project-2', null, '3')
+    await fillCard(user, 2, 'client-2:project-2', null, '4')
 
     await user.click(screen.getByRole('button', { name: 'שמירה' }))
 
@@ -386,8 +388,8 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     const body = JSON.parse(String((call?.[1] as RequestInit).body))
     expect(body).toMatchObject({ startTime: '09:00', endTime: '18:00' })
     expect(body.rows).toHaveLength(2)
-    expect(body.rows[0]).toMatchObject({ projectId: 'project-1', taskId: 'task-2', hours: 4 })
-    expect(body.rows[1]).toMatchObject({ projectId: 'project-2', taskId: 'task-3', hours: 3 })
+    expect(body.rows[0]).toMatchObject({ projectId: 'project-1', taskId: 'task-2', hours: 5 })
+    expect(body.rows[1]).toMatchObject({ projectId: 'project-2', taskId: 'task-3', hours: 4 })
     await waitFor(() => expect(onClose).toHaveBeenCalled())
   })
 
@@ -548,7 +550,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     fireEvent.change(screen.getByLabelText('שעת כניסה'), { target: { value: '09:00' } })
     fireEvent.change(screen.getByLabelText('שעת יציאה'), { target: { value: '18:00' } })
     await user.click(screen.getByRole('button', { name: 'הוספת פרויקט' }))
-    await fillCard(user, 1, 'client-1:project-1', 'task-2', '4')
+    await fillCard(user, 1, 'client-1:project-1', 'task-2', '9')
 
     await user.click(screen.getByRole('button', { name: 'שמירה' }))
 
@@ -583,11 +585,35 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     fireEvent.change(screen.getByLabelText('שעת כניסה'), { target: { value: '09:00' } })
     fireEvent.change(screen.getByLabelText('שעת יציאה'), { target: { value: '18:00' } })
     await user.click(screen.getByRole('button', { name: 'הוספת פרויקט' }))
-    await fillCard(user, 1, 'client-1:project-1', 'task-2', '4')
+    await fillCard(user, 1, 'client-1:project-1', 'task-2', '9')
 
     await user.click(screen.getByRole('button', { name: 'שמירה' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('שמרתם יותר מדי פעמים ברצף')
+  })
+
+  it('tells the user the month is locked when save returns 409', async () => {
+    signIn()
+    mockFetch((url) =>
+      url.includes('/reports/batch')
+        ? {
+            ok: false,
+            status: 409,
+            json: { error: { code: 'CONFLICT', message: 'החודש נעול — לא ניתן לדווח' } },
+          }
+        : { ok: true, status: 200, json: options },
+    )
+    const user = userEvent.setup()
+
+    renderScreen()
+    await screen.findByRole('button', { name: 'הוספת פרויקט' })
+    fireEvent.change(screen.getByLabelText('שעת כניסה'), { target: { value: '09:00' } })
+    fireEvent.change(screen.getByLabelText('שעת יציאה'), { target: { value: '18:00' } })
+    await user.click(screen.getByRole('button', { name: 'הוספת פרויקט' }))
+    await fillCard(user, 1, 'client-1:project-1', 'task-2', '9')
+    await user.click(screen.getByRole('button', { name: 'שמירה' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('החודש נעול')
   })
 
   it('shows a red חסר badge when project hours are less than the attendance window', async () => {
@@ -607,6 +633,27 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     expect(within(summary!).getByText('סה״כ 3.5 שעות')).toBeInTheDocument()
     expect(within(summary!).getByText('חסר')).toBeInTheDocument()
     expect(screen.getAllByText('חסר').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('does not save while project hours are short of the attendance window', async () => {
+    signIn()
+    const fetchMock = mockFetch((url) =>
+      url.includes('/reports/batch')
+        ? { ok: true, status: 201, json: { reports: [] } }
+        : { ok: true, status: 200, json: options },
+    )
+    const user = userEvent.setup()
+
+    renderScreen()
+    await screen.findByRole('button', { name: 'הוספת פרויקט' })
+    fireEvent.change(screen.getByLabelText('שעת כניסה'), { target: { value: '09:00' } })
+    fireEvent.change(screen.getByLabelText('שעת יציאה'), { target: { value: '18:00' } })
+    await user.click(screen.getByRole('button', { name: 'הוספת פרויקט' }))
+    await fillCard(user, 1, 'client-1:project-1', 'task-2', '4')
+    await user.click(screen.getByRole('button', { name: 'שמירה' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('חסרות שעות בפרויקטים')
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/reports/batch'))).toBe(false)
   })
 
   it('hides the summary חסר badge when project hours fill the attendance window', async () => {
@@ -694,6 +741,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
 
     fireEvent.change(screen.getByLabelText('כניסה 1'), { target: { value: '09:00' } })
     fireEvent.change(screen.getByLabelText('יציאה 1'), { target: { value: '12:00' } })
+    fireEvent.change(screen.getByLabelText('שעת יציאה'), { target: { value: '12:00' } })
     await user.click(screen.getByRole('button', { name: 'שמירה' }))
 
     await waitFor(() => {
@@ -781,12 +829,12 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     fireEvent.change(screen.getByLabelText('שעת כניסה'), { target: { value: '09:00' } })
     fireEvent.change(screen.getByLabelText('שעת יציאה'), { target: { value: '18:00' } })
     await user.click(screen.getByRole('button', { name: 'הוספת פרויקט' }))
-    await fillCard(user, 1, 'client-1:project-1', 'task-2', '4')
+    await fillCard(user, 1, 'client-1:project-1', 'task-2', '6')
     await user.click(screen.getByRole('button', { name: 'הוספת פרויקט' }))
     await fillClockCard(user, 2, 'client-3:project-3', '13:00', '16:00')
 
     const summary = screen.getByText('סיכום').closest<HTMLElement>('.manual-report__summary')
-    expect(within(summary!).getByText('סה״כ 7 שעות')).toBeInTheDocument()
+    expect(within(summary!).getByText('סה״כ 9 שעות')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'שמירה' }))
 
@@ -795,7 +843,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     })
     const body = batchBody(fetchMock)
     expect(body).toMatchObject({ startTime: '09:00', endTime: '18:00' })
-    expect(body.rows[0]).toMatchObject({ projectId: 'project-1', hours: 4 })
+    expect(body.rows[0]).toMatchObject({ projectId: 'project-1', hours: 6 })
     expect(body.rows[0]).not.toHaveProperty('rowStartTime')
     expect(body.rows[1]).toMatchObject({ projectId: 'project-3', rowStartTime: '13:00', rowEndTime: '16:00' })
     expect(body.rows[1]).not.toHaveProperty('hours')
@@ -834,7 +882,9 @@ describe('ManualReport', { timeout: 20_000 }, () => {
 
     renderScreen(vi.fn(), {
       initialDate: '2026-08-17',
-      initialReports: [savedRow({ rowStartTime: '10:00', rowEndTime: '13:00', hours: 3 })],
+      initialReports: [
+        savedRow({ rowStartTime: '10:00', rowEndTime: '13:00', hours: 3, startTime: '10:00', endTime: '13:00' }),
+      ],
     })
 
     expect(await screen.findByLabelText('כניסה 1')).toHaveValue('10:00')
@@ -865,7 +915,16 @@ describe('ManualReport', { timeout: 20_000 }, () => {
 
     renderScreen(vi.fn(), {
       initialDate: '2026-08-17',
-      initialReports: [savedRow({ clientId: 'client-3', projectId: 'project-3', taskId: 'task-4', hours: 4 })],
+      initialReports: [
+        savedRow({
+          clientId: 'client-3',
+          projectId: 'project-3',
+          taskId: 'task-4',
+          hours: 4,
+          startTime: '09:00',
+          endTime: '13:00',
+        }),
+      ],
     })
 
     const typed = await screen.findByLabelText('שעות 1')
@@ -895,7 +954,9 @@ describe('ManualReport', { timeout: 20_000 }, () => {
 
     renderScreen(vi.fn(), {
       initialDate: '2026-08-17',
-      initialReports: [savedRow({ rowStartTime: '10:00', rowEndTime: '13:00', hours: 3 })],
+      initialReports: [
+        savedRow({ rowStartTime: '10:00', rowEndTime: '13:00', hours: 3, startTime: '10:00', endTime: '13:00' }),
+      ],
     })
 
     await screen.findByLabelText('כניסה 1')
@@ -960,6 +1021,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     renderScreen(onClose)
     await user.click(await screen.findByRole('tab', { name: 'דיווח העדרות' }))
     await user.selectOptions(screen.getByLabelText('סוג היעדרות'), 'VACATION')
+    await user.click(screen.getByRole('button', { name: 'דיווח על היעדרות ליותר מיום אחד' }))
     fireEvent.change(screen.getByLabelText('מתאריך'), { target: { value: '2026-08-13' } })
     fireEvent.change(screen.getByLabelText('עד תאריך'), { target: { value: '2026-08-16' } })
 
@@ -979,6 +1041,235 @@ describe('ManualReport', { timeout: 20_000 }, () => {
       endDate: '2026-08-16',
     })
     await waitFor(() => expect(onClose).toHaveBeenCalled())
+  })
+
+  it('defaults the absence tab to one-day mode and reveals the end date only after the more-days link is clicked', async () => {
+    signIn()
+    mockFetch(() => ({ ok: true, status: 200, json: options }))
+    const user = userEvent.setup()
+
+    renderScreen()
+    await user.click(await screen.findByRole('tab', { name: 'דיווח העדרות' }))
+
+    expect(screen.getByLabelText('מתאריך')).toBeInTheDocument()
+    expect(screen.queryByLabelText('עד תאריך')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'דיווח על היעדרות ליותר מיום אחד' }))
+
+    expect(screen.getByLabelText('עד תאריך')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'דיווח על היעדרות ליותר מיום אחד' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'חזרה ליום אחד' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'חזרה ליום אחד' }))
+
+    expect(screen.queryByLabelText('עד תאריך')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'דיווח על היעדרות ליותר מיום אחד' })).toBeInTheDocument()
+  })
+
+  it('sends a single-day endDate after collapsing back from a filled range', async () => {
+    signIn()
+    const fetchMock = mockFetch((url, init) => {
+      if (String(url).includes('/absences') && init?.method === 'POST') {
+        return {
+          ok: true,
+          status: 201,
+          json: {
+            id: 'a3',
+            userId: 'u1',
+            type: 'VACATION',
+            startDate: '2026-08-13',
+            endDate: '2026-08-13',
+            halfDay: false,
+            workingDayCount: 1,
+          },
+        }
+      }
+      return { ok: true, status: 200, json: options }
+    })
+    const user = userEvent.setup()
+
+    renderScreen()
+    await user.click(await screen.findByRole('tab', { name: 'דיווח העדרות' }))
+    await user.selectOptions(screen.getByLabelText('סוג היעדרות'), 'VACATION')
+    await user.click(screen.getByRole('button', { name: 'דיווח על היעדרות ליותר מיום אחד' }))
+    fireEvent.change(screen.getByLabelText('מתאריך'), { target: { value: '2026-08-13' } })
+    fireEvent.change(screen.getByLabelText('עד תאריך'), { target: { value: '2026-08-16' } })
+    await user.click(screen.getByRole('button', { name: 'חזרה ליום אחד' }))
+    await user.click(screen.getByRole('button', { name: 'שמירה' }))
+
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(
+          ([url, init]) => String(url).includes('/absences') && (init as RequestInit).method === 'POST',
+        ),
+      ).toBe(true)
+    })
+    const call = fetchMock.mock.calls.find(
+      ([url, init]) => String(url).includes('/absences') && (init as RequestInit).method === 'POST',
+    )
+    expect(JSON.parse(String((call?.[1] as RequestInit).body))).toEqual({
+      type: 'VACATION',
+      startDate: '2026-08-13',
+      endDate: '2026-08-13',
+    })
+  })
+
+  it('posts a single-day absence with endDate equal to startDate when the more-days link is not used', async () => {
+    signIn()
+    const fetchMock = mockFetch((url, init) => {
+      if (String(url).includes('/absences') && init?.method === 'POST') {
+        return {
+          ok: true,
+          status: 201,
+          json: {
+            id: 'a2',
+            userId: 'u1',
+            type: 'SICK',
+            startDate: '2026-08-13',
+            endDate: '2026-08-13',
+            halfDay: false,
+            workingDayCount: 1,
+          },
+        }
+      }
+      return { ok: true, status: 200, json: options }
+    })
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+
+    renderScreen(onClose)
+    await user.click(await screen.findByRole('tab', { name: 'דיווח העדרות' }))
+    await user.selectOptions(screen.getByLabelText('סוג היעדרות'), 'SICK')
+    fireEvent.change(screen.getByLabelText('מתאריך'), { target: { value: '2026-08-13' } })
+    await user.click(screen.getByRole('button', { name: 'שמירה' }))
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
+    const call = fetchMock.mock.calls.find(([url, init]) => String(url).includes('/absences') && (init as RequestInit).method === 'POST')
+    expect(JSON.parse(String((call?.[1] as RequestInit).body))).toEqual({
+      type: 'SICK',
+      startDate: '2026-08-13',
+      endDate: '2026-08-13',
+    })
+  })
+
+  it('pre-fills a saved single-day absence and keeps the more-days link', async () => {
+    signIn()
+    mockFetch(() => ({ ok: true, status: 200, json: options }))
+    const user = userEvent.setup()
+
+    renderScreen(vi.fn(), {
+      initialDate: '2026-08-12',
+      initialAbsences: [
+        {
+          id: 'abs-9',
+          userId: 'u1',
+          type: 'SICK',
+          startDate: '2026-08-12',
+          endDate: '2026-08-12',
+          halfDay: false,
+          workingDayCount: 1,
+          attachments: [],
+        },
+      ],
+    })
+
+    await user.click(await screen.findByRole('tab', { name: 'דיווח העדרות' }))
+
+    expect(screen.getByLabelText('סוג היעדרות')).toHaveValue('SICK')
+    expect(screen.getByLabelText('מתאריך')).toHaveValue('2026-08-12')
+    expect(screen.queryByLabelText('עד תאריך')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'דיווח על היעדרות ליותר מיום אחד' })).toBeInTheDocument()
+  })
+
+  it('pre-fills a saved multi-day absence with the range already expanded', async () => {
+    signIn()
+    mockFetch(() => ({ ok: true, status: 200, json: options }))
+    const user = userEvent.setup()
+
+    renderScreen(vi.fn(), {
+      initialDate: '2026-08-14',
+      initialAbsences: [
+        {
+          id: 'abs-10',
+          userId: 'u1',
+          type: 'VACATION',
+          startDate: '2026-08-13',
+          endDate: '2026-08-16',
+          halfDay: false,
+          workingDayCount: 2,
+          attachments: [],
+        },
+      ],
+    })
+
+    await user.click(await screen.findByRole('tab', { name: 'דיווח העדרות' }))
+
+    expect(screen.getByLabelText('מתאריך')).toHaveValue('2026-08-13')
+    expect(screen.getByLabelText('עד תאריך')).toHaveValue('2026-08-16')
+    expect(screen.queryByRole('button', { name: 'דיווח על היעדרות ליותר מיום אחד' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'חזרה ליום אחד' })).toBeInTheDocument()
+  })
+
+  it('updates an existing absence via PATCH instead of creating a new one', async () => {
+    signIn()
+    const fetchMock = mockFetch((url, init) => {
+      if (String(url).includes('/absences/abs-11') && init?.method === 'PATCH') {
+        return {
+          ok: true,
+          status: 200,
+          json: {
+            id: 'abs-11',
+            userId: 'u1',
+            type: 'VACATION',
+            startDate: '2026-08-12',
+            endDate: '2026-08-12',
+            halfDay: false,
+            workingDayCount: 1,
+            attachments: [],
+          },
+        }
+      }
+      return { ok: true, status: 200, json: options }
+    })
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+
+    renderScreen(onClose, {
+      initialDate: '2026-08-12',
+      initialAbsences: [
+        {
+          id: 'abs-11',
+          userId: 'u1',
+          type: 'SICK',
+          startDate: '2026-08-12',
+          endDate: '2026-08-12',
+          halfDay: false,
+          workingDayCount: 1,
+          attachments: [],
+        },
+      ],
+    })
+
+    await user.click(await screen.findByRole('tab', { name: 'דיווח העדרות' }))
+    await user.selectOptions(screen.getByLabelText('סוג היעדרות'), 'VACATION')
+    await user.click(screen.getByRole('button', { name: 'שמירה' }))
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
+    expect(
+      fetchMock.mock.calls.some(
+        ([url, init]) => String(url).includes('/absences') && (init as RequestInit).method === 'POST',
+      ),
+    ).toBe(false)
+    const call = fetchMock.mock.calls.find(
+      ([url, init]) => String(url).includes('/absences/abs-11') && (init as RequestInit).method === 'PATCH',
+    )
+    expect(call).toBeDefined()
+    expect(JSON.parse(String((call?.[1] as RequestInit).body))).toEqual({
+      type: 'VACATION',
+      startDate: '2026-08-12',
+      endDate: '2026-08-12',
+      attachmentIds: [],
+    })
   })
 
   it('does not fetch when absence type is missing, and shows conflict dates from 409', async () => {
@@ -1003,6 +1294,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
 
     renderScreen()
     await user.click(await screen.findByRole('tab', { name: 'דיווח העדרות' }))
+    await user.click(screen.getByRole('button', { name: 'דיווח על היעדרות ליותר מיום אחד' }))
     fireEvent.change(screen.getByLabelText('מתאריך'), { target: { value: '2026-08-13' } })
     fireEvent.change(screen.getByLabelText('עד תאריך'), { target: { value: '2026-08-16' } })
     await user.click(screen.getByRole('button', { name: 'שמירה' }))
@@ -1017,5 +1309,14 @@ describe('ManualReport', { timeout: 20_000 }, () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('2026-08-13')
     expect(screen.getByRole('alert')).toHaveTextContent('התאריכים מתנגשים עם דיווח קיים')
+  })
+
+  it('hides the absence tab when an admin is editing another employee', async () => {
+    signIn()
+    mockFetch(() => ({ ok: true, status: 200, json: options }))
+    renderScreen(vi.fn(), { allowAbsenceTab: false })
+
+    expect(await screen.findByRole('button', { name: 'הוספת פרויקט' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'דיווח העדרות' })).not.toBeInTheDocument()
   })
 })

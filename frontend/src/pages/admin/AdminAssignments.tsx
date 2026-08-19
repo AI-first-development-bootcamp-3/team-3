@@ -90,7 +90,22 @@ function WorkerPills({ workers }: { workers: string[] }) {
           {name}
         </span>
       ))}
-      {extra > 0 ? <span className="admin-pill admin-pill--more">+{extra}</span> : null}
+      {extra > 0 ? (
+        <span
+          className="admin-pill admin-pill--more"
+          tabIndex={0}
+          aria-label={`כל העובדים: ${workers.join(', ')}`}
+        >
+          +{extra}
+          <span className="admin-pill__everyone" role="tooltip">
+            {workers.map((name, index) => (
+              <span key={`${name}-all-${index}`} className="admin-pill">
+                {name}
+              </span>
+            ))}
+          </span>
+        </span>
+      ) : null}
     </div>
   )
 }
