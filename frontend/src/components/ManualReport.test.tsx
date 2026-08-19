@@ -60,6 +60,7 @@ function renderScreen(
     initialDate?: string
     initialReports?: Parameters<typeof ManualReport>[0]['initialReports']
     initialAbsences?: Parameters<typeof ManualReport>[0]['initialAbsences']
+    headerMeta?: Parameters<typeof ManualReport>[0]['headerMeta']
     allowAbsenceTab?: boolean
   } = {},
 ) {
@@ -208,6 +209,32 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     renderScreen()
 
     expect(await screen.findByRole('button', { name: 'מחיקת דיווח' })).toBeDisabled()
+  })
+
+  it('shows the half-day status under the date without dropping מחיקת דיווח', async () => {
+    signIn()
+    mockFetch(() => ({ ok: true, status: 200, json: options }))
+
+    renderScreen(vi.fn(), {
+      initialDate: '2026-08-20',
+      headerMeta: { status: 'חצי יום חופשה 🏖️', tone: 'absence', tags: [] },
+      initialAbsences: [
+        {
+          id: 'a-half',
+          userId: 'u1',
+          type: 'VACATION',
+          startDate: '2026-08-20',
+          endDate: '2026-08-20',
+          halfDay: true,
+          workingDayCount: 0.5,
+          attachments: [],
+        },
+      ],
+    })
+
+    expect(await screen.findByText('חצי יום חופשה 🏖️')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'מחיקת דיווח' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'סגירה' })).toBeInTheDocument()
   })
 
   it('asks before deleting a saved day and does not call the API on cancel', async () => {

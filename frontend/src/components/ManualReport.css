@@ -45,19 +45,23 @@
 }
 
 .manual-report__top {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'date actions'
+    'tags tags';
   align-items: center;
-  justify-content: space-between;
-  gap: 32px;
+  column-gap: 12px;
+  row-gap: 8px;
   margin-bottom: 20px;
 }
 
 .manual-report__top-actions {
   display: flex;
+  grid-area: actions;
   flex-shrink: 0;
   align-items: center;
-  gap: 16px;
-  margin-inline-start: 12px;
+  gap: 8px;
 }
 
 .manual-report__icon-btn {
@@ -74,7 +78,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 8px;
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -90,21 +94,22 @@
   opacity: 0.55;
 }
 
+.manual-report__delete-day-label {
+  display: none;
+}
+
 .manual-report__top-meta {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 16px;
-  min-width: 0;
+  display: contents;
 }
 
 .manual-report__header-tags {
   display: flex;
+  grid-area: tags;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-start;
   gap: 8px;
+  min-width: 0;
 }
 
 .manual-report__header-tag {
@@ -112,6 +117,7 @@
   flex-direction: row;
   align-items: center;
   gap: 4px;
+  max-width: 100%;
   padding: 5px 10px;
   border-radius: 100px;
   font-size: 15px;
@@ -162,8 +168,9 @@
 
 .manual-report__top-date {
   display: flex;
+  grid-area: date;
   align-items: center;
-  flex-shrink: 0;
+  min-width: 0;
 }
 
 .manual-report__date-picker {
@@ -197,7 +204,8 @@
 }
 
 .manual-report__date-error {
-  margin: -12px 0 16px;
+  grid-column: 1 / -1;
+  margin: 0;
   text-align: end;
 }
 
@@ -906,15 +914,11 @@
   .mr-project--desktop__pickers {
     grid-template-columns: 1fr;
   }
+}
 
-  .manual-report__top {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .manual-report__top-meta {
-    flex-direction: column-reverse;
-    align-items: stretch;
+@media (min-width: 720px) {
+  .manual-report__delete-day-label {
+    display: inline;
   }
 }
 
