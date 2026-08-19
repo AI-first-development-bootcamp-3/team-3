@@ -87,7 +87,14 @@ export function hoursToMinutes(hours: number): number {
   return Math.round(hours * 60);
 }
 
-export function allocationsFitWindow(startTime: string, endTime: string, allocations: number[]): boolean {
+export function allocationsFitWindow(
+  startTime: string,
+  endTime: string,
+  allocations: number[],
+  maxHours?: number,
+): boolean {
   const allocatedMinutes = allocations.reduce((sum, hours) => sum + hoursToMinutes(hours), 0);
-  return allocatedMinutes <= attendanceWindowMinutes(startTime, endTime);
+  const windowMinutes = attendanceWindowMinutes(startTime, endTime);
+  const capMinutes = maxHours !== undefined ? Math.min(windowMinutes, hoursToMinutes(maxHours)) : windowMinutes;
+  return allocatedMinutes <= capMinutes;
 }

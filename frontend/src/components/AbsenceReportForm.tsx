@@ -7,17 +7,19 @@ import { createAbsence, updateAbsence, uploadAttachment, type AttachmentMetadata
 import { countWorkingDays } from '../lib/workingDays'
 import type { Absence } from '../types'
 import {
-  ABSENCE_TYPE_LABELS,
-  ABSENCE_TYPES,
+  ABSENCE_FORM_KIND_LABELS,
+  ABSENCE_FORM_KINDS,
+  absenceFormKindFromAbsence,
+  absencePayloadFromKind,
   absenceReportSchema,
-  employeeAbsenceType,
+  type AbsenceFormKind,
   type AbsenceReportInput,
   type AbsenceReportValues,
 } from './AbsenceReport.schema'
 
 interface Props {
   onClose: () => void
-  onSaved?: () => void
+  onSaved?: (result?: { halfDay: boolean }) => void
   defaultStartDate?: string
   existingAbsence?: Absence
 }
@@ -63,7 +65,7 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
   } = useForm<AbsenceReportInput, unknown, AbsenceReportValues>({
     resolver: zodResolver(absenceReportSchema),
     defaultValues: {
-      type: employeeAbsenceType(existingAbsence?.type),
+      kind: absenceFormKindFromAbsence(existingAbsence),
       startDate: existingAbsence?.startDate ?? defaultStartDate,
       endDate: existingAbsence && existingAbsence.startDate !== existingAbsence.endDate ? existingAbsence.endDate : '',
       documents: [],
@@ -71,10 +73,13 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
   })
   const startDate = useWatch({ control, name: 'startDate' }) ?? ''
   const endDate = useWatch({ control, name: 'endDate' }) ?? ''
+  const kind = (useWatch({ control, name: 'kind' }) ?? '') as AbsenceFormKind | ''
+  const halfDay = kind === 'VACATION_HALF'
   const workingDays = useMemo(
-    () => countWorkingDays(startDate, endDate || startDate),
-    [startDate, endDate],
+    () => (halfDay ? 0.5 : countWorkingDays(startDate, endDate || startDate)),
+    [endDate, halfDay, startDate],
   )
+  const kindOptions = isMultiDay ? ABSENCE_FORM_KINDS.filter((value) => value !== 'VACATION_HALF') : ABSENCE_FORM_KINDS
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || [])
@@ -99,6 +104,7 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
   const onSubmit = async (values: AbsenceReportValues) => {
     setBanner(null)
     try {
+
       setIsUploading(true)
 
       // Upload any pending files
@@ -120,10 +126,13 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
 
       setIsUploading(false)
 
+      const { type, halfDay: halfDayPayload } = absencePayloadFromKind(values.kind)
+
       const payload = {
-        type: values.type,
+        type,
         startDate: values.startDate,
         endDate: values.endDate || values.startDate,
+        halfDay: Boolean(halfDayPayload && !(values.endDate && values.endDate !== values.startDate)),
         ...(existingAbsence || attachmentIds.length > 0 ? { attachmentIds } : {}),
       }
       if (existingAbsence) {
@@ -131,10 +140,10 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
         message.success('ההיעדרות עודכנה בהצלחה')
       } else {
         await createAbsence(payload)
-        message.success('ההיעדרות נשמרה בהצלחה')
+        message.success(payload.halfDay ? 'חצי יום חופשה נשמר' : 'ההיעדרות נשמרה בהצלחה')
       }
-      onSaved?.()
-      onClose()
+      onSaved?.({ halfDay: payload.halfDay })
+      if (!payload.halfDay) onClose()
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
         setBanner(conflictCopy(error.body))
@@ -166,17 +175,17 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
       <div className="absence-report__fields">
         <label className="manual-report__field">
           <span className="manual-report__field-label">סוג היעדרות</span>
-          <select className="mr-project--desktop__select" aria-label="סוג היעדרות" {...register('type')}>
+          <select className="mr-project--desktop__select" aria-label="סוג היעדרות" {...register('kind')}>
             <option value="" disabled>
               בחר
             </option>
-            {ABSENCE_TYPES.map((type) => (
-              <option key={type} value={type}>
-                {ABSENCE_TYPE_LABELS[type]}
+            {kindOptions.map((option) => (
+              <option key={option} value={option}>
+                {ABSENCE_FORM_KIND_LABELS[option]}
               </option>
             ))}
           </select>
-          {errors.type ? <p className="manual-report__field-error">{errors.type.message}</p> : null}
+          {errors.kind ? <p className="manual-report__field-error">{errors.kind.message}</p> : null}
         </label>
         <label className="manual-report__field">
           <span className="manual-report__field-label">{isMultiDay ? 'מתאריך' : 'תאריך'}</span>
@@ -206,7 +215,10 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
           <button
             type="button"
             className="absence-report__more-days-link"
-            onClick={() => setIsMultiDay(true)}
+            onClick={() => {
+              setIsMultiDay(true)
+              if (kind === 'VACATION_HALF') setValue('kind', 'VACATION_FULL')
+            }}
           >
             דיווח על היעדרות ליותר מיום אחד
           </button>

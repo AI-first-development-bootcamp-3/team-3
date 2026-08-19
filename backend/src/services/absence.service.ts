@@ -54,9 +54,11 @@ function toAttachmentDto(row: {
   };
 }
 
+const HALF_DAY_WORKING_COUNT = 0.5;
+
 export async function createAbsence(
   userId: string,
-  input: { type: AbsenceType; startDate: string; endDate: string; attachmentIds?: string[] },
+  input: { type: AbsenceType; startDate: string; endDate: string; halfDay?: boolean; attachmentIds?: string[] },
 ): Promise<AbsenceDto> {
   await assertRangeUnlocked(input.startDate, input.endDate);
 
@@ -72,11 +74,13 @@ export async function createAbsence(
 
   const startUtc = calendarDateToUtc(input.startDate);
   const endUtc = calendarDateToUtc(input.endDate);
+  const halfDay = input.halfDay === true;
+
   const { hasConflict, conflicts } = await checkAbsenceConflicts({
     userId,
     startDate: startUtc,
     endDate: endUtc,
-    halfDay: false,
+    halfDay,
   });
 
   if (hasConflict) {
@@ -92,7 +96,7 @@ export async function createAbsence(
       type: input.type,
       startDate: startUtc,
       endDate: endUtc,
-      halfDay: false,
+      halfDay,
     },
   });
 
@@ -113,7 +117,7 @@ export async function createAbsence(
     startDate: toIsoDate(created.startDate),
     endDate: toIsoDate(created.endDate),
     halfDay: created.halfDay,
-    workingDayCount: count,
+    workingDayCount: created.halfDay ? HALF_DAY_WORKING_COUNT : count,
     attachments: attachments.map(toAttachmentDto),
   };
 }
@@ -152,7 +156,7 @@ export async function listAbsencesForMonth(
       startDate: startIso,
       endDate: endIso,
       halfDay: row.halfDay,
-      workingDayCount: count,
+      workingDayCount: row.halfDay ? HALF_DAY_WORKING_COUNT : count,
       attachments: row.documents.map(toAttachmentDto),
     };
   });
@@ -161,7 +165,13 @@ export async function listAbsencesForMonth(
 export async function updateAbsence(
   userId: string,
   absenceId: string,
-  input: { type: AbsenceType; startDate: string; endDate: string; attachmentIds?: string[] | undefined },
+  input: {
+    type: AbsenceType;
+    startDate: string;
+    endDate: string;
+    halfDay?: boolean;
+    attachmentIds?: string[] | undefined;
+  },
 ): Promise<AbsenceDto> {
   const existing = await prisma.absence.findFirst({ where: { id: absenceId, isActive: true } });
 
@@ -198,11 +208,13 @@ export async function updateAbsence(
 
   const startUtc = calendarDateToUtc(input.startDate);
   const endUtc = calendarDateToUtc(input.endDate);
+  const halfDay = input.type !== 'VACATION' ? false : (input.halfDay ?? existing.halfDay);
+
   const { hasConflict, conflicts } = await checkAbsenceConflicts({
     userId,
     startDate: startUtc,
     endDate: endUtc,
-    halfDay: false,
+    halfDay,
     excludeAbsenceId: absenceId,
   });
 
@@ -219,6 +231,7 @@ export async function updateAbsence(
       type: input.type,
       startDate: startUtc,
       endDate: endUtc,
+      halfDay,
     },
   });
 
@@ -249,7 +262,7 @@ export async function updateAbsence(
     startDate: toIsoDate(updated.startDate),
     endDate: toIsoDate(updated.endDate),
     halfDay: updated.halfDay,
-    workingDayCount: count,
+    workingDayCount: updated.halfDay ? HALF_DAY_WORKING_COUNT : count,
     attachments: attachments.map(toAttachmentDto),
   };
 }
@@ -275,4 +288,19 @@ export async function deleteAbsence(userId: string, absenceId: string): Promise<
     where: { id: absenceId },
     data: { isActive: false },
   });
+}
+
+export async function hasHalfDayVacationOnDate(userId: string, isoDate: string): Promise<boolean> {
+  const dayUtc = calendarDateToUtc(isoDate);
+  const row = await prisma.absence.findFirst({
+    where: {
+      userId,
+      type: 'VACATION',
+      halfDay: true,
+      startDate: { lte: dayUtc },
+      endDate: { gte: dayUtc },
+    },
+    select: { id: true },
+  });
+  return Boolean(row);
 }

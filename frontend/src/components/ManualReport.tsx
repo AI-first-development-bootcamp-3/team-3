@@ -50,9 +50,10 @@ import tagCheckGreen from '../assets/home/tag-check-green.svg'
 import tagAlertOrange from '../assets/home/tag-alert-orange.svg'
 import tagCloseBlue from '../assets/home/tag-close-blue.svg'
 import { DAY_STATUS_LABELS } from '../lib/dayStatusLabels'
+import { HALF_DAY_HOURS, isHalfDayVacation, STANDARD_DAY_HOURS, workHoursTarget } from '../lib/halfDay'
 import './ManualReport.css'
 
-const STANDARD_HOURS = 9
+const STANDARD_HOURS = STANDARD_DAY_HOURS
 
 const MISSING_DETAILS = {
   title: 'חסר לנו פרט או שניים',
@@ -391,9 +392,11 @@ function ManualReport({
     }
   }, [loadOptions])
 
+  const dayAbsences = initialAbsences ?? []
+  const halfVacation = dayAbsences.some(isHalfDayVacation)
   const dayTotal = useMemo(
-    () => attendanceWindowHours(day.dayStart ?? '', day.dayEnd ?? ''),
-    [day.dayStart, day.dayEnd],
+    () => workHoursTarget(attendanceWindowHours(day.dayStart ?? '', day.dayEnd ?? ''), halfVacation),
+    [day.dayEnd, day.dayStart, halfVacation],
   )
   const reported = useMemo(
     () => rows.reduce((total, row) => total + rowAllocatedHours(options, day.dayStart ?? '', row), 0),
@@ -401,7 +404,6 @@ function ManualReport({
   )
   const remaining = Math.max(dayTotal - reported, 0)
   const hasHierarchy = (options?.clients.length ?? 0) > 0
-  const dayAbsences = initialAbsences ?? []
   const hasSavedDay = (initialReports?.length ?? 0) > 0 || dayAbsences.length > 0
   const deleteCopy = dayDeleteCopy(dayAbsences, (initialReports?.length ?? 0) > 0)
   const header = deriveHeader(headerMeta, reported, dayTotal)
@@ -843,7 +845,15 @@ function ManualReport({
           {tabs}
           <AbsenceReportForm
             onClose={onClose}
-            onSaved={onSaved}
+            onSaved={(result) => {
+              onSaved?.()
+              if (!result?.halfDay) return
+              setReportTab('hours')
+              setBanner({
+                title: 'חצי יום חופשה נשמר',
+                detail: `יש להשלים ${HALF_DAY_HOURS} שעות עבודה ליום זה.`,
+              })
+            }}
             defaultStartDate={day.date || initialDate}
             existingAbsence={dayAbsences[0]}
           />
