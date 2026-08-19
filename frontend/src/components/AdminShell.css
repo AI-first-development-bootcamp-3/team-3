@@ -169,8 +169,9 @@
     z-index: 20;
     width: auto;
     flex-direction: row;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
+    overflow: visible;
     padding: 12px 16px;
   }
 
@@ -224,8 +225,15 @@
   }
 
   .admin-sidebar__profile {
+    position: relative;
+    z-index: 40;
     padding: 0;
     border-top: 0;
+  }
+
+  .admin-sidebar__profile .user-menu__panel {
+    top: calc(100% + 8px);
+    bottom: auto;
   }
 
   .admin-shell__main {

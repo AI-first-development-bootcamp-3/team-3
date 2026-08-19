@@ -113,4 +113,14 @@ describe('AdminShell', () => {
 
     expect(screen.getByRole('button', { name: 'תפריט ניהול' })).toHaveAttribute('aria-expanded', 'false')
   })
+
+  it('opens the account menu from the header avatar', async () => {
+    const user = userEvent.setup()
+    renderAdmin()
+
+    await user.click(screen.getByRole('button', { name: 'תפריט חשבון' }))
+
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'דיווח שעות' })).toBeInTheDocument()
+  })
 })
