@@ -56,8 +56,8 @@ export const updateAbsenceBodySchema = absenceWriteObject.transform((body) => ({
   type: body.type,
   startDate: body.startDate,
   endDate: body.endDate ?? body.startDate,
-  halfDay: body.halfDay,
-  attachmentIds: body.attachmentIds,
+  ...(body.halfDay !== undefined ? { halfDay: body.halfDay } : {}),
+  ...(body.attachmentIds !== undefined ? { attachmentIds: body.attachmentIds } : {}),
 }));
 
 export type UpdateAbsenceBody = z.infer<typeof updateAbsenceBodySchema>;
