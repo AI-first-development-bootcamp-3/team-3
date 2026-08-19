@@ -23,6 +23,7 @@ enum AbsenceType {
   SICK
   RESERVE_DUTY
   OTHER
+  HOLIDAY
 }
 
 enum TaskStatus {
@@ -198,6 +199,19 @@ model Absence {
 
   @@index([userId, isActive, startDate, endDate])
   @@map("absences")
+}
+
+/// Resolved Gregorian dates for in-scope Israeli paid public holidays (SCRUM-308).
+model IsraeliHoliday {
+  id     String   @id @default(uuid())
+  year   Int
+  date   DateTime @db.Date
+  code   String
+  nameHe String
+
+  @@unique([year, code])
+  @@unique([year, date])
+  @@map("israeli_holidays")
 }
 
 /// File bytes live outside PostgreSQL, behind the FileStorage interface —

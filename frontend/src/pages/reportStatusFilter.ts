@@ -9,7 +9,7 @@ import type { DemoDay } from './homeDemoData'
  * `DAY_STATUS_LABELS` and the absence labels from `ABSENCE_TYPE_LABELS`; none is
  * restated here, so the filter cannot drift from the pills it filters.
  *
- * Absence days are split by type, which `tone` alone cannot express — all four
+ * Absence days are split by type, which `tone` alone cannot express — they all
  * share `tone: 'absence'` — so those values carry the `AbsenceType` instead. The
  * two unions do not overlap.
  */
@@ -23,6 +23,7 @@ export const REPORT_STATUS_FILTERS: readonly ReportStatusFilter[] = [
   'partial',
   'weekend',
   ...ABSENCE_TYPES,
+  'HOLIDAY',
 ]
 
 export const REPORT_STATUS_FILTER_LABELS: Record<ReportStatusFilter, string> = {
