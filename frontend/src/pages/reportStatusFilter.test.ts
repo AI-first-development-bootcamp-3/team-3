@@ -21,6 +21,7 @@ const DAYS: DemoDay[] = [
   day('2026-08-13', 'missing'),
   day('2026-08-12', 'full'),
   day('2026-08-11', 'absence', 'VACATION'),
+  day('2026-08-10', 'absence', 'HOLIDAY'),
 ]
 
 describe('filterDaysByStatus', () => {
@@ -36,6 +37,7 @@ describe('filterDaysByStatus', () => {
   it('separates absence days by type rather than lumping them together', () => {
     expect(filterDaysByStatus(DAYS, 'SICK').map((d) => d.isoDate)).toEqual(['2026-08-14'])
     expect(filterDaysByStatus(DAYS, 'VACATION').map((d) => d.isoDate)).toEqual(['2026-08-11'])
+    expect(filterDaysByStatus(DAYS, 'HOLIDAY').map((d) => d.isoDate)).toEqual(['2026-08-10'])
     expect(filterDaysByStatus(DAYS, 'RESERVE_DUTY')).toEqual([])
     expect(filterDaysByStatus(DAYS, 'OTHER')).toEqual([])
   })
@@ -88,6 +90,7 @@ describe('filterDaysByStatus', () => {
       'SICK',
       'RESERVE_DUTY',
       'OTHER',
+      'HOLIDAY',
     ])
     expect(REPORT_STATUS_FILTER_LABELS.all).toBe('כל הדיווחים')
     // Both label sets are reused from their source, so they cannot drift from

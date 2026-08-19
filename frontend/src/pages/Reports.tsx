@@ -70,6 +70,7 @@ function headerFromDay(day: DemoDay): ManualReportHeaderMeta {
     status: day.status,
     tone: day.tone,
     tags: day.tags.map((tag) => ({ text: tag.text, icon: tag.icon })),
+    holiday: day.absenceType === 'HOLIDAY',
   }
 }
 
@@ -232,7 +233,9 @@ function Reports() {
                 <span>{day.date}</span>
               </div>
               <div className="home-shell__day-tags">
-                <span className={`home-shell__tag home-shell__tag--${day.tone}`}>
+                <span
+                  className={`home-shell__tag home-shell__tag--${day.tone}${day.absenceType === 'HOLIDAY' ? ' home-shell__tag--holiday' : ''}`}
+                >
                   {day.status}
                   {day.tone !== 'weekend' && day.tone !== 'absence' ? (
                     <img src={DEMO_STATUS_ICONS[day.tone]} alt="" />

@@ -10,6 +10,7 @@ import {
   ABSENCE_TYPE_LABELS,
   ABSENCE_TYPES,
   absenceReportSchema,
+  employeeAbsenceType,
   type AbsenceReportInput,
   type AbsenceReportValues,
 } from './AbsenceReport.schema'
@@ -61,7 +62,7 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
   } = useForm<AbsenceReportInput, unknown, AbsenceReportValues>({
     resolver: zodResolver(absenceReportSchema),
     defaultValues: {
-      type: existingAbsence?.type ?? '',
+      type: employeeAbsenceType(existingAbsence?.type),
       startDate: existingAbsence?.startDate ?? defaultStartDate,
       endDate: existingAbsence && existingAbsence.startDate !== existingAbsence.endDate ? existingAbsence.endDate : '',
       documents: [],

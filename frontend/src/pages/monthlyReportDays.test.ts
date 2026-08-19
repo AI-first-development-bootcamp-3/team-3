@@ -126,4 +126,26 @@ describe('buildHomeDays', () => {
     expect(days).toHaveLength(1)
     expect(days[0]?.tone).toBe('full')
   })
+
+  it('shows חג for a holiday absence instead of a missing work day', () => {
+    const days = buildHomeDays({
+      absences: [
+        {
+          id: 'a1',
+          userId: 'u1',
+          type: 'HOLIDAY',
+          startDate: '2026-04-01',
+          endDate: '2026-04-01',
+          halfDay: false,
+          workingDayCount: 1,
+          attachments: [],
+        },
+      ],
+    })
+
+    expect(days).toHaveLength(1)
+    expect(days[0]?.status).toBe('חג 🎉')
+    expect(days[0]?.tone).toBe('absence')
+    expect(days[0]?.absenceType).toBe('HOLIDAY')
+  })
 })

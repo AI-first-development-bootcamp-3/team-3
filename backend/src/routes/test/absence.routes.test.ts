@@ -10,6 +10,7 @@ import { Role } from '../../generated/prisma/enums.js';
 import { createAbsence, createAttachment, createTimeReport, createUser } from '../../test/factories.js';
 import { resetDatabase } from '../../test/resetDatabase.js';
 import { createAbsenceBodySchema, updateAbsenceBodySchema } from '../../types/absence.schema.js';
+import { ensureHolidayAbsencesForMonth } from '../../services/israeliHolidays.service.js';
 
 function tokenFor(user: { id: string; role: string }): string {
   return jwt.sign({ sub: user.id, role: user.role }, env.JWT_SECRET, { expiresIn: '1h' });
@@ -100,6 +101,30 @@ describe('POST /absences', () => {
 
     expect(response.status).toBe(400);
     expect(await prisma.absence.count()).toBe(0);
+  });
+
+  it('rejects HOLIDAY as a client-created type', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+
+    const response = await request(app)
+      .post('/absences')
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({ type: 'HOLIDAY', startDate: '2026-04-01' });
+
+    expect(response.status).toBe(400);
+    expect(await prisma.absence.count()).toBe(0);
+  });
+
+  it('rejects stacking vacation on a system holiday', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    await ensureHolidayAbsencesForMonth(2026, 4);
+
+    const response = await request(app)
+      .post('/absences')
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({ type: 'VACATION', startDate: '2026-04-02' });
+
+    expect(response.status).toBe(409);
   });
 
   it('rejects an absence in a locked month with 409', async () => {
@@ -193,6 +218,23 @@ describe('GET /absences', () => {
     const response = await request(app).get('/absences').query({ month: 8, year: 2026 });
 
     expect(response.status).toBe(401);
+  });
+
+  it('materializes weekday חג rows when listing an unlocked month', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+
+    const response = await request(app)
+      .get('/absences')
+      .query({ month: 4, year: 2026 })
+      .set('Authorization', `Bearer ${tokenFor(employee)}`);
+
+    expect(response.status).toBe(200);
+    const holidays = response.body.absences.filter((row: { type: string }) => row.type === 'HOLIDAY');
+    expect(holidays.map((row: { startDate: string }) => row.startDate).sort()).toEqual([
+      '2026-04-02',
+      '2026-04-08',
+      '2026-04-22',
+    ]);
   });
 });
 
@@ -431,6 +473,21 @@ describe('DELETE /absences/:id', () => {
       where: { id: absence.id, isActive: undefined },
     });
     expect(stored?.isActive).toBe(false);
+  });
+
+  it('refuses to delete a system holiday absence', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    await ensureHolidayAbsencesForMonth(2026, 4);
+    const holiday = await prisma.absence.findFirst({
+      where: { userId: employee.id, type: 'HOLIDAY' },
+    });
+
+    const response = await request(app)
+      .delete(`/absences/${holiday?.id}`)
+      .set('Authorization', `Bearer ${tokenFor(employee)}`);
+
+    expect(response.status).toBe(403);
+    expect(await prisma.absence.count({ where: { id: holiday?.id } })).toBe(1);
   });
 
   it('rejects deleting an absence in a locked month with 409', async () => {
