@@ -49,7 +49,7 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
   const { message } = App.useApp()
   const [banner, setBanner] = useState<{ title: string; detail: string } | null>(null)
   const [uploadedFiles, setUploadedFiles] = useState<AttachmentMetadata[]>(existingAbsence?.attachments ?? [])
-  const [isUploading, setIsUploading] = useState(false)
+  const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [isMultiDay, setIsMultiDay] = useState(
     existingAbsence ? existingAbsence.startDate !== existingAbsence.endDate : false,
   )
@@ -80,28 +80,13 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
   )
   const kindOptions = isMultiDay ? ABSENCE_FORM_KINDS.filter((value) => value !== 'VACATION_HALF') : ABSENCE_FORM_KINDS
 
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || [])
     if (files.length === 0) return
 
-    setIsUploading(true)
-    const newUploadedFiles: AttachmentMetadata[] = []
+    setPendingFiles((prev) => [...prev, ...files])
+    message.info(`${files.length} file(s) ready to upload`)
 
-    for (const file of files) {
-      try {
-        const metadata = await uploadAttachment(file)
-        newUploadedFiles.push(metadata)
-      } catch {
-        message.error(`Failed to upload ${file.name}`)
-      }
-    }
-
-    if (newUploadedFiles.length > 0) {
-      setUploadedFiles((prev) => [...prev, ...newUploadedFiles])
-      message.success(`${newUploadedFiles.length} file(s) uploaded`)
-    }
-
-    setIsUploading(false)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -111,11 +96,31 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
     setUploadedFiles((prev) => prev.filter((f) => f.id !== fileId))
   }
 
+  const removePendingFile = (index: number) => {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index))
+  }
+
   const onSubmit = async (values: AbsenceReportValues) => {
     setBanner(null)
     try {
-      const attachmentIds = uploadedFiles.map((f) => f.id)
+      // Upload any pending files
+      const newAttachments: AttachmentMetadata[] = []
+      for (const file of pendingFiles) {
+        try {
+          const metadata = await uploadAttachment(file)
+          newAttachments.push(metadata)
+        } catch {
+          message.error(`Failed to upload ${file.name}`)
+          return
+        }
+      }
+
+      // Combine previously uploaded files with newly uploaded files
+      const allAttachments = [...uploadedFiles, ...newAttachments]
+      const attachmentIds = allAttachments.map((f) => f.id)
+
       const { type, halfDay: halfDayPayload } = absencePayloadFromKind(values.kind)
+
       const payload = {
         type,
         startDate: values.startDate,
@@ -222,7 +227,7 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
             type="button"
             className="absence-report__upload-button"
             onClick={() => fileInputRef.current?.click()}
-            disabled={isUploading}
+            disabled={isSubmitting}
           >
             <span className="absence-report__upload-icon">📄</span>
             <span className="absence-report__upload-text">יש לצרף תמונה או מסמך</span>
@@ -235,10 +240,10 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
             accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx,.txt"
             style={{ display: 'none' }}
             onChange={handleFileSelect}
-            disabled={isUploading}
+            disabled={isSubmitting}
           />
         </label>
-        {uploadedFiles.length > 0 && (
+        {(uploadedFiles.length > 0 || pendingFiles.length > 0) && (
           <div className="absence-report__uploaded-files">
             {uploadedFiles.map((file) => (
               <div key={file.id} className="absence-report__file-item">
@@ -248,6 +253,19 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
                   className="absence-report__file-remove"
                   onClick={() => removeFile(file.id)}
                   aria-label={`Remove ${file.filename}`}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            {pendingFiles.map((file, index) => (
+              <div key={`pending-${index}`} className="absence-report__file-item absence-report__file-item--pending">
+                <span className="absence-report__file-name">{file.name} (לא שומר עדיין)</span>
+                <button
+                  type="button"
+                  className="absence-report__file-remove"
+                  onClick={() => removePendingFile(index)}
+                  aria-label={`Remove ${file.name}`}
                 >
                   ✕
                 </button>

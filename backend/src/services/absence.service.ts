@@ -135,6 +135,7 @@ export async function listAbsencesForMonth(
   const rows = await prisma.absence.findMany({
     where: {
       userId,
+      isActive: true,
       startDate: { lt: rangeEnd },
       endDate: { gte: rangeStart },
     },
@@ -172,7 +173,7 @@ export async function updateAbsence(
     attachmentIds?: string[] | undefined;
   },
 ): Promise<AbsenceDto> {
-  const existing = await prisma.absence.findFirst({ where: { id: absenceId } });
+  const existing = await prisma.absence.findFirst({ where: { id: absenceId, isActive: true } });
 
   if (!existing) {
     throw AppError.notFound('Absence not found');
@@ -283,7 +284,10 @@ export async function deleteAbsence(userId: string, absenceId: string): Promise<
 
   await assertRangeUnlocked(toIsoDate(row.startDate), toIsoDate(row.endDate));
 
-  await prisma.absence.delete({ where: { id: absenceId } });
+  await prisma.absence.update({
+    where: { id: absenceId },
+    data: { isActive: false },
+  });
 }
 
 export async function hasHalfDayVacationOnDate(userId: string, isoDate: string): Promise<boolean> {
