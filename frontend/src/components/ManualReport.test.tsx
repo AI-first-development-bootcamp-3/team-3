@@ -60,6 +60,7 @@ function renderScreen(
     initialDate?: string
     initialReports?: Parameters<typeof ManualReport>[0]['initialReports']
     initialAbsences?: Parameters<typeof ManualReport>[0]['initialAbsences']
+    headerMeta?: Parameters<typeof ManualReport>[0]['headerMeta']
     allowAbsenceTab?: boolean
   } = {},
 ) {
