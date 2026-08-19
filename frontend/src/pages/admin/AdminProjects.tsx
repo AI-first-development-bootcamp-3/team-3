@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { Button, Tag } from 'antd'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import AdminEntityTable from '../../components/AdminEntityTable'
 import { listClients } from '../../services/adminClients'
@@ -42,22 +41,24 @@ function AdminProjects() {
       dataIndex: 'isActive',
       key: 'isActive',
       render: (isActive: boolean) => (
-        <Tag color={isActive ? 'green' : 'default'}>{isActive ? 'פעיל' : 'לא פעיל'}</Tag>
+        <span className={isActive ? 'admin-status admin-status--on' : 'admin-status admin-status--off'}>
+          {isActive ? 'פעיל' : 'לא פעיל'}
+        </span>
       ),
     },
     {
-      title: '',
+      title: 'פעולות',
       key: 'actions',
       render: (_: unknown, project: AdminProject) => (
-        <Button type="link" onClick={() => setEditing(project)}>
+        <button type="button" className="admin-link-btn" onClick={() => setEditing(project)}>
           עריכה
-        </Button>
+        </button>
       ),
     },
   ]
 
   return (
-    <section>
+    <section className="admin-page--fill">
       <div className="admin-page__head">
         <div className="admin-page__titles">
           <h1 className="admin-page__title">פרויקטים</h1>

@@ -1,20 +1,15 @@
-import { Button, Input } from 'antd'
-import type { TableProps } from 'antd'
-import { SearchOutlined } from '@ant-design/icons'
-import { useMemo, useState } from 'react'
-import type { ReactNode } from 'react'
-import AdminEntityTable from './AdminEntityTable'
+import { useMemo, useState, type ReactNode } from 'react'
+import AdminEntityTable, { type AdminTableColumn } from './AdminEntityTable'
+import '../pages/admin/AdminAssignments.css'
 
-interface AdminListPageProps<T> {
+interface AdminListPageProps<T extends object> {
   title: string
   description: string
   searchPlaceholder: string
   data: T[]
-  columns: TableProps<T>['columns']
-  /** Row-level match against the current search text (already lowercased). */
+  columns: AdminTableColumn<T>[]
   filter: (row: T, query: string) => boolean
   onCreate?: () => void
-  /** Rendered between the toolbar and the table, e.g. an inline create form. */
   children?: ReactNode
 }
 
@@ -36,35 +31,33 @@ function AdminListPage<T extends object>({
   }, [data, filter, searchText])
 
   return (
-    <div dir="rtl">
-      <div style={{ marginBottom: 24, display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-        <Button type="primary" style={{ minWidth: 106, height: 48 }} onClick={onCreate}>
-          יצירה
-        </Button>
-        <Input
-          placeholder={searchPlaceholder}
-          prefix={<SearchOutlined />}
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-          style={{ width: 400, height: 48 }}
-        />
-        <div style={{ textAlign: 'right', flex: 1 }}>
-          <h2 style={{ margin: '0 0 8px 0', fontSize: 24, fontWeight: 500 }}>{title}</h2>
-          <p style={{ margin: 0, fontSize: 14, color: '#666' }}>{description}</p>
+    <section className="admin-page--fill">
+      <div className="admin-page__head">
+        <div className="admin-page__titles">
+          <h1 className="admin-page__title">{title}</h1>
+          <p className="admin-page__lead">{description}</p>
+        </div>
+        <div className="admin-page__tools">
+          <label className="admin-search">
+            <input
+              type="search"
+              placeholder={searchPlaceholder}
+              value={searchText}
+              onChange={(event) => setSearchText(event.target.value)}
+            />
+          </label>
+          {onCreate ? (
+            <button type="button" className="admin-create__btn" onClick={onCreate}>
+              יצירה
+            </button>
+          ) : null}
         </div>
       </div>
 
       {children}
 
-      <AdminEntityTable
-        columns={columns}
-        dataSource={filteredData}
-        pagination={{ pageSize: 10, align: 'center' }}
-        style={{ direction: 'rtl' }}
-        size="middle"
-        bordered={false}
-      />
-    </div>
+      <AdminEntityTable columns={columns} dataSource={filteredData} />
+    </section>
   )
 }
 

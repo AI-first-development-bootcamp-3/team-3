@@ -184,4 +184,17 @@ describe('buildMonthKpis', () => {
     expect(kpis['ימי חופשה'].value).toBe('0.5')
     expect(kpis['דיווחים חסרים'].value).toBe('11')
   })
+
+  it('does not count a half vacation day as missing when more than 4.5 hours fill the window', () => {
+    const kpis = buildMonthKpis({
+      reports: [row({ hours: 9, durationHours: 9 })],
+      absences: [absence({ startDate: '2026-08-17', endDate: '2026-08-17', halfDay: true, workingDayCount: 0.5 })],
+      year: 2026,
+      month: 8,
+      today: '2026-08-17',
+    })
+
+    expect(kpis['ימי חופשה'].value).toBe('0.5')
+    expect(kpis['דיווחים חסרים'].value).toBe('11')
+  })
 })

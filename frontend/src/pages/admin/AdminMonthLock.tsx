@@ -18,10 +18,13 @@ const MONTH_NAMES = [
   'דצמבר',
 ]
 
+type PendingLock = { month: number; locked: boolean }
+
 function AdminMonthLock() {
   const queryClient = useQueryClient()
   const thisYear = new Date().getFullYear()
   const [year, setYear] = useState(thisYear)
+  const [pending, setPending] = useState<PendingLock | null>(null)
   const locksQuery = useQuery({
     queryKey: ['adminMonthLocks', year],
     queryFn: () => listMonthLocks(year),
@@ -40,8 +43,18 @@ function AdminMonthLock() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adminMonthLocks', year] }),
   })
 
+  const pendingLabel = pending ? `${MONTH_NAMES[pending.month - 1]} ${year}` : ''
+  const confirming = lockMutation.isPending || unlockMutation.isPending
+
+  const confirmPending = async () => {
+    if (!pending) return
+    if (pending.locked) await unlockMutation.mutateAsync(pending.month)
+    else await lockMutation.mutateAsync(pending.month)
+    setPending(null)
+  }
+
   return (
-    <section>
+    <section className="admin-page--fill">
       <div className="admin-page__head">
         <div className="admin-page__titles">
           <h1 className="admin-page__title">נעילת חודש</h1>
@@ -82,15 +95,11 @@ function AdminMonthLock() {
                   <td>{locked ? 'נעול' : 'פתוח'}</td>
                   <td>
                     {locked ? (
-                      <button
-                        type="button"
-                        className="admin-row-menu__btn"
-                        onClick={() => unlockMutation.mutate(month)}
-                      >
+                      <button type="button" className="admin-link-btn" onClick={() => setPending({ month, locked: true })}>
                         פתיחה
                       </button>
                     ) : (
-                      <button type="button" className="admin-create__btn" onClick={() => lockMutation.mutate(month)}>
+                      <button type="button" className="admin-create__btn" onClick={() => setPending({ month, locked: false })}>
                         נעילה
                       </button>
                     )}
@@ -101,6 +110,48 @@ function AdminMonthLock() {
           </tbody>
         </table>
       </div>
+
+      {pending ? (
+        <div
+          className="admin-modal-overlay"
+          role="presentation"
+          onClick={() => {
+            if (!confirming) setPending(null)
+          }}
+        >
+          <div
+            className="admin-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="month-lock-confirm-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="month-lock-confirm-title">
+              {pending.locked ? `לפתוח את חודש ${pendingLabel}?` : `לנעול את חודש ${pendingLabel}?`}
+            </h2>
+            <p className="admin-modal__hint">
+              {pending.locked
+                ? 'עובדים יוכלו שוב לדווח שעות והיעדרויות בחודש זה.'
+                : 'עובדים לא יוכלו לדווח שעות או היעדרויות בחודש זה עד שהחודש ייפתח מחדש.'}
+            </p>
+            <div className="admin-confirm-actions">
+              <button type="button" className="admin-confirm-actions__cancel" disabled={confirming} onClick={() => setPending(null)}>
+                ביטול
+              </button>
+              <button
+                type="button"
+                className={pending.locked ? 'admin-create__btn' : 'admin-confirm-actions__delete'}
+                disabled={confirming}
+                onClick={() => {
+                  void confirmPending()
+                }}
+              >
+                {pending.locked ? 'פתיחה' : 'נעילה'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }

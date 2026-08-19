@@ -14,6 +14,8 @@ import {
   type DeleteKind,
   type EditKind,
 } from './AdminFigmaDialogs'
+import AdminFloatingMenu from '../../components/AdminFloatingMenu'
+import AdminPillOverflow from '../../components/AdminPillOverflow'
 import './AdminAssignments.css'
 
 const PAGE_SIZE = 10
@@ -91,20 +93,13 @@ function WorkerPills({ workers }: { workers: string[] }) {
         </span>
       ))}
       {extra > 0 ? (
-        <span
-          className="admin-pill admin-pill--more"
-          tabIndex={0}
-          aria-label={`כל העובדים: ${workers.join(', ')}`}
-        >
-          +{extra}
-          <span className="admin-pill__everyone" role="tooltip">
-            {workers.map((name, index) => (
-              <span key={`${name}-all-${index}`} className="admin-pill">
-                {name}
-              </span>
-            ))}
-          </span>
-        </span>
+        <AdminPillOverflow count={extra} label={`כל העובדים: ${workers.join(', ')}`}>
+          {workers.map((name, index) => (
+            <span key={`${name}-all-${index}`} className="admin-pill">
+              {name}
+            </span>
+          ))}
+        </AdminPillOverflow>
       ) : null}
     </div>
   )
@@ -132,9 +127,9 @@ function AdminAssignments() {
 
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
-  const [createOpen, setCreateOpen] = useState(false)
+  const [createAnchor, setCreateAnchor] = useState<HTMLElement | null>(null)
   const [createKind, setCreateKind] = useState<CreateKind | null>(null)
-  const [rowMenu, setRowMenu] = useState<{ key: string; kind: 'edit' | 'delete' } | null>(null)
+  const [rowMenu, setRowMenu] = useState<{ key: string; kind: 'edit' | 'delete'; anchor: HTMLElement } | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ row: AssignmentRow; kind: DeleteKind } | null>(null)
   const [editTarget, setEditTarget] = useState<{ row: AssignmentRow; kind: EditKind } | null>(null)
   const [assignRow, setAssignRow] = useState<AssignmentRow | null>(null)
@@ -173,7 +168,7 @@ function AdminAssignments() {
       : 'אין מידע קיים עד כה'
 
   return (
-    <section>
+    <section className="admin-page--fill">
       <div className="admin-page__head">
         <div className="admin-page__titles">
           <h1 className="admin-page__title">שיוך עובד למשימה</h1>
@@ -193,26 +188,34 @@ function AdminAssignments() {
             />
           </label>
           <div className="admin-create">
-            <button type="button" className="admin-create__btn" onClick={() => setCreateOpen((open) => !open)}>
+            <button
+              type="button"
+              className="admin-create__btn"
+              aria-expanded={Boolean(createAnchor)}
+              onClick={(event) => {
+                const button = event.currentTarget
+                setCreateAnchor((current) => (current ? null : button))
+              }}
+            >
               יצירה
               <ChevronIcon />
             </button>
-            {createOpen ? (
-              <div className="admin-create__menu" role="menu">
+            {createAnchor ? (
+              <AdminFloatingMenu anchor={createAnchor} onClose={() => setCreateAnchor(null)}>
                 {CREATE_ITEMS.map((item) => (
                   <button
                     key={item}
                     type="button"
                     role="menuitem"
                     onClick={() => {
-                      setCreateOpen(false)
+                      setCreateAnchor(null)
                       setCreateKind(CREATE_KIND[item])
                     }}
                   >
                     {item}
                   </button>
                 ))}
-              </div>
+              </AdminFloatingMenu>
             ) : null}
           </div>
         </div>
@@ -251,13 +254,14 @@ function AdminAssignments() {
                         type="button"
                         className="admin-icon-btn admin-icon-btn--delete"
                         aria-label={`מחיקה ${row.client} ${row.project} ${row.task}`}
-                        onClick={() =>
+                        onClick={(event) => {
+                          const button = event.currentTarget
                           setRowMenu((current) =>
                             current?.key === row.key && current.kind === 'delete'
                               ? null
-                              : { key: row.key, kind: 'delete' },
+                              : { key: row.key, kind: 'delete', anchor: button },
                           )
-                        }
+                        }}
                       >
                         <TrashIcon />
                       </button>
@@ -265,18 +269,22 @@ function AdminAssignments() {
                         type="button"
                         className="admin-icon-btn admin-icon-btn--edit"
                         aria-label={`עריכה ${row.client} ${row.project} ${row.task}`}
-                        onClick={() =>
+                        onClick={(event) => {
+                          const button = event.currentTarget
                           setRowMenu((current) =>
                             current?.key === row.key && current.kind === 'edit'
                               ? null
-                              : { key: row.key, kind: 'edit' },
+                              : { key: row.key, kind: 'edit', anchor: button },
                           )
-                        }
+                        }}
                       >
                         <PencilIcon />
                       </button>
                       {rowMenu?.key === row.key ? (
-                        <div className="admin-row-menu" role="menu">
+                        <AdminFloatingMenu
+                          anchor={rowMenu.anchor}
+                          onClose={() => setRowMenu(null)}
+                        >
                           {(rowMenu.kind === 'edit' ? EDIT_ITEMS : DELETE_ITEMS).map((item) => (
                             <button
                               key={item}
@@ -296,7 +304,7 @@ function AdminAssignments() {
                               {item}
                             </button>
                           ))}
-                        </div>
+                        </AdminFloatingMenu>
                       ) : null}
                     </div>
                   </td>

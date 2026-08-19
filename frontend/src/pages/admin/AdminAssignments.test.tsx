@@ -303,9 +303,10 @@ describe('AdminAssignments', () => {
 
     const overflow = screen.getByLabelText(/כל העובדים/)
     await user.hover(overflow)
-    expect(within(overflow).getByText('שירי כהן נפטלי')).toBeInTheDocument()
-    expect(within(overflow).getByText('יואב ישראלי בכר')).toBeInTheDocument()
-    expect(within(overflow).getByText('רז לוי')).toBeInTheDocument()
+    const tooltip = await screen.findByRole('tooltip')
+    expect(within(tooltip).getByText('שירי כהן נפטלי')).toBeInTheDocument()
+    expect(within(tooltip).getByText('יואב ישראלי בכר')).toBeInTheDocument()
+    expect(within(tooltip).getByText('רז לוי')).toBeInTheDocument()
   })
 
   it('filters rows by employee name', async () => {

@@ -7,6 +7,7 @@ import {
   type ProjectRowValues,
 } from './ManualReport.schema'
 import { LOCATION_OPTIONS } from './ManualReport.constants'
+import ManualReportSelect from './ManualReportSelect'
 import trashIcon from '../assets/manual-report/desktop/trash.svg'
 
 export type RowErrors = Partial<Record<keyof ProjectRowValues, string>>
@@ -39,15 +40,6 @@ function hoursLabel(value: number): string {
   return `${Number.isInteger(value) ? value : value.toFixed(1)} שעות`
 }
 
-function PlaceholderOption({ show }: { show: boolean }) {
-  if (!show) return null
-  return (
-    <option value="" disabled hidden>
-      בחר
-    </option>
-  )
-}
-
 function ManualReportProjectCard({
   index,
   variant = 'desktop',
@@ -76,72 +68,54 @@ function ManualReportProjectCard({
     <article className="mr-project--desktop">
       <div className="mr-project--desktop__head">
         <button type="button" className="mr-project--desktop__delete" onClick={onRemove}>
-          <img src={trashIcon} alt="" width={20} height={20} />
           מחיקת פרויקט
+          <img src={trashIcon} alt="" width={20} height={20} />
         </button>
         <h3 className="mr-project--desktop__title">{`פרויקט מס׳ ${index + 1}`}</h3>
       </div>
 
       <div className="mr-project--desktop__pickers">
-        <label className="mr-project--desktop__pick-col">
+        <div className="mr-project--desktop__pick-col">
           <span className="mr-project--desktop__pick-label">פרויקט</span>
-          <select
-            className={`mr-project--desktop__select${projectKey ? ' mr-project--desktop__select--filled' : ''}`}
-            aria-label={`פרויקט ${index + 1}`}
+          <ManualReportSelect
+            ariaLabel={`פרויקט ${index + 1}`}
             value={projectKey}
-            onChange={(event) => {
-              const [clientId, projectId] = event.target.value.split(':')
+            options={options.clients.flatMap((client) =>
+              client.projects.map((project) => ({
+                value: `${client.id}:${project.id}`,
+                label: project.name,
+              })),
+            )}
+            onChange={(next) => {
+              const [clientId, projectId] = next.split(':')
               onProjectChange(clientId ?? '', projectId ?? '')
             }}
-          >
-            <PlaceholderOption show={!projectKey} />
-            {options.clients.flatMap((client) =>
-              client.projects.map((project) => (
-                <option key={project.id} value={`${client.id}:${project.id}`}>
-                  {project.name}
-                </option>
-              )),
-            )}
-          </select>
+          />
           {errors.projectId ? <p className="mr-project--desktop__error">{errors.projectId}</p> : null}
-        </label>
+        </div>
 
-        <label className="mr-project--desktop__pick-col">
+        <div className="mr-project--desktop__pick-col">
           <span className="mr-project--desktop__pick-label">משימה</span>
-          <select
-            className={`mr-project--desktop__select${values.taskId ? ' mr-project--desktop__select--filled' : ''}`}
-            aria-label={`משימה ${index + 1}`}
+          <ManualReportSelect
+            ariaLabel={`משימה ${index + 1}`}
             value={values.taskId}
             disabled={!values.projectId}
-            onChange={(event) => onTaskChange(event.target.value)}
-          >
-            <PlaceholderOption show={!values.taskId} />
-            {tasks.map((task) => (
-              <option key={task.id} value={task.id}>
-                {task.name}
-              </option>
-            ))}
-          </select>
+            options={tasks.map((task) => ({ value: task.id, label: task.name }))}
+            onChange={onTaskChange}
+          />
           {errors.taskId ? <p className="mr-project--desktop__error">{errors.taskId}</p> : null}
-        </label>
+        </div>
 
-        <label className="mr-project--desktop__pick-col">
+        <div className="mr-project--desktop__pick-col">
           <span className="mr-project--desktop__pick-label">מיקום</span>
-          <select
-            className={`mr-project--desktop__select${values.workLocation ? ' mr-project--desktop__select--filled' : ''}`}
-            aria-label={`מיקום ${index + 1}`}
+          <ManualReportSelect
+            ariaLabel={`מיקום ${index + 1}`}
             value={values.workLocation}
-            onChange={(event) => onLocationChange(event.target.value as WorkLocation | '')}
-          >
-            <PlaceholderOption show={!values.workLocation} />
-            {LOCATION_OPTIONS.map((location) => (
-              <option key={location.value} value={location.value}>
-                {location.label}
-              </option>
-            ))}
-          </select>
-            {errors.workLocation ? <p className="mr-project--desktop__error">{errors.workLocation}</p> : null}
-        </label>
+            options={LOCATION_OPTIONS.map((location) => ({ value: location.value, label: location.label }))}
+            onChange={(next) => onLocationChange(next as WorkLocation | '')}
+          />
+          {errors.workLocation ? <p className="mr-project--desktop__error">{errors.workLocation}</p> : null}
+        </div>
 
         {clockInOut ? (
           <>

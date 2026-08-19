@@ -4,6 +4,18 @@
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 20px;
+  flex-shrink: 0;
+}
+
+.admin-page--fill {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.admin-page--fill > *:not(.admin-table-wrap) {
+  flex-shrink: 0;
 }
 
 .admin-page__titles {
@@ -66,6 +78,12 @@
   color: #8a8f99;
 }
 
+.admin-search__label {
+  color: #8a8f99;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 .admin-create {
   position: relative;
 }
@@ -86,19 +104,18 @@
   cursor: pointer;
 }
 
-.admin-create__menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  inset-inline-start: 0;
-  z-index: 20;
+.admin-floating-menu {
   min-width: 220px;
+  max-width: min(320px, calc(100vw - 16px));
+  max-height: min(320px, calc(100svh - 16px));
+  overflow: auto;
   padding: 8px;
   border-radius: 12px;
   background: #fff;
   box-shadow: 0 8px 24px rgb(27 42 74 / 12%);
 }
 
-.admin-create__menu button {
+.admin-floating-menu button {
   display: block;
   width: 100%;
   padding: 10px 12px;
@@ -112,12 +129,43 @@
   cursor: pointer;
 }
 
-.admin-create__menu button:hover,
-.admin-row-menu button:hover {
+.admin-floating-menu button:hover {
   background: #eef3ff;
 }
 
+.admin-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.admin-status--on {
+  background: #e3f9ca;
+  color: #106103;
+}
+
+.admin-status--off {
+  background: #f0f1f4;
+  color: #8a8f99;
+}
+
+.admin-link-btn {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #2f6bff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .admin-table-wrap {
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   border-radius: 12px;
   background: #fff;
@@ -137,6 +185,10 @@
   font-weight: 700;
   text-align: right;
   white-space: nowrap;
+}
+
+.admin-table__th--sort {
+  cursor: pointer;
 }
 
 .admin-table td {
@@ -210,24 +262,19 @@
 }
 
 .admin-pill__everyone {
-  display: none;
-  position: absolute;
-  top: calc(100% + 6px);
-  inset-inline-end: 0;
-  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
   min-width: 200px;
   max-width: 320px;
   padding: 8px;
   border-radius: 12px;
   background: #fff;
   box-shadow: 0 8px 24px rgb(27 42 74 / 12%);
-  flex-wrap: wrap;
-  gap: 6px;
 }
 
-.admin-pill--more:hover .admin-pill__everyone,
-.admin-pill--more:focus-visible .admin-pill__everyone {
-  display: flex;
+.admin-pill__everyone--floating {
+  z-index: 90;
 }
 
 .admin-row-menu {
