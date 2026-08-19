@@ -4,6 +4,7 @@ import { prisma } from '../config/prisma.js';
 import { AbsenceType, Role } from '../generated/prisma/enums.js';
 import type {
   AbsenceModel,
+  AttachmentModel,
   ClientModel,
   ProjectModel,
   TaskAssignmentModel,
@@ -171,6 +172,23 @@ export async function createAbsence(
       endDate: overrides.endDate ?? new Date('2026-08-16T00:00:00.000Z'),
       ...(overrides.halfDay !== undefined ? { halfDay: overrides.halfDay } : {}),
       ...(overrides.isActive !== undefined ? { isActive: overrides.isActive } : {}),
+    },
+  });
+}
+
+export async function createAttachment(
+  overrides: Partial<
+    Pick<AttachmentModel, 'filename' | 'mimeType' | 'sizeBytes' | 'storageKey' | 'uploaderId' | 'absenceId'>
+  > = {},
+): Promise<AttachmentModel> {
+  return prisma.attachment.create({
+    data: {
+      filename: overrides.filename ?? `file-${crypto.randomUUID()}.pdf`,
+      mimeType: overrides.mimeType ?? 'application/pdf',
+      sizeBytes: overrides.sizeBytes ?? 1024,
+      storageKey: overrides.storageKey ?? `test/${crypto.randomUUID()}`,
+      uploaderId: overrides.uploaderId ?? (await createUser()).id,
+      ...(overrides.absenceId !== undefined ? { absenceId: overrides.absenceId } : {}),
     },
   });
 }

@@ -842,6 +842,7 @@ function ManualReport({
             onClose={onClose}
             onSaved={onSaved}
             defaultStartDate={day.date || initialDate}
+            existingAbsence={dayAbsences[0]}
           />
         </div>
       )}

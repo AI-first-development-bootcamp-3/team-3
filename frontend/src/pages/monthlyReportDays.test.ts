@@ -95,6 +95,7 @@ describe('buildHomeDays', () => {
           endDate: '2026-08-12',
           halfDay: false,
           workingDayCount: 1,
+          attachments: [],
         },
       ],
       weekendDates: ['2026-08-14', '2026-08-15'],
@@ -117,6 +118,7 @@ describe('buildHomeDays', () => {
           endDate: '2026-08-12',
           halfDay: false,
           workingDayCount: 1,
+          attachments: [],
         },
       ],
     })
