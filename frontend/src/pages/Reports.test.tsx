@@ -231,6 +231,7 @@ describe('Reports home shell', () => {
             endDate: '2026-08-12',
             halfDay: false,
             workingDayCount: 1,
+            attachments: [],
           },
         ],
       },
@@ -644,6 +645,7 @@ describe('Reports home shell', () => {
                   endDate: '2026-08-20',
                   halfDay: false,
                   workingDayCount: 1,
+            attachments: [],
                 },
               ]
             : [],

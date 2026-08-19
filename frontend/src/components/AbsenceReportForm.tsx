@@ -111,7 +111,7 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
         type: values.type,
         startDate: values.startDate,
         endDate: values.endDate || values.startDate,
-        attachmentIds: attachmentIds.length > 0 ? attachmentIds : undefined,
+        ...(existingAbsence || attachmentIds.length > 0 ? { attachmentIds } : {}),
       }
       if (existingAbsence) {
         await updateAbsence(existingAbsence.id, payload)

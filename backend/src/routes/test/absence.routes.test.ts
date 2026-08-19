@@ -9,7 +9,7 @@ import { authGuardRateLimitStore } from '../../middleware/writeRateLimit.middlew
 import { Role } from '../../generated/prisma/enums.js';
 import { createAbsence, createAttachment, createTimeReport, createUser } from '../../test/factories.js';
 import { resetDatabase } from '../../test/resetDatabase.js';
-import { createAbsenceBodySchema } from '../../types/absence.schema.js';
+import { createAbsenceBodySchema, updateAbsenceBodySchema } from '../../types/absence.schema.js';
 
 function tokenFor(user: { id: string; role: string }): string {
   return jwt.sign({ sub: user.id, role: user.role }, env.JWT_SECRET, { expiresIn: '1h' });
@@ -33,6 +33,22 @@ describe('createAbsenceBodySchema', () => {
   it('rejects an unknown type', () => {
     const result = createAbsenceBodySchema.safeParse({ type: 'HOLIDAY', startDate: '2026-08-09' });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('updateAbsenceBodySchema', () => {
+  it('keeps attachmentIds undefined when the field is omitted', () => {
+    const parsed = updateAbsenceBodySchema.parse({ type: 'VACATION', startDate: '2026-08-09' });
+    expect(parsed.attachmentIds).toBeUndefined();
+  });
+
+  it('keeps an explicit empty attachmentIds array', () => {
+    const parsed = updateAbsenceBodySchema.parse({
+      type: 'VACATION',
+      startDate: '2026-08-09',
+      attachmentIds: [],
+    });
+    expect(parsed.attachmentIds).toEqual([]);
   });
 });
 
@@ -169,6 +185,7 @@ describe('GET /absences', () => {
       userId: employee.id,
       startDate: '2026-08-17',
       endDate: '2026-08-19',
+      attachments: [],
     });
   });
 
@@ -305,6 +322,81 @@ describe('PATCH /absences/:id', () => {
     );
     expect((await prisma.attachment.findUniqueOrThrow({ where: { id: dropped.id } })).absenceId).toBeNull();
     expect((await prisma.attachment.findUniqueOrThrow({ where: { id: added.id } })).absenceId).toBe(absence.id);
+  });
+
+  it('leaves current attachments when attachmentIds is omitted', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    const absence = await createAbsence({
+      userId: employee.id,
+      startDate: new Date('2026-08-16T00:00:00.000Z'),
+      endDate: new Date('2026-08-16T00:00:00.000Z'),
+    });
+    const kept = await createAttachment({ uploaderId: employee.id, absenceId: absence.id });
+
+    const response = await request(app)
+      .patch(`/absences/${absence.id}`)
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({ type: 'VACATION', startDate: '2026-08-16' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.attachments.map((a: { id: string }) => a.id)).toEqual([kept.id]);
+    expect((await prisma.attachment.findUniqueOrThrow({ where: { id: kept.id } })).absenceId).toBe(absence.id);
+  });
+
+  it('unlinks every attachment when attachmentIds is an empty array', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    const absence = await createAbsence({ userId: employee.id });
+    const dropped = await createAttachment({ uploaderId: employee.id, absenceId: absence.id });
+
+    const response = await request(app)
+      .patch(`/absences/${absence.id}`)
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({ type: 'VACATION', startDate: '2026-08-16', attachmentIds: [] });
+
+    expect(response.status).toBe(200);
+    expect(response.body.attachments).toEqual([]);
+    expect((await prisma.attachment.findUniqueOrThrow({ where: { id: dropped.id } })).absenceId).toBeNull();
+  });
+
+  it('rejects an update in a locked month with 409', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    const absence = await createAbsence({
+      userId: employee.id,
+      startDate: new Date('2026-08-09T00:00:00.000Z'),
+      endDate: new Date('2026-08-09T00:00:00.000Z'),
+    });
+    await prisma.monthLock.create({ data: { year: 2026, month: 8, lockedById: employee.id } });
+
+    const response = await request(app)
+      .patch(`/absences/${absence.id}`)
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({ type: 'VACATION', startDate: '2026-08-16' });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error.message).toBe('החודש נעול — לא ניתן לדווח');
+    expect((await prisma.absence.findFirstOrThrow({ where: { id: absence.id } })).startDate.toISOString()).toBe(
+      '2026-08-09T00:00:00.000Z',
+    );
+  });
+
+  it('rejects moving an absence into a locked month with 409', async () => {
+    const employee = await createUser({ role: Role.EMPLOYEE });
+    const absence = await createAbsence({
+      userId: employee.id,
+      startDate: new Date('2026-07-12T00:00:00.000Z'),
+      endDate: new Date('2026-07-12T00:00:00.000Z'),
+    });
+    await prisma.monthLock.create({ data: { year: 2026, month: 8, lockedById: employee.id } });
+
+    const response = await request(app)
+      .patch(`/absences/${absence.id}`)
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send({ type: 'VACATION', startDate: '2026-08-16' });
+
+    expect(response.status).toBe(409);
+    expect((await prisma.absence.findFirstOrThrow({ where: { id: absence.id } })).startDate.toISOString()).toBe(
+      '2026-07-12T00:00:00.000Z',
+    );
   });
 
   it('rejects an unauthenticated caller', async () => {

@@ -157,7 +157,7 @@ export async function listAbsencesForMonth(
 export async function updateAbsence(
   userId: string,
   absenceId: string,
-  input: { type: AbsenceType; startDate: string; endDate: string; attachmentIds?: string[] },
+  input: { type: AbsenceType; startDate: string; endDate: string; attachmentIds?: string[] | undefined },
 ): Promise<AbsenceDto> {
   const existing = await prisma.absence.findFirst({ where: { id: absenceId } });
 
@@ -168,6 +168,9 @@ export async function updateAbsence(
   if (existing.userId !== userId) {
     throw AppError.forbidden();
   }
+
+  await assertRangeUnlocked(toIsoDate(existing.startDate), toIsoDate(existing.endDate));
+  await assertRangeUnlocked(input.startDate, input.endDate);
 
   const startLocal = parseCalendarDate(input.startDate);
   const endLocal = parseCalendarDate(input.endDate);
@@ -205,17 +208,22 @@ export async function updateAbsence(
     },
   });
 
-  // Reconcile attachments to the submitted set: unlink anything dropped, link anything new.
-  const attachmentIds = input.attachmentIds ?? [];
-  await prisma.attachment.updateMany({
-    where: { absenceId, id: { notIn: attachmentIds } },
-    data: { absenceId: null },
-  });
-  if (attachmentIds.length > 0) {
-    await prisma.attachment.updateMany({
-      where: { id: { in: attachmentIds }, uploaderId: userId },
-      data: { absenceId },
-    });
+  if (input.attachmentIds !== undefined) {
+    if (input.attachmentIds.length === 0) {
+      await prisma.attachment.updateMany({
+        where: { absenceId },
+        data: { absenceId: null },
+      });
+    } else {
+      await prisma.attachment.updateMany({
+        where: { absenceId, id: { notIn: input.attachmentIds } },
+        data: { absenceId: null },
+      });
+      await prisma.attachment.updateMany({
+        where: { id: { in: input.attachmentIds }, uploaderId: userId },
+        data: { absenceId },
+      });
+    }
   }
 
   const attachments = await prisma.attachment.findMany({ where: { absenceId } });

@@ -107,8 +107,9 @@ absenceRouter.get(
  *     description: >
  *       Re-validates type/dates the same way `POST /absences` does, recomputes
  *       `workingDayCount`, and runs the conflict check excluding this absence's
- *       own current dates. `attachmentIds` is the full desired set of attached
- *       files - anything previously linked but omitted is unlinked.
+ *       own current dates. Locked months (current or new range) return 409.
+ *       When `attachmentIds` is sent it is the full desired set; omit the field
+ *       to leave current links unchanged, or send `[]` to unlink every file.
  *     tags: [Absences]
  *     security: [{ bearerAuth: [] }]
  *     parameters:
@@ -140,7 +141,7 @@ absenceRouter.get(
  *       404:
  *         description: No active absence with that id.
  *       409:
- *         description: Dates conflict with a different absence or reported work hours.
+ *         description: Dates conflict with another record, or the month is locked.
  *       429:
  *         description: Too many writes from this caller.
  */

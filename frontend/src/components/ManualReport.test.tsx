@@ -1213,6 +1213,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
       type: 'VACATION',
       startDate: '2026-08-12',
       endDate: '2026-08-12',
+      attachmentIds: [],
     })
   })
 
