@@ -159,6 +159,7 @@ function AdminShell() {
               className={({ isActive }) =>
                 isActive ? 'admin-sidebar__link admin-sidebar__link--active' : 'admin-sidebar__link'
               }
+              onClick={() => setMenuOpen(false)}
             >
               <span className="admin-sidebar__icon">
                 <Icon />

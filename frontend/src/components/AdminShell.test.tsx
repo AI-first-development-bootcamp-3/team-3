@@ -87,6 +87,7 @@ describe('AdminShell', () => {
     await user.click(toggle)
     expect(screen.getByRole('button', { name: 'סגירת תפריט ניהול' })).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByRole('button', { name: 'סגירת תפריט' })).toBeInTheDocument()
+    expect(document.querySelector('.admin-sidebar--open')).not.toBeNull()
 
     await user.click(screen.getByRole('link', { name: 'נעילת חודש' }))
     expect(screen.getByText('month lock page')).toBeInTheDocument()
