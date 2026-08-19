@@ -226,12 +226,14 @@ public holidays so they appear without using vacation.
 `nameHe`, civil `date`). Authenticated employees and admins; `400` if `year`
 is missing or out of range.
 
-`POST /absences` creates one full-day absence for the authenticated caller
+`POST /absences` creates one absence for the authenticated caller
 (`type` `VACATION` / `SICK` / `RESERVE_DUTY` / `OTHER`, `startDate`, optional
-inclusive `endDate`). Friday and Saturday are excluded from `workingDayCount`;
-a weekend-only range is `400`. Overlap with another absence or with reported
-work hours is `409` with per-date details. Attachments and half-day are later
-tickets. The same write rate limit as report POSTs applies.
+inclusive `endDate`, optional `halfDay`). `halfDay: true` is vacation on a
+single date only (4.5 of the 9-hour day; the other 4.5 must be reported as
+hours). Friday and Saturday are excluded from `workingDayCount`; a
+weekend-only range is `400`. Overlap with another absence or with reported
+work hours is `409` with per-date details. The same write rate limit as
+report POSTs applies.
 
 `DELETE /absences/:id` cancels that absence for the authenticated owner
 (`204`). The row is soft-deleted (`isActive` false) so it stays in history.

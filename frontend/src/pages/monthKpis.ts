@@ -1,5 +1,6 @@
 import { attendanceWindowHours } from '../components/ManualReport.schema'
 import { expandWorkingDayIsos, monthEndIso } from '../lib/workingDays'
+import { isHalfDayVacation, workHoursTarget } from '../lib/halfDay'
 import type { Absence, TimeReportListItem } from '../types'
 import type { DEMO_KPIS } from './homeDemoData'
 
@@ -41,6 +42,10 @@ function workingDaysDue(year: number, month: number, today: string): string[] {
   return expandWorkingDayIsos(start, end)
 }
 
+function absencesCoveringDate(absences: Absence[], isoDate: string): Absence[] {
+  return absences.filter((absence) => absence.startDate <= isoDate && absence.endDate >= isoDate)
+}
+
 function absenceDaysInMonth(absences: Absence[], prefix: string, type?: Absence['type']): Set<string> {
   const days = new Set<string>()
   for (const absence of absences) {
@@ -50,6 +55,18 @@ function absenceDaysInMonth(absences: Absence[], prefix: string, type?: Absence[
     }
   }
   return days
+}
+
+function vacationDaysUsed(absences: Absence[], prefix: string): number {
+  let total = 0
+  for (const absence of absences) {
+    if (absence.type !== 'VACATION') continue
+    for (const isoDate of expandWorkingDayIsos(absence.startDate, absence.endDate)) {
+      if (!isoDate.startsWith(prefix)) continue
+      total += absence.halfDay ? 0.5 : 1
+    }
+  }
+  return total
 }
 
 function reportsByDate(reports: TimeReportListItem[]): Map<string, TimeReportListItem[]> {
@@ -62,10 +79,19 @@ function reportsByDate(reports: TimeReportListItem[]): Map<string, TimeReportLis
   return byDate
 }
 
-function dayIsMissing(rows: TimeReportListItem[] | undefined): boolean {
+function dayIsMissing(
+  rows: TimeReportListItem[] | undefined,
+  covering: Absence[],
+): boolean {
+  const fullCover = covering.some((absence) => !absence.halfDay)
+  if (fullCover) return false
+  const halfVacation = covering.some(isHalfDayVacation)
   if (!rows || rows.length === 0) return true
   const first = rows[0]
-  const windowHours = first ? attendanceWindowHours(first.startTime, first.endTime) : 0
+  const windowHours = workHoursTarget(
+    first ? attendanceWindowHours(first.startTime, first.endTime) : 0,
+    halfVacation,
+  )
   const allocated = rows.reduce((sum, row) => sum + Number(row.hours || 0), 0)
   return !hoursMatchWindow(allocated, windowHours)
 }
@@ -79,24 +105,22 @@ export function buildMonthKpis(input: {
 }): MonthKpis {
   const prefix = monthPrefix(input.year, input.month)
   const dueDays = workingDaysDue(input.year, input.month, input.today)
-  const vacationDays = absenceDaysInMonth(input.absences, prefix, 'VACATION')
+  const vacationDays = vacationDaysUsed(input.absences, prefix)
   const sickDays = absenceDaysInMonth(input.absences, prefix, 'SICK')
-  const absenceDays = absenceDaysInMonth(input.absences, prefix)
   const byDate = reportsByDate(input.reports)
 
   const reportedHours = input.reports.reduce((sum, row) => sum + Number(row.hours || 0), 0)
 
   let missing = 0
   for (const isoDate of dueDays) {
-    if (absenceDays.has(isoDate)) continue
-    if (dayIsMissing(byDate.get(isoDate))) missing += 1
+    if (dayIsMissing(byDate.get(isoDate), absencesCoveringDate(input.absences, isoDate))) missing += 1
   }
 
   const projectIds = new Set(input.reports.map((row) => row.projectId).filter(Boolean))
 
   return {
     'שעות חודשיות': { value: formatHours(reportedHours), caption: `מתוך ${MONTHLY_HOURS_TARGET}` },
-    'ימי חופשה': { value: String(vacationDays.size), caption: 'נוצלו החודש' },
+    'ימי חופשה': { value: formatHours(vacationDays), caption: 'נוצלו החודש' },
     'ימי מחלה': { value: String(sickDays.size), caption: 'נוצלו החודש' },
     'דיווחים חסרים': { value: String(missing), caption: 'דיווחים שצריך לתת מענה' },
     'פרויקטים מדווחים': { value: String(projectIds.size), caption: 'פרויקטים מדווחים החודש' },

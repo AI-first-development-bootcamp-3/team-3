@@ -158,4 +158,30 @@ describe('buildMonthKpis', () => {
     // 2 Sun–Thu days through the 2nd, minus Pesach on the 1st.
     expect(kpis['דיווחים חסרים'].value).toBe('1')
   })
+
+  it('counts a half vacation day as 0.5 and still missing until 4.5 hours are reported', () => {
+    const kpis = buildMonthKpis({
+      reports: [],
+      absences: [absence({ startDate: '2026-08-17', endDate: '2026-08-17', halfDay: true, workingDayCount: 0.5 })],
+      year: 2026,
+      month: 8,
+      today: '2026-08-17',
+    })
+
+    expect(kpis['ימי חופשה'].value).toBe('0.5')
+    expect(kpis['דיווחים חסרים'].value).toBe('12')
+  })
+
+  it('does not count a half vacation day as missing once 4.5 hours are reported', () => {
+    const kpis = buildMonthKpis({
+      reports: [row({ hours: 4.5, durationHours: 4.5 })],
+      absences: [absence({ startDate: '2026-08-17', endDate: '2026-08-17', halfDay: true, workingDayCount: 0.5 })],
+      year: 2026,
+      month: 8,
+      today: '2026-08-17',
+    })
+
+    expect(kpis['ימי חופשה'].value).toBe('0.5')
+    expect(kpis['דיווחים חסרים'].value).toBe('11')
+  })
 })

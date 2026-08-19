@@ -12,6 +12,7 @@ const absenceWriteObject = z
     type: z.enum(EMPLOYEE_ABSENCE_TYPES),
     startDate: calendarDateSchema,
     endDate: calendarDateSchema.optional(),
+    halfDay: z.boolean().optional(),
     attachmentIds: z.array(z.string().uuid()).optional(),
   })
   .superRefine((body, ctx) => {
@@ -23,12 +24,28 @@ const absenceWriteObject = z
         message: 'End date must not be before start date',
       });
     }
+    if (!body.halfDay) return;
+    if (body.type !== 'VACATION') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['halfDay'],
+        message: 'Half-day is only allowed for vacation',
+      });
+    }
+    if (endDate !== body.startDate) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['halfDay'],
+        message: 'Half-day absences must be a single date',
+      });
+    }
   });
 
 export const createAbsenceBodySchema = absenceWriteObject.transform((body) => ({
   type: body.type,
   startDate: body.startDate,
   endDate: body.endDate ?? body.startDate,
+  halfDay: body.halfDay ?? false,
   attachmentIds: body.attachmentIds ?? [],
 }));
 
@@ -39,7 +56,8 @@ export const updateAbsenceBodySchema = absenceWriteObject.transform((body) => ({
   type: body.type,
   startDate: body.startDate,
   endDate: body.endDate ?? body.startDate,
-  attachmentIds: body.attachmentIds,
+  ...(body.halfDay !== undefined ? { halfDay: body.halfDay } : {}),
+  ...(body.attachmentIds !== undefined ? { attachmentIds: body.attachmentIds } : {}),
 }));
 
 export type UpdateAbsenceBody = z.infer<typeof updateAbsenceBodySchema>;

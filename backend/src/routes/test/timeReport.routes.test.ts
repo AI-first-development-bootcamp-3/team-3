@@ -11,6 +11,7 @@ import {
 } from '../../middleware/writeRateLimit.middleware.js';
 import { ReportFormat, Role } from '../../generated/prisma/enums.js';
 import {
+  createAbsence,
   createClient,
   createProject,
   createTask,
@@ -608,6 +609,46 @@ describe('POST /reports/batch', () => {
     expect(response.status).toBe(400);
     expect(response.body.error.code).toBe('HOURS_EXCEED_WINDOW');
     expect(await prisma.timeReport.count()).toBe(0);
+  });
+
+  it('rejects nine reported hours on a half-day vacation', async () => {
+    const employee = await createUser();
+    const hierarchy = await aHierarchy(employee);
+    await createAbsence({
+      userId: employee.id,
+      type: 'VACATION',
+      startDate: new Date('2026-08-17T00:00:00.000Z'),
+      endDate: new Date('2026-08-17T00:00:00.000Z'),
+      halfDay: true,
+    });
+
+    const response = await request(app)
+      .post('/reports/batch')
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send(dayBody([rowFor(hierarchy, { hours: 9 })]));
+
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('HOURS_EXCEED_WINDOW');
+  });
+
+  it('accepts 4.5 reported hours on a half-day vacation', async () => {
+    const employee = await createUser();
+    const hierarchy = await aHierarchy(employee);
+    await createAbsence({
+      userId: employee.id,
+      type: 'VACATION',
+      startDate: new Date('2026-08-17T00:00:00.000Z'),
+      endDate: new Date('2026-08-17T00:00:00.000Z'),
+      halfDay: true,
+    });
+
+    const response = await request(app)
+      .post('/reports/batch')
+      .set('Authorization', `Bearer ${tokenFor(employee)}`)
+      .send(dayBody([rowFor(hierarchy, { hours: 4.5 })]));
+
+    expect(response.status).toBe(201);
+    expect(response.body.reports[0].hours).toBe(4.5);
   });
 
   it('replaces the caller\'s previous rows for that date instead of appending', async () => {
