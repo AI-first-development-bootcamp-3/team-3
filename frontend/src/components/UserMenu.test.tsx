@@ -10,7 +10,7 @@ function renderMenu(path = '/') {
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/" element={<UserMenu />} />
-        <Route path="/admin" element={<UserMenu />} />
+        <Route path="/admin/assignments" element={<UserMenu />} />
         <Route path="/change-password" element={<div>password page</div>} />
       </Routes>
     </MemoryRouter>,
@@ -56,7 +56,7 @@ describe('UserMenu', () => {
     renderMenu('/')
 
     await user.click(screen.getByRole('button', { name: 'תפריט חשבון' }))
-    expect(screen.getByRole('menuitem', { name: 'ניהול' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'ניהול' })).toHaveAttribute('href', '/admin/assignments')
     expect(screen.queryByRole('menuitem', { name: 'דיווח שעות' })).not.toBeInTheDocument()
   })
 })

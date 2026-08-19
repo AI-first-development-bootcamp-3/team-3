@@ -17,7 +17,7 @@ function renderWithRoutes(initialEntries: Array<string | { pathname: string; sta
           }
         />
         <Route path="/" element={<div>Home page</div>} />
-        <Route path="/admin" element={<div>Admin page</div>} />
+        <Route path="/admin/assignments" element={<div>Admin page</div>} />
       </Routes>
     </MemoryRouter>,
   )

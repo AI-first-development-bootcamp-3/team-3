@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useLocation } from 'react-router-dom'
 import { logoutAndRedirect } from '../services/auth'
+import { ADMIN_HOME_PATH } from '../services/authPaths'
 import { sessionStore } from '../services/sessionStore'
 import './UserMenu.css'
 
@@ -84,7 +85,7 @@ function UserMenu() {
           ) : null}
 
           {isAdmin && !onAdmin ? (
-            <Link className="user-menu__item" role="menuitem" to="/admin" onClick={() => setOpen(false)}>
+            <Link className="user-menu__item" role="menuitem" to={ADMIN_HOME_PATH} onClick={() => setOpen(false)}>
               ניהול
             </Link>
           ) : null}

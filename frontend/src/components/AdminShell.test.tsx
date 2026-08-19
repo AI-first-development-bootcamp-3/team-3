@@ -24,8 +24,10 @@ function renderAdmin(path = '/admin/assignments') {
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/admin" element={<AdminShell />}>
-          <Route index element={<div>overview page</div>} />
           <Route path="assignments" element={<div>assignments page</div>} />
+          <Route path="clients" element={<div>clients page</div>} />
+          <Route path="projects" element={<div>projects page</div>} />
+          <Route path="tasks" element={<div>tasks page</div>} />
           <Route path="hour-settings" element={<div>hour settings page</div>} />
           <Route path="users" element={<div>users page</div>} />
           <Route path="reports" element={<div>employee reports page</div>} />
@@ -37,15 +39,18 @@ function renderAdmin(path = '/admin/assignments') {
 }
 
 describe('AdminShell', () => {
-  it('shows the Figma sidebar destinations and signed-in name', () => {
+  it('lists every admin destination in the sidebar and omits overview', () => {
     renderAdmin()
 
     const nav = screen.getByRole('navigation', { name: 'ניהול' })
-    expect(within(nav).getByRole('link', { name: 'סקירה' })).toHaveAttribute('href', '/admin')
+    expect(within(nav).queryByRole('link', { name: 'סקירה' })).not.toBeInTheDocument()
     expect(within(nav).getByRole('link', { name: 'ניהול לקוחות/פרויקטים' })).toHaveAttribute(
       'href',
       '/admin/assignments',
     )
+    expect(within(nav).getByRole('link', { name: 'לקוחות' })).toHaveAttribute('href', '/admin/clients')
+    expect(within(nav).getByRole('link', { name: 'פרויקטים' })).toHaveAttribute('href', '/admin/projects')
+    expect(within(nav).getByRole('link', { name: 'משימות' })).toHaveAttribute('href', '/admin/tasks')
     expect(within(nav).getByRole('link', { name: 'הגדרת דיווחי שעות' })).toHaveAttribute(
       'href',
       '/admin/hour-settings',
@@ -62,5 +67,12 @@ describe('AdminShell', () => {
 
     expect(screen.getByText('hour settings page')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'הגדרת דיווחי שעות' })).toHaveClass('admin-sidebar__link--active')
+  })
+
+  it('marks the matching sidebar row when opening clients', () => {
+    renderAdmin('/admin/clients')
+
+    expect(screen.getByText('clients page')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'לקוחות' })).toHaveClass('admin-sidebar__link--active')
   })
 })

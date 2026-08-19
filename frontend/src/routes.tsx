@@ -1,7 +1,6 @@
-import { createBrowserRouter } from 'react-router-dom'
+import { createBrowserRouter, Navigate } from 'react-router-dom'
 import Layout from './pages/Layout'
 import Reports from './pages/Reports'
-import AdminOverview from './pages/admin/AdminOverview'
 import AdminUsers from './pages/admin/AdminUsers'
 import AdminClients from './pages/admin/AdminClients'
 import AdminProjects from './pages/admin/AdminProjects'
@@ -17,6 +16,7 @@ import AdminShell from './components/AdminShell'
 import RequireAuth from './components/RequireAuth'
 import RequireRole from './components/RequireRole'
 import RequireGuest from './components/RequireGuest'
+import { ADMIN_HOME_PATH } from './services/authPaths'
 
 const router = createBrowserRouter([
   {
@@ -41,7 +41,7 @@ const router = createBrowserRouter([
           </RequireAuth>
         ),
         children: [
-          { index: true, element: <AdminOverview /> },
+          { index: true, element: <Navigate to={ADMIN_HOME_PATH} replace /> },
           { path: 'assignments', element: <AdminAssignments /> },
           { path: 'hour-settings', element: <AdminHourSettings /> },
           { path: 'month-lock', element: <AdminMonthLock /> },

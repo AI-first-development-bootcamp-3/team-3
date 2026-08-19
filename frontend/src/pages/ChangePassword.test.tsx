@@ -22,7 +22,7 @@ function renderPage() {
       <Routes>
         <Route path="/change-password" element={<ChangePassword />} />
         <Route path="/" element={<div>employee home</div>} />
-        <Route path="/admin" element={<div>admin home</div>} />
+        <Route path="/admin/assignments" element={<div>admin home</div>} />
       </Routes>
     </MemoryRouter>,
   )
