@@ -638,14 +638,15 @@ function ManualReport({
               type="button"
               className="manual-report__delete-day"
               disabled={!hasSavedDay}
-              title={hasSavedDay ? undefined : 'אין דיווח שמור למחוק'}
+              aria-label="מחיקת דיווח"
+              title={hasSavedDay ? 'מחיקת דיווח' : 'אין דיווח שמור למחוק'}
               onClick={() => {
                 if (!hasSavedDay) return
                 setBanner(null)
                 setPendingDayDelete(true)
               }}
             >
-              מחיקת דיווח
+              <span className="manual-report__delete-day-label">מחיקת דיווח</span>
               <img src={trashIcon} alt="" width={24} height={24} />
             </button>
             <button type="button" className="manual-report__icon-btn" onClick={onClose} aria-label="סגירה">
