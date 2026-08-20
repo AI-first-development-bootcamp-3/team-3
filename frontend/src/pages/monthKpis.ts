@@ -23,6 +23,14 @@ function hoursMatchWindow(allocated: number, windowHours: number): boolean {
   return windowHours > 0 && Math.abs(allocated - windowHours) < 0.1
 }
 
+function hoursShortOfTarget(allocated: number, target: number): boolean {
+  return target > 0 && allocated + 0.1 <= target + 1e-9
+}
+
+function hoursOverWindow(allocated: number, windowHours: number): boolean {
+  return windowHours > 0 && allocated > windowHours + 0.1
+}
+
 function dueEndIso(year: number, month: number, today: string): string {
   const end = monthEndIso(year, month)
   const start = `${monthPrefix(year, month)}-01`
@@ -88,11 +96,12 @@ function dayIsMissing(
   const halfVacation = covering.some(isHalfDayVacation)
   if (!rows || rows.length === 0) return true
   const first = rows[0]
-  const windowHours = workHoursTarget(
-    first ? attendanceWindowHours(first.startTime, first.endTime) : 0,
-    halfVacation,
-  )
+  const windowHours = first ? attendanceWindowHours(first.startTime, first.endTime) : 0
   const allocated = rows.reduce((sum, row) => sum + Number(row.hours || 0), 0)
+  if (halfVacation) {
+    const target = workHoursTarget(windowHours, true)
+    return hoursShortOfTarget(allocated, target) || hoursOverWindow(allocated, windowHours)
+  }
   return !hoursMatchWindow(allocated, windowHours)
 }
 

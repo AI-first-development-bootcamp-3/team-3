@@ -42,7 +42,7 @@ function AdminHourSettings() {
       : 'אין מידע קיים עד כה'
 
   return (
-    <section>
+    <section className="admin-page--fill">
       <div className="admin-page__head">
         <div className="admin-page__titles">
           <h1 className="admin-page__title">הגדרת דיווחי שעות</h1>

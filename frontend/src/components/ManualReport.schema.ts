@@ -50,6 +50,23 @@ export function derivedHoursFromMinutes(minutes: number): number {
   return Math.round((minutes / 60) * 10) / 10
 }
 
+/** Same rounding the server uses in `allocationsFitWindow`. */
+export function hoursToMinutes(hours: number): number {
+  return Math.round(hours * 60)
+}
+
+export function hoursExceedWindow(allocated: number, windowHours: number): boolean {
+  return hoursToMinutes(allocated) > hoursToMinutes(windowHours)
+}
+
+/** How many hours to drop so the day fits, in tenths. Never reports 0 when
+ * the minute totals actually overflow — that was the "reduce 0 hours" toast. */
+export function overflowHours(allocated: number, windowHours: number): number {
+  const extraMinutes = hoursToMinutes(allocated) - hoursToMinutes(windowHours)
+  if (extraMinutes <= 0) return 0
+  return Math.max(0.1, Math.round((extraMinutes / 60) * 10) / 10)
+}
+
 /** Hours a clock-in/out row contributes, or 0 when its pair is incomplete. */
 export function derivedRowHours(dayStart: string, rowStart: string, rowEnd: string): number {
   if (!HHMM.test(dayStart) || !HHMM.test(rowStart) || !HHMM.test(rowEnd)) return 0
@@ -155,7 +172,9 @@ function overlappingIndexes(rows: { index: number; interval: RowInterval }[]): n
  * against its own project's report format (design D7 — Zod cannot look the
  * format up on its own).
  */
-export function buildManualReportSchema(options: ReportingOptions | null | undefined) {
+export function buildManualReportSchema(
+  options: ReportingOptions | null | undefined,
+) {
   return z
     .object({
       date: z.string().min(1, 'יש לבחור תאריך').regex(/^\d{4}-\d{2}-\d{2}$/, 'תאריך בפורמט YYYY-MM-DD'),
@@ -212,7 +231,7 @@ export function buildManualReportSchema(options: ReportingOptions | null | undef
         ctx.addIssue({ code: 'custom', path: ['rows', index, 'rowStartTime'], message: ROWS_OVERLAP_MESSAGE })
       }
 
-      if (allocated > windowHours + 1e-9) {
+      if (hoursExceedWindow(allocated, windowHours)) {
         ctx.addIssue({
           code: 'custom',
           path: ['rows'],

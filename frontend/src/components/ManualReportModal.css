@@ -80,3 +80,21 @@
     animation: none;
   }
 }
+
+/* While the drawer is mounted, only its own scroll area may move. */
+html.mr-side-panel-open,
+html.mr-side-panel-open body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+html.mr-side-panel-open .reports-layout,
+html.mr-side-panel-open .home-shell {
+  overflow: hidden;
+  max-height: 100svh;
+}
+
+html.mr-side-panel-open .admin-shell__main {
+  overflow: hidden;
+  overscroll-behavior: none;
+}

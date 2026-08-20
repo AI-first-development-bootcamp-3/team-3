@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Button, Tag, notification } from 'antd'
+import { notification } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import AdminEntityTable from '../../components/AdminEntityTable'
 import AdminClientForm from '../../components/AdminClientForm'
 import { createClient, listClients, updateClient, type AdminClient } from '../../services/adminClients'
+import './AdminAssignments.css'
 
 function AdminClients() {
   const queryClient = useQueryClient()
@@ -39,23 +40,37 @@ function AdminClients() {
       title: 'סטטוס',
       dataIndex: 'isActive',
       key: 'isActive',
-      render: (isActive: boolean) => <Tag color={isActive ? 'green' : 'default'}>{isActive ? 'פעיל' : 'לא פעיל'}</Tag>,
+      render: (isActive: boolean) => (
+        <span className={isActive ? 'admin-status admin-status--on' : 'admin-status admin-status--off'}>
+          {isActive ? 'פעיל' : 'לא פעיל'}
+        </span>
+      ),
       sorter: (a: AdminClient, b: AdminClient) => Number(a.isActive) - Number(b.isActive),
     },
     {
-      title: '',
+      title: 'פעולות',
       key: 'actions',
       render: (_: unknown, client: AdminClient) => (
-        <Button type="link" onClick={() => setEditingClient(client)}>
+        <button type="button" className="admin-link-btn" onClick={() => setEditingClient(client)}>
           עריכה
-        </Button>
+        </button>
       ),
     },
   ]
 
   return (
-    <div dir="rtl">
-      <h1>לקוחות</h1>
+    <section className="admin-page--fill">
+      <div className="admin-page__head">
+        <div className="admin-page__titles">
+          <h1 className="admin-page__title">לקוחות</h1>
+          <p className="admin-page__lead">ניהול לקוחות, סטטוס פעילות ועריכת פרטים.</p>
+        </div>
+        <div className="admin-page__tools">
+          <button type="button" className="admin-create__btn" onClick={() => setShowCreateForm(!showCreateForm)}>
+            לקוח חדש
+          </button>
+        </div>
+      </div>
 
       {editingClient && (
         <AdminClientForm
@@ -63,8 +78,6 @@ function AdminClients() {
           initialValues={{ name: editingClient.name, contactDetails: editingClient.contactDetails ?? '' }}
           active={editingClient.isActive}
           onActiveChange={async (nextActive) => {
-            // Optimistic, but rolled back on failure - the toggle must not
-            // stay flipped when the server rejected the change.
             const previous = editingClient
             setEditingClient({ ...editingClient, isActive: nextActive })
             try {
@@ -93,12 +106,8 @@ function AdminClients() {
         />
       )}
 
-      <Button type="primary" onClick={() => setShowCreateForm(!showCreateForm)} style={{ marginBottom: 16 }}>
-        לקוח חדש
-      </Button>
-
       <AdminEntityTable columns={columns} dataSource={clients} rowKey="id" loading={isLoading} />
-    </div>
+    </section>
   )
 }
 

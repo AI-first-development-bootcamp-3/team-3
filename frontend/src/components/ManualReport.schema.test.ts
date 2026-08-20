@@ -3,6 +3,8 @@ import type { ReportingOptions } from '../types'
 import {
   attendanceWindowHours,
   buildManualReportSchema,
+  hoursExceedWindow,
+  overflowHours,
   ROW_OUTSIDE_WINDOW_MESSAGE,
   ROW_START_REQUIRED_MESSAGE,
   ROW_ZERO_LENGTH_MESSAGE,
@@ -118,6 +120,30 @@ describe('buildManualReportSchema', () => {
 
     expect(result.success).toBe(false)
     expect(fieldsOf(result)).toContain('rows')
+  })
+
+  it('accepts a sum that fills the window exactly, including hours typed as a string', () => {
+    expect(
+      schema.safeParse(aDay({ dayStart: '13:00', dayEnd: '18:00', rows: [sumRow({ hours: 5 })] })).success,
+    ).toBe(true)
+    expect(
+      schema.safeParse(aDay({ dayStart: '13:00', dayEnd: '18:00', rows: [sumRow({ hours: '5' })] })).success,
+    ).toBe(true)
+  })
+
+  it('accepts more than a half-day remainder when the hours still fit the clock window', () => {
+    expect(
+      schema.safeParse(aDay({ dayStart: '09:00', dayEnd: '18:00', rows: [sumRow({ hours: 9 })] })).success,
+    ).toBe(true)
+    expect(
+      schema.safeParse(aDay({ dayStart: '13:00', dayEnd: '18:00', rows: [sumRow({ hours: 5 })] })).success,
+    ).toBe(true)
+  })
+
+  it('does not treat an exact fill as overflow', () => {
+    expect(hoursExceedWindow(5, 5)).toBe(false)
+    expect(overflowHours(5, 5)).toBe(0)
+    expect(overflowHours(10, 9)).toBe(1)
   })
 
   it('accepts two rows that sit under the window', () => {

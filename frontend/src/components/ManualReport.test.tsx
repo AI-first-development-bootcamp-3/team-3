@@ -84,6 +84,24 @@ function signIn() {
     )
 }
 
+async function chooseSelect(
+  user: ReturnType<typeof userEvent.setup>,
+  label: string,
+  value: string,
+) {
+  const field = screen.getByLabelText(label)
+  if (field instanceof HTMLSelectElement) {
+    await user.selectOptions(field, value)
+    return
+  }
+  await user.click(field)
+  const option = document.querySelector(`[data-select-value="${CSS.escape(value)}"]`)
+  if (!(option instanceof HTMLElement)) {
+    throw new Error(`No dropdown option for ${label}=${value}`)
+  }
+  await user.click(option)
+}
+
 async function fillCard(
   user: ReturnType<typeof userEvent.setup>,
   index: number,
@@ -91,11 +109,11 @@ async function fillCard(
   taskValue: string | null,
   hours: string,
 ) {
-  await user.selectOptions(screen.getByLabelText(`פרויקט ${index}`), projectValue)
+  await chooseSelect(user, `פרויקט ${index}`, projectValue)
   if (taskValue) {
-    await user.selectOptions(screen.getByLabelText(`משימה ${index}`), taskValue)
+    await chooseSelect(user, `משימה ${index}`, taskValue)
   }
-  await user.selectOptions(screen.getByLabelText(`מיקום ${index}`), 'OFFICE')
+  await chooseSelect(user, `מיקום ${index}`, 'OFFICE')
   const hoursInput = screen.getByLabelText(`שעות ${index}`)
   await user.clear(hoursInput)
   await user.type(hoursInput, hours)
@@ -109,8 +127,8 @@ async function fillClockCard(
   rowStart: string,
   rowEnd: string,
 ) {
-  await user.selectOptions(screen.getByLabelText(`פרויקט ${index}`), projectValue)
-  await user.selectOptions(screen.getByLabelText(`מיקום ${index}`), 'OFFICE')
+  await chooseSelect(user, `פרויקט ${index}`, projectValue)
+  await chooseSelect(user, `מיקום ${index}`, 'OFFICE')
   fireEvent.change(screen.getByLabelText(`כניסה ${index}`), { target: { value: rowStart } })
   fireEvent.change(screen.getByLabelText(`יציאה ${index}`), { target: { value: rowEnd } })
 }
@@ -194,9 +212,9 @@ describe('ManualReport', { timeout: 20_000 }, () => {
       ],
     })
 
-    expect(await screen.findByLabelText('פרויקט 1')).toHaveValue('client-1:project-1')
-    expect(screen.getByLabelText('משימה 1')).toHaveValue('task-2')
-    expect(screen.getByLabelText('מיקום 1')).toHaveValue('HOME')
+    expect(await screen.findByLabelText('פרויקט 1')).toHaveAttribute('data-value', 'client-1:project-1')
+    expect(screen.getByLabelText('משימה 1')).toHaveAttribute('data-value', 'task-2')
+    expect(screen.getByLabelText('מיקום 1')).toHaveAttribute('data-value', 'HOME')
     expect(screen.getByLabelText('שעות 1')).toHaveValue('9')
     expect(screen.getByLabelText('פירוט 1')).toHaveValue('Existing')
     expect(screen.queryByText('עדיין אין פרויקטים מדווחים')).not.toBeInTheDocument()
@@ -211,7 +229,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     expect(await screen.findByRole('button', { name: 'מחיקת דיווח' })).toBeDisabled()
   })
 
-  it('shows the half-day status under the date without dropping מחיקת דיווח', async () => {
+  it('keeps מחיקת דיווח available for a half-day vacation without a status badge', async () => {
     signIn()
     mockFetch(() => ({ ok: true, status: 200, json: options }))
 
@@ -232,9 +250,169 @@ describe('ManualReport', { timeout: 20_000 }, () => {
       ],
     })
 
-    expect(await screen.findByText('חצי יום חופשה 🏖️')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'מחיקת דיווח' })).toBeEnabled()
+    expect(screen.queryByText('חצי יום חופשה 🏖️')).not.toBeInTheDocument()
+    expect(screen.queryByText('חלקי')).not.toBeInTheDocument()
+    expect(screen.queryByText('מלא')).not.toBeInTheDocument()
+    expect(screen.queryByText('חסר')).not.toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'מחיקת דיווח' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'סגירה' })).toBeInTheDocument()
+  })
+
+  it('shows the 09:00–18:00 window as 9 hours and the half-day remainder in סיכום', async () => {
+    signIn()
+    mockFetch(() => ({ ok: true, status: 200, json: options }))
+    const user = userEvent.setup()
+
+    renderScreen(vi.fn(), {
+      initialDate: '2026-08-20',
+      initialAbsences: [
+        {
+          id: 'a-half',
+          userId: 'u1',
+          type: 'VACATION',
+          startDate: '2026-08-20',
+          endDate: '2026-08-20',
+          halfDay: true,
+          workingDayCount: 0.5,
+          attachments: [],
+        },
+      ],
+    })
+
+    await user.click(await screen.findByRole('tab', { name: 'דיווח ידני' }))
+
+    expect(await screen.findByLabelText('סה״כ שעות')).toHaveTextContent('9 שעות')
+    expect(screen.getByText('0 מתוך 4.5 שעות')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('שעת כניסה'), { target: { value: '13:00' } })
+    fireEvent.change(screen.getByLabelText('שעת יציאה'), { target: { value: '18:00' } })
+
+    expect(screen.getByLabelText('סה״כ שעות')).toHaveTextContent('5 שעות')
+    expect(screen.getByText('0 מתוך 4.5 שעות')).toBeInTheDocument()
+  })
+
+  it('saves a full 09:00–18:00 day on a half-day vacation without treating 4.5 as a cap', async () => {
+    signIn()
+    const fetchMock = mockFetch((url) =>
+      url.includes('/reports/batch')
+        ? { ok: true, status: 201, json: { reports: [] } }
+        : { ok: true, status: 200, json: options },
+    )
+    const user = userEvent.setup()
+
+    renderScreen(vi.fn(), {
+      initialDate: '2026-08-20',
+      initialAbsences: [
+        {
+          id: 'a-half',
+          userId: 'u1',
+          type: 'VACATION',
+          startDate: '2026-08-20',
+          endDate: '2026-08-20',
+          halfDay: true,
+          workingDayCount: 0.5,
+          attachments: [],
+        },
+      ],
+    })
+
+    await user.click(await screen.findByRole('tab', { name: 'דיווח ידני' }))
+    await screen.findByRole('button', { name: 'הוספת פרויקט' })
+    fireEvent.change(screen.getByLabelText('שעת כניסה'), { target: { value: '09:00' } })
+    fireEvent.change(screen.getByLabelText('שעת יציאה'), { target: { value: '18:00' } })
+    await user.click(screen.getByRole('button', { name: 'הוספת פרויקט' }))
+    await fillCard(user, 1, 'client-1:project-1', 'task-2', '9')
+    await user.click(screen.getByRole('button', { name: 'שמירה' }))
+
+    const warning = await screen.findByRole('alert')
+    expect(warning).toHaveTextContent('דיווח מעל חצי יום חופשה')
+    expect(warning).toHaveTextContent('4.5')
+    expect(warning).toHaveTextContent('9')
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/reports/batch'))).toBe(false)
+
+    await user.click(screen.getByRole('button', { name: 'שמירה' }))
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/reports/batch'))).toBe(true)
+    })
+    expect(await screen.findByText('הדיווח נשמר בהצלחה')).toBeInTheDocument()
+  })
+
+  it('saves 4.5 hours on a half-day vacation without asking for confirmation', async () => {
+    signIn()
+    const fetchMock = mockFetch((url) =>
+      url.includes('/reports/batch')
+        ? { ok: true, status: 201, json: { reports: [] } }
+        : { ok: true, status: 200, json: options },
+    )
+    const user = userEvent.setup()
+
+    renderScreen(vi.fn(), {
+      initialDate: '2026-08-20',
+      initialAbsences: [
+        {
+          id: 'a-half',
+          userId: 'u1',
+          type: 'VACATION',
+          startDate: '2026-08-20',
+          endDate: '2026-08-20',
+          halfDay: true,
+          workingDayCount: 0.5,
+          attachments: [],
+        },
+      ],
+    })
+
+    await user.click(await screen.findByRole('tab', { name: 'דיווח ידני' }))
+    await screen.findByRole('button', { name: 'הוספת פרויקט' })
+    fireEvent.change(screen.getByLabelText('שעת כניסה'), { target: { value: '09:00' } })
+    fireEvent.change(screen.getByLabelText('שעת יציאה'), { target: { value: '18:00' } })
+    await user.click(screen.getByRole('button', { name: 'הוספת פרויקט' }))
+    await fillCard(user, 1, 'client-1:project-1', 'task-2', '4.5')
+    await user.click(screen.getByRole('button', { name: 'שמירה' }))
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/reports/batch'))).toBe(true)
+    })
+    expect(screen.queryByText('דיווח מעל חצי יום חופשה')).not.toBeInTheDocument()
+    expect(await screen.findByText('הדיווח נשמר בהצלחה')).toBeInTheDocument()
+  })
+
+  it('measures overflow against the entry-exit window, not the 4.5 hour half-day target', async () => {
+    signIn()
+    const fetchMock = mockFetch(() => ({ ok: true, status: 200, json: options }))
+    const user = userEvent.setup()
+
+    renderScreen(vi.fn(), {
+      initialDate: '2026-08-20',
+      initialAbsences: [
+        {
+          id: 'a-half',
+          userId: 'u1',
+          type: 'VACATION',
+          startDate: '2026-08-20',
+          endDate: '2026-08-20',
+          halfDay: true,
+          workingDayCount: 0.5,
+          attachments: [],
+        },
+      ],
+    })
+
+    await user.click(await screen.findByRole('tab', { name: 'דיווח ידני' }))
+    await screen.findByRole('button', { name: 'הוספת פרויקט' })
+    fireEvent.change(screen.getByLabelText('שעת כניסה'), { target: { value: '09:00' } })
+    fireEvent.change(screen.getByLabelText('שעת יציאה'), { target: { value: '18:00' } })
+    await user.click(screen.getByRole('button', { name: 'הוספת פרויקט' }))
+    await fillCard(user, 1, 'client-1:project-1', 'task-2', '10')
+    await user.click(screen.getByRole('button', { name: 'שמירה' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('יותר מדי שעות בפרויקטים')
+    expect(alert).toHaveTextContent('10')
+    expect(alert).toHaveTextContent('9')
+    expect(alert).not.toHaveTextContent('4.5')
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/reports/batch'))).toBe(false)
   })
 
   it('asks before deleting a saved day and does not call the API on cancel', async () => {
@@ -374,11 +552,11 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     expect(screen.queryByRole('button', { name: 'המשך ובחר משימה' })).not.toBeInTheDocument()
 
     await fillCard(user, 1, 'client-1:project-1', 'task-2', '4')
-    expect(screen.getByLabelText('משימה 1')).toHaveValue('task-2')
+    expect(screen.getByLabelText('משימה 1')).toHaveAttribute('data-value', 'task-2')
 
     await user.click(screen.getByRole('button', { name: 'הוספת פרויקט' }))
-    await user.selectOptions(screen.getByLabelText('פרויקט 2'), 'client-2:project-2')
-    expect(screen.getByLabelText('משימה 2')).toHaveValue('task-3')
+    await chooseSelect(user, 'פרויקט 2', 'client-2:project-2')
+    expect(screen.getByLabelText('משימה 2')).toHaveAttribute('data-value', 'task-3')
   })
 
   it('saves every project of the day in one request under the window', async () => {
@@ -466,7 +644,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     await waitFor(() => {
       expect(screen.getAllByRole('button', { name: 'מחיקת פרויקט' })).toHaveLength(1)
     })
-    expect(screen.getByLabelText('משימה 1')).toHaveValue('task-3')
+    expect(screen.getByLabelText('משימה 1')).toHaveAttribute('data-value', 'task-3')
   })
 
   it('does not send an incomplete day', async () => {
@@ -559,6 +737,32 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     expect(alert).toHaveTextContent('9')
     expect(alert).toHaveTextContent('יש להפחית שעה אחת')
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/reports/batch'))).toBe(false)
+  })
+
+  it('saves when project hours fill the entry-exit window exactly', async () => {
+    signIn()
+    const fetchMock = mockFetch((url) =>
+      url.includes('/reports/batch')
+        ? { ok: true, status: 201, json: { reports: [] } }
+        : { ok: true, status: 200, json: options },
+    )
+    const user = userEvent.setup()
+
+    renderScreen()
+    await screen.findByRole('button', { name: 'הוספת פרויקט' })
+    fireEvent.change(screen.getByLabelText('שעת כניסה'), { target: { value: '13:00' } })
+    fireEvent.change(screen.getByLabelText('שעת יציאה'), { target: { value: '18:00' } })
+    await user.click(screen.getByRole('button', { name: 'הוספת פרויקט' }))
+    await fillCard(user, 1, 'client-1:project-1', 'task-2', '5')
+    await user.click(screen.getByRole('button', { name: 'שמירה' }))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/reports/batch'),
+        expect.objectContaining({ method: 'POST' }),
+      )
+    })
+    expect(screen.queryByText('יש להפחית 0 שעות')).not.toBeInTheDocument()
   })
 
   it('sends the chosen report date in the batch request', async () => {
@@ -658,8 +862,8 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     const summary = screen.getByText('סיכום').closest<HTMLElement>('.manual-report__summary')
     expect(summary).not.toBeNull()
     expect(within(summary!).getByText('סה״כ 3.5 שעות')).toBeInTheDocument()
-    expect(within(summary!).getByText('חסר')).toBeInTheDocument()
-    expect(screen.getAllByText('חסר').length).toBeGreaterThanOrEqual(2)
+    expect(within(summary!).queryByText('חסר')).not.toBeInTheDocument()
+    expect(screen.queryByText('חסר')).not.toBeInTheDocument()
   })
 
   it('does not save while project hours are short of the attendance window', async () => {
@@ -698,7 +902,8 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     const summary = screen.getByText('סיכום').closest<HTMLElement>('.manual-report__summary')
     expect(summary).not.toBeNull()
     expect(within(summary!).queryByText('חסר')).not.toBeInTheDocument()
-    expect(screen.getByText('מלא')).toBeInTheDocument()
+    expect(screen.queryByText('מלא')).not.toBeInTheDocument()
+    expect(screen.queryByText('חלקי')).not.toBeInTheDocument()
   })
 
   it('does not show the summary חסר badge when project hours exceed the attendance window', async () => {
@@ -725,7 +930,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
 
     renderScreen()
     await user.click(await screen.findByRole('button', { name: 'הוספת פרויקט' }))
-    await user.selectOptions(screen.getByLabelText('פרויקט 1'), 'client-1:project-1')
+    await chooseSelect(user, 'פרויקט 1', 'client-1:project-1')
 
     expect(screen.getByLabelText('שעות 1').tagName).toBe('INPUT')
     expect(screen.queryByLabelText('כניסה 1')).not.toBeInTheDocument()
@@ -741,7 +946,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     await user.click(await screen.findByRole('button', { name: 'הוספת פרויקט' }))
     await fillClockCard(user, 1, 'client-3:project-3', '09:00', '13:00')
 
-    expect(screen.getByLabelText('משימה 1')).toHaveValue('task-4')
+    expect(screen.getByLabelText('משימה 1')).toHaveAttribute('data-value', 'task-4')
     const derived = screen.getByLabelText('שעות 1')
     expect(derived.tagName).toBe('OUTPUT')
     expect(derived).toHaveTextContent('4 שעות')
@@ -761,7 +966,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     await fillCard(user, 1, 'client-1:project-1', 'task-2', '4')
     expect(screen.getByLabelText('שעות 1')).toHaveValue('4')
 
-    await user.selectOptions(screen.getByLabelText('פרויקט 1'), 'client-3:project-3')
+    await chooseSelect(user, 'פרויקט 1', 'client-3:project-3')
 
     expect(screen.getByLabelText('כניסה 1')).toBeInTheDocument()
     expect(screen.getByLabelText('שעות 1').tagName).toBe('OUTPUT')
@@ -793,8 +998,8 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     renderScreen()
     await user.click(await screen.findByRole('button', { name: 'הוספת פרויקט' }))
     await fillCard(user, 1, 'client-1:project-1', 'task-2', '4')
-    await user.selectOptions(screen.getByLabelText('פרויקט 1'), 'client-3:project-3')
-    await user.selectOptions(screen.getByLabelText('פרויקט 1'), 'client-1:project-1')
+    await chooseSelect(user, 'פרויקט 1', 'client-3:project-3')
+    await chooseSelect(user, 'פרויקט 1', 'client-1:project-1')
 
     expect(screen.getByLabelText('שעות 1').tagName).toBe('INPUT')
     expect(screen.getByLabelText('שעות 1')).toHaveValue('0')
@@ -987,7 +1192,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     })
 
     await screen.findByLabelText('כניסה 1')
-    await user.selectOptions(screen.getByLabelText('פרויקט 1'), 'client-2:project-2')
+    await chooseSelect(user, 'פרויקט 1', 'client-2:project-2')
 
     expect(screen.getByLabelText('שעות 1').tagName).toBe('INPUT')
     expect(screen.queryByLabelText('כניסה 1')).not.toBeInTheDocument()
@@ -1014,7 +1219,7 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     })
 
     expect(await screen.findByLabelText('שעות 1')).toHaveValue('4')
-    await user.selectOptions(screen.getByLabelText('פרויקט 1'), 'client-3:project-4')
+    await chooseSelect(user, 'פרויקט 1', 'client-3:project-4')
 
     expect(screen.getByLabelText('כניסה 1')).toHaveValue('')
     expect(screen.getByLabelText('יציאה 1')).toHaveValue('')
@@ -1116,9 +1321,8 @@ describe('ManualReport', { timeout: 20_000 }, () => {
       endDate: '2026-08-09',
       halfDay: true,
     })
-    expect(onClose).not.toHaveBeenCalled()
-    expect(await screen.findByRole('heading', { name: 'חצי יום חופשה נשמר' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'דיווח ידני' })).toHaveAttribute('aria-selected', 'true')
+    expect(onClose).toHaveBeenCalled()
+    expect(await screen.findByText('חצי יום חופשה נשמר')).toBeInTheDocument()
   })
 
   it('defaults the absence tab to one-day mode and reveals the end date only after the more-days link is clicked', async () => {
@@ -1135,8 +1339,9 @@ describe('ManualReport', { timeout: 20_000 }, () => {
     expect(screen.getByRole('option', { name: 'חופשה - יום מלא 🏖️' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'דיווח על היעדרות ליותר מיום אחד' }))
+    fireEvent.change(screen.getByLabelText('מתאריך'), { target: { value: '2026-08-13' } })
 
-    expect(screen.getByLabelText('עד תאריך')).toBeInTheDocument()
+    expect(screen.getByLabelText('עד תאריך')).toHaveAttribute('min', '2026-08-13')
     expect(screen.queryByRole('button', { name: 'דיווח על היעדרות ליותר מיום אחד' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'חזרה ליום אחד' })).toBeInTheDocument()
 

@@ -27,23 +27,6 @@
   outline: none;
 }
 
-.admin-reports__reason {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 0 0 20px;
-  font-size: 14px;
-  color: #1b2a4a;
-}
-
-.admin-reports__reason input {
-  height: 44px;
-  padding: 0 14px;
-  border: 1px solid #e8eaee;
-  border-radius: 10px;
-  font: inherit;
-}
-
 .admin-reports__new {
   display: flex;
   flex-wrap: wrap;
@@ -87,3 +70,15 @@
   font-weight: 700;
   cursor: pointer;
 }
+
+.admin-audit-actions {
+  max-width: 260px;
+}
+
+.admin-audit-pill {
+  background: #eef3ff;
+  color: #2f6bff;
+  font-weight: 600;
+  white-space: nowrap;
+}
+

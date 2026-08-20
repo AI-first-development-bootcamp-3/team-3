@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { App, Button, Select, Tag } from 'antd'
+import { App, Select } from 'antd'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import AdminEntityTable from '../../components/AdminEntityTable'
 import CreateUserForm from '../../components/CreateUserForm'
@@ -62,22 +62,26 @@ function AdminUsers() {
       dataIndex: 'isActive',
       key: 'isActive',
       render: (isActive: boolean) => (
-        <Tag color={isActive ? 'green' : 'default'}>{isActive ? 'פעיל' : 'לא פעיל'}</Tag>
+        <span className={isActive ? 'admin-status admin-status--on' : 'admin-status admin-status--off'}>
+          {isActive ? 'פעיל' : 'לא פעיל'}
+        </span>
       ),
     },
     {
-      title: '',
+      title: 'פעולות',
       key: 'actions',
       render: (_: unknown, user: AdminUser) => (
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Button
-            type="link"
+        <div className="admin-table__actions">
+          <button
+            type="button"
+            className="admin-link-btn"
             onClick={() => statusMutation.mutate({ id: user.id, isActive: !user.isActive })}
           >
             {user.isActive ? 'השבתה' : 'הפעלה'}
-          </Button>
-          <Button
-            type="link"
+          </button>
+          <button
+            type="button"
+            className="admin-link-btn"
             onClick={async () => {
               const result = await resetUserPassword(user.id)
               notification.success({
@@ -88,14 +92,14 @@ function AdminUsers() {
             }}
           >
             איפוס סיסמה
-          </Button>
+          </button>
         </div>
       ),
     },
   ]
 
   return (
-    <section>
+    <section className="admin-page--fill">
       <div className="admin-page__head">
         <div className="admin-page__titles">
           <h1 className="admin-page__title">משתמשים</h1>

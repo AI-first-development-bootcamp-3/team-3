@@ -47,7 +47,6 @@ function conflictCopy(body: unknown): { title: string; detail: string } {
 
 function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAbsence }: Props) {
   const { message } = App.useApp()
-  const [banner, setBanner] = useState<{ title: string; detail: string } | null>(null)
   const [uploadedFiles, setUploadedFiles] = useState<AttachmentMetadata[]>(existingAbsence?.attachments ?? [])
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
   const [isMultiDay, setIsMultiDay] = useState(
@@ -80,6 +79,18 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
   )
   const kindOptions = isMultiDay ? ABSENCE_FORM_KINDS.filter((value) => value !== 'VACATION_HALF') : ABSENCE_FORM_KINDS
 
+  const showErrorToast = (toast: { title: string; detail: string }) => {
+    message.error({
+      content: (
+        <div>
+          <strong>{toast.title}</strong>
+          <div>{toast.detail}</div>
+        </div>
+      ),
+      duration: 6,
+    })
+  }
+
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || [])
     if (files.length === 0) return
@@ -101,7 +112,6 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
   }
 
   const onSubmit = async (values: AbsenceReportValues) => {
-    setBanner(null)
     try {
       // Upload any pending files
       const newAttachments: AttachmentMetadata[] = []
@@ -136,27 +146,27 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
         message.success(payload.halfDay ? 'חצי יום חופשה נשמר' : 'ההיעדרות נשמרה בהצלחה')
       }
       onSaved?.({ halfDay: payload.halfDay })
-      if (!payload.halfDay) onClose()
+      onClose()
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
-        setBanner(conflictCopy(error.body))
+        showErrorToast(conflictCopy(error.body))
         return
       }
       if (error instanceof ApiError && error.status === 400) {
-        setBanner({
+        showErrorToast({
           title: 'לא ניתן לשמור את ההיעדרות',
           detail: 'בדקו את סוג ההיעדרות ואת התאריכים. טווח שמכיל רק שישי–שבת לא נספר.',
         })
         return
       }
       if (error instanceof ApiError && error.status === 429) {
-        setBanner({
+        showErrorToast({
           title: 'שמרתם יותר מדי פעמים ברצף',
           detail: 'המתינו כמה דקות ונסו לשמור שוב.',
         })
         return
       }
-      setBanner({
+      showErrorToast({
         title: 'משהו השתבש. נסו שוב.',
         detail: 'לא הצלחנו לשמור את ההיעדרות. בדקו את החיבור ונסו שוב.',
       })
@@ -182,14 +192,33 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
         </label>
         <label className="manual-report__field">
           <span className="manual-report__field-label">{isMultiDay ? 'מתאריך' : 'תאריך'}</span>
-          <input type="date" className="manual-report__field-input" aria-label="מתאריך" {...register('startDate')} />
+          <input
+            type="date"
+            className="manual-report__field-input"
+            aria-label="מתאריך"
+            {...register('startDate', {
+              onChange: (event) => {
+                const next = event.target.value
+                if (endDate && next && endDate < next) {
+                  setValue('endDate', '')
+                  clearErrors('endDate')
+                }
+              },
+            })}
+          />
           {errors.startDate ? <p className="manual-report__field-error">{errors.startDate.message}</p> : null}
         </label>
         {isMultiDay ? (
           <>
             <label className="manual-report__field">
               <span className="manual-report__field-label">עד תאריך</span>
-              <input type="date" className="manual-report__field-input" aria-label="עד תאריך" {...register('endDate')} />
+              <input
+                type="date"
+                className="manual-report__field-input"
+                aria-label="עד תאריך"
+                min={startDate || undefined}
+                {...register('endDate')}
+              />
               {errors.endDate ? <p className="manual-report__field-error">{errors.endDate.message}</p> : null}
             </label>
             <button
@@ -274,14 +303,6 @@ function AbsenceReportForm({ onClose, onSaved, defaultStartDate = '', existingAb
           </div>
         )}
       </div>
-      {banner ? (
-        <div className="manual-report__banner" role="alert">
-          <div className="manual-report__banner-text">
-            <h2>{banner.title}</h2>
-            <p>{banner.detail}</p>
-          </div>
-        </div>
-      ) : null}
       <button type="submit" className="manual-report__save" disabled={isSubmitting}>
         שמירה
       </button>

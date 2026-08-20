@@ -274,11 +274,26 @@ export function CreateEntityDialog({
         <div className="admin-field__row">
           <label className="admin-field">
             <span>תאריך התחלה</span>
-            <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+            <input
+              type="date"
+              aria-label="תאריך התחלה"
+              value={startDate}
+              onChange={(event) => {
+                const next = event.target.value
+                setStartDate(next)
+                if (endDate && next && endDate < next) setEndDate('')
+              }}
+            />
           </label>
           <label className="admin-field">
             <span>תאריך סיום</span>
-            <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+            <input
+              type="date"
+              aria-label="תאריך סיום"
+              value={endDate}
+              min={startDate || undefined}
+              onChange={(event) => setEndDate(event.target.value)}
+            />
           </label>
         </div>
       ) : null}
